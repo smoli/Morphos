@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; frame-src 'self';" />
+  <title>Morphos</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <div class="brand">
+        <span class="logo">◈</span>
+        <div>
+          <div class="brand-name">Morphos</div>
+          <div class="brand-sub">Die App, die sich selbst entwickelt</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button id="historyBtn" class="ghost" title="Versionen">⟲ Versionen (<span id="historyCount">0</span>)</button>
+      </div>
+    </header>
+
+    <main id="stage">
+      <!-- Startzustand -->
+      <section id="welcome">
+        <h1>Was soll diese Anwendung sein?</h1>
+        <p class="lead">
+          Beschreibe deine Idee — ein Taschenrechner, ein Texteditor, eine Tabellenkalkulation,
+          ein Spiel. Die Oberfläche und die Funktionen entstehen live.
+        </p>
+        <div class="examples">
+          <button class="chip" data-example="Ein moderner wissenschaftlicher Taschenrechner.">🧮 Taschenrechner</button>
+          <button class="chip" data-example="Ein Texteditor mit Markdown-Vorschau nebeneinander.">📝 Editor</button>
+          <button class="chip" data-example="Eine einfache Tabellenkalkulation mit Summenformeln.">📊 Tabelle</button>
+          <button class="chip" data-example="Eine To-do-Liste mit Kategorien und Fortschrittsbalken.">✅ To-do-Liste</button>
+        </div>
+      </section>
+
+      <!-- Erzeugte App -->
+      <iframe id="canvas"
+              class="hidden"
+              sandbox="allow-scripts allow-forms allow-modals allow-popups allow-pointer-lock"
+              referrerpolicy="no-referrer"></iframe>
+
+      <!-- Ladeoverlay -->
+      <div id="loading" class="hidden">
+        <div class="spinner"></div>
+        <div id="loadingText">Die Anwendung wird entwickelt …</div>
+      </div>
+    </main>
+
+    <!-- Versions-Panel -->
+    <aside id="historyPanel" class="hidden">
+      <div class="history-head">
+        <span>Versionen</span>
+        <button id="closeHistory" class="ghost small">✕</button>
+      </div>
+      <ul id="historyList"></ul>
+    </aside>
+
+    <footer id="promptbar">
+      <div id="errorBox" class="hidden"></div>
+      <form id="promptForm">
+        <input id="promptInput" type="text" autocomplete="off"
+               placeholder="Beschreibe, was die App sein oder als Nächstes können soll …" />
+        <button id="sendBtn" type="submit">Umsetzen ▸</button>
+      </form>
+    </footer>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

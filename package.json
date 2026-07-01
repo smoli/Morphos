@@ -1,0 +1,22 @@
+{
+  "name": "morphos",
+  "version": "0.1.0",
+  "description": "Eine selbst-entwickelnde Electron-App: Der Anwender beschreibt, was die App sein soll, und ein LLM erschafft und verändert die Oberfläche live.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "keywords": [
+    "electron",
+    "llm",
+    "claude",
+    "self-evolving",
+    "generative-ui"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}
