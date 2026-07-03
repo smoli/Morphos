@@ -3,7 +3,9 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia, type Pinia } from 'pinia';
 import { createRouter, createMemoryHistory, type Router } from 'vue-router';
 import DesktopView from './DesktopView.vue';
+import WindowFrame from '@/components/WindowFrame.vue';
 import { useWorkspaceStore } from '@/stores/workspace';
+import { useDesktopStore } from '@/stores/desktop';
 import { setHost } from '@/services/host';
 import type { AppSummary, MorphosHost } from '@/types';
 
@@ -71,19 +73,39 @@ describe('DesktopView', () => {
     expect(wrapper.findAll('.tile')).toHaveLength(3);
   });
 
-  it('öffnet eine App per Klick auf ihre Kachel', async () => {
-    const { wrapper, router } = await mountView();
+  it('öffnet eine App als Fenster per Klick auf ihre Kachel', async () => {
+    const { wrapper } = await mountView();
+    const desktop = useDesktopStore();
     const tile = wrapper.findAll('.tile').find((t) => t.text().includes('Rechner'))!;
     await tile.trigger('click');
     await flushPromises();
-    expect(router.currentRoute.value.path).toBe('/app/rechner-1');
+    expect(desktop.windows).toHaveLength(1);
+    expect(desktop.windows[0].appId).toBe('rechner-1');
+    expect(wrapper.findAllComponents(WindowFrame)).toHaveLength(1);
   });
 
-  it('führt zur Entwurfsansicht über „Neue App“', async () => {
-    const { wrapper, router } = await mountView();
+  it('öffnet ein Entwurfsfenster über „Neue App“', async () => {
+    const { wrapper } = await mountView();
+    const desktop = useDesktopStore();
     await wrapper.get('.tile.new').trigger('click');
     await flushPromises();
-    expect(router.currentRoute.value.name).toBe('app-new');
+    expect(desktop.windows).toHaveLength(1);
+    expect(desktop.windows[0].appId).toBeNull();
+  });
+
+  it('minimiert ein Fenster in den Dock und stellt es wieder her', async () => {
+    const { wrapper } = await mountView();
+    const desktop = useDesktopStore();
+    const tile = wrapper.findAll('.tile').find((t) => t.text().includes('Rechner'))!;
+    await tile.trigger('click');
+    await flushPromises();
+
+    await wrapper.get('.w-min').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('.dock').exists()).toBe(true);
+
+    await wrapper.get('.dock-item').trigger('click');
+    expect(desktop.windows[0].minimized).toBe(false);
   });
 
   it('setzt eine Funktions-Berechtigung über die Berechtigungsliste', async () => {

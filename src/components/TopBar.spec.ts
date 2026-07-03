@@ -3,7 +3,6 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia, type Pinia } from 'pinia';
 import { createRouter, createMemoryHistory, type Router } from 'vue-router';
 import TopBar from './TopBar.vue';
-import { useAppStore } from '@/stores/app';
 import { useWorkspaceStore } from '@/stores/workspace';
 
 function makeRouter(): Router {
@@ -12,9 +11,6 @@ function makeRouter(): Router {
     routes: [
       { path: '/', name: 'start', component: { template: '<div />' } },
       { path: '/desktop', name: 'desktop', component: { template: '<div />' } },
-      { path: '/app/new', name: 'app-new', component: { template: '<div />' } },
-      { path: '/app/:id', name: 'app', component: { template: '<div />' } },
-      { path: '/app/:id/versions', name: 'versions', component: { template: '<div />' } },
     ],
   });
 }
@@ -32,25 +28,6 @@ describe('TopBar', () => {
     await router.isReady();
     const wrapper = mount(TopBar, { global: { plugins: [pinia, router] } });
     expect(wrapper.text()).toContain('Morphos');
-  });
-
-  it('zeigt in einer App deren Namen und die Versionsanzahl', async () => {
-    const store = useAppStore();
-    store.id = 'rechner-1';
-    store.name = 'Rechner';
-    store.icon = '🧮';
-    store.versions = [
-      { sha: 'v2', prompt: 'b', time: 2 },
-      { sha: 'v1', prompt: 'a', time: 1 },
-    ];
-    const router = makeRouter();
-    router.push('/app/rechner-1');
-    await router.isReady();
-
-    const wrapper = mount(TopBar, { global: { plugins: [pinia, router] } });
-    expect(wrapper.text()).toContain('Rechner');
-    expect(wrapper.text()).toContain('2');
-    expect(wrapper.text()).toContain('Desktop');
   });
 
   it('zeigt auf dem Desktop den Ordnernamen', async () => {

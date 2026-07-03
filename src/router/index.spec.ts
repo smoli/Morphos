@@ -7,18 +7,23 @@ describe('router', () => {
     expect(match.name).toBe('start');
   });
 
-  it('definiert Desktop-, App- und Versionsrouten', () => {
+  it('definiert Start- und Desktop-Route', () => {
     const names = router.getRoutes().map((r) => r.name);
     expect(names).toContain('start');
     expect(names).toContain('desktop');
-    expect(names).toContain('app-new');
-    expect(names).toContain('app');
-    expect(names).toContain('versions');
   });
 
-  it('löst eine App-Route mit Id auf', () => {
-    const match = router.resolve('/app/rechner-1');
-    expect(match.name).toBe('app');
-    expect(match.params.id).toBe('rechner-1');
+  it('kennt keine eigenständigen App-/Versions-Routen mehr (Apps sind Fenster)', () => {
+    const names = router.getRoutes().map((r) => r.name);
+    expect(names).not.toContain('app');
+    expect(names).not.toContain('app-new');
+    expect(names).not.toContain('versions');
+  });
+
+  it('leitet Alt-App-Links auf den Desktop um', () => {
+    expect(router.resolve('/app/rechner-1').redirectedFrom).toBeUndefined();
+    // Die Redirect-Definition zeigt auf den Desktop.
+    const record = router.getRoutes().find((r) => r.path === '/app/:id');
+    expect(record?.redirect).toBe('/desktop');
   });
 });

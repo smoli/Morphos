@@ -5,7 +5,9 @@
 Beim Start wählt der Anwender ein **Verzeichnis**, in dem seine Apps liegen
 (zuletzt genutzte Ordner werden gemerkt). Der **Desktop** zeigt dann für jede
 dort gespeicherte App ein Icon; von hier lässt sich eine bestehende App öffnen
-oder eine neue anlegen.
+oder eine neue anlegen. Apps öffnen sich als **frei bewegliche, überlappende
+Fenster** auf dem Desktop — mehrere gleichzeitig, jedes mit eigener Titelleiste
+(Ziehen, Größe ändern, Versionen, Minimieren in den Dock, Schließen).
 
 In einer App gibt es zunächst nur ein Eingabefeld. Der Anwender schreibt hinein,
 *was die Anwendung sein soll* — ein Taschenrechner, ein Editor, eine
@@ -88,9 +90,16 @@ geladen, nicht neu erzeugt; Apps im alten JSON-Historienformat werden beim erste
   und ein `<meta name="morphos:icon">` (Emoji); daraus entstehen Name und Icon
   der Desktop-Kachel.
 - **Versionen = Git-Historie:** Jede Generierung ist ein Commit (Botschaft =
-  Wunsch). Über **⟲ Versionen** lässt sich ein früherer Stand wiederherstellen —
-  als **neuer Commit** mit dem alten Baum: Die Historie bleibt linear, nichts
-  geht je verloren. Der Stand bleibt über Neustarts erhalten.
+  Wunsch). Über **⟲ Versionen** in der Fenster-Titelleiste lässt sich ein
+  früherer Stand wiederherstellen — als **neuer Commit** mit dem alten Baum:
+  Die Historie bleibt linear, nichts geht je verloren. Der Stand bleibt über
+  Neustarts erhalten.
+- **Mehrere Apps gleichzeitig:** Der Desktop ist ein Fenstermanager im Renderer.
+  Jedes App-Fenster ist eine unabhängige Instanz (eigener Zustand, eigener
+  Chat, eigenes Sandbox-iframe). Beim Ziehen/Größenändern legt sich kurz eine
+  unsichtbare Schutzschicht über die iframes, damit sie die Maus nicht
+  „schlucken“. Eine erneut geöffnete App holt ihr bestehendes Fenster nach vorn,
+  statt es zu duplizieren.
 
 ## Architektur
 

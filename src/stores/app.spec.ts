@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
-import { useAppStore } from './app';
+import { useAppWindow } from './app';
 import { setHost } from '@/services/host';
+// Jeder Test bekommt eine frische Pinia — dieselbe Instanz-Id ist damit isoliert.
+const useAppStore = () => useAppWindow('test');
 import type { AppData, GenerateResult, MorphosHost, SourceFile, VersionInfo } from '@/types';
 
 const DOC = (body: string, title = 'Test', icon = '🧪'): string =>

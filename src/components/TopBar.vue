@@ -1,14 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
-import { useAppStore } from '@/stores/app';
 import { useWorkspaceStore } from '@/stores/workspace';
 
 const route = useRoute();
-const store = useAppStore();
 const workspace = useWorkspaceStore();
 
-const inApp = computed(() => route.name === 'app' || route.name === 'app-new' || route.name === 'versions');
 const onDesktop = computed(() => route.name === 'desktop');
 const brandTarget = computed(() => (workspace.hasFolder ? '/desktop' : '/'));
 
@@ -30,17 +27,7 @@ function folderName(p: string | null): string {
     </RouterLink>
 
     <div class="right">
-      <template v-if="inApp">
-        <RouterLink to="/desktop" class="link">🖥 Desktop</RouterLink>
-        <span v-if="store.name" class="current">
-          <span class="current-icon">{{ store.icon }}</span>{{ store.name }}
-        </span>
-        <RouterLink v-if="!store.isDraft" :to="`/app/${store.id}/versions`" class="link">
-          ⟲ Versionen ({{ store.versionCount }})
-        </RouterLink>
-      </template>
-
-      <template v-else-if="onDesktop">
+      <template v-if="onDesktop">
         <span class="current" :title="workspace.folder ?? ''">📁 {{ folderName(workspace.folder) }}</span>
         <RouterLink to="/" class="link">Ordner wechseln</RouterLink>
       </template>

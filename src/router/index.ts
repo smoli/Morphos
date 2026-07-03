@@ -1,19 +1,19 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import StartView from '@/views/StartView.vue';
 import DesktopView from '@/views/DesktopView.vue';
-import WorkspaceView from '@/views/WorkspaceView.vue';
-import VersionsView from '@/views/VersionsView.vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 
 // Hash-History, damit die Navigation auch unter file:// in Electron funktioniert.
+// Apps werden als Fenster auf dem Desktop geöffnet (kein eigener Router-Pfad).
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/', name: 'start', component: StartView },
     { path: '/desktop', name: 'desktop', component: DesktopView },
-    { path: '/app/new', name: 'app-new', component: WorkspaceView },
-    { path: '/app/:id', name: 'app', component: WorkspaceView, props: true },
-    { path: '/app/:id/versions', name: 'versions', component: VersionsView, props: true },
+    // Alt-Links auf einzelne Apps landen auf dem Desktop.
+    { path: '/app/:id', redirect: '/desktop' },
+    { path: '/app/:id/versions', redirect: '/desktop' },
+    { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 });
 

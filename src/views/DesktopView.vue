@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onMounted, ref } from 'vue';
 import { useWorkspaceStore } from '@/stores/workspace';
+import { useDesktopStore } from '@/stores/desktop';
+import WindowFrame from '@/components/WindowFrame.vue';
 import { FS_OP_LABELS } from '@/core/permissions';
-import type { FsOp, PermMode } from '@/types';
+import type { AppSummary, FsOp, PermMode } from '@/types';
 
 const workspace = useWorkspaceStore();
-const router = useRouter();
+const desktop = useDesktopStore();
+
+const minimized = computed(() => desktop.windows.filter((w) => w.minimized));
 
 const newLibPattern = ref('');
 
@@ -30,12 +33,12 @@ onMounted(() => {
   void workspace.refresh();
 });
 
-function openApp(id: string): void {
-  void router.push(`/app/${id}`);
+function openApp(app: AppSummary): void {
+  desktop.openApp(app.id, { title: app.name, icon: app.icon });
 }
 
 function newApp(): void {
-  void router.push('/app/new');
+  desktop.openDraft();
 }
 
 function setAccessFolder(): void {
@@ -44,12 +47,16 @@ function setAccessFolder(): void {
 
 async function removeApp(id: string, name: string): Promise<void> {
   if (!confirm(`App „${name}“ wirklich löschen?`)) return;
+  // Ein offenes Fenster dieser App schließen, bevor sie verschwindet.
+  const open = desktop.windows.find((w) => w.appId === id);
+  if (open) desktop.closeWindow(open.instanceId);
   await workspace.removeApp(id);
 }
 </script>
 
 <template>
   <div class="desktop">
+    <div class="desk-content">
     <div class="access-bar">
       <span class="access-info">
         <span v-if="workspace.accessRoot" class="access-path" :title="workspace.accessRoot">
@@ -118,7 +125,7 @@ async function removeApp(id: string, name: string): Promise<void> {
       </button>
 
       <div v-for="app in workspace.apps" :key="app.id" class="tile-wrap">
-        <button type="button" class="tile" @click="openApp(app.id)" :title="app.name">
+        <button type="button" class="tile" @click="openApp(app)" :title="app.name">
           <span class="icon">{{ app.icon }}</span>
           <span class="name">{{ app.name }}</span>
           <span class="meta">{{ app.versions }} Version(en)</span>
@@ -130,14 +137,84 @@ async function removeApp(id: string, name: string): Promise<void> {
     <p v-if="!workspace.loading && workspace.apps.length === 0" class="hint">
       Noch keine Apps in diesem Verzeichnis. Erstelle deine erste App über „Neue App“.
     </p>
+    </div>
+
+    <!-- Fenster-Ebene: liegt über dem Launcher; nur die Fenster fangen Klicks. -->
+    <div class="windows-layer">
+      <WindowFrame v-for="w in desktop.stacked" v-show="!w.minimized" :key="w.instanceId" :win="w" />
+    </div>
+
+    <!-- Dock für minimierte Fenster. -->
+    <div v-if="minimized.length" class="dock">
+      <button
+        v-for="w in minimized"
+        :key="w.instanceId"
+        type="button"
+        class="dock-item"
+        :title="w.title"
+        @click="desktop.restoreWindow(w.instanceId)"
+      >
+        <span>{{ w.icon }}</span>
+        <span class="dock-name">{{ w.title }}</span>
+      </button>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .desktop {
+  position: relative;
   height: 100%;
+  overflow: hidden;
+}
+.desk-content {
+  position: absolute;
+  inset: 0;
   overflow-y: auto;
   padding: 24px;
+}
+/* Fenster schweben über dem Launcher; die Ebene selbst fängt keine Klicks,
+   nur die Fenster (pointer-events in WindowFrame gesetzt). */
+.windows-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.dock {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  background: rgba(20, 22, 28, 0.9);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  z-index: 10000;
+  max-width: 90%;
+  overflow-x: auto;
+}
+.dock-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dock-item:hover {
+  border-color: var(--accent);
+}
+.dock-name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .access-bar {
   display: flex;

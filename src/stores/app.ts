@@ -229,11 +229,3 @@ export function useAppWindow(instanceId: string) {
   },
   })();
 }
-
-/**
- * Rückwärtskompatibler Zugriff auf eine einzelne, gemeinsame App-Instanz.
- * Wird beim Umbau auf die Fenster-Fabrik nach und nach abgelöst.
- */
-export function useAppStore() {
-  return useAppWindow('main');
-}
