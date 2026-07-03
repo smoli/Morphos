@@ -25,10 +25,16 @@ interface AppState {
 }
 
 /**
- * Zustand genau EINER geöffneten App. Prompts beziehen sich stets auf diese App;
- * jeder Stand wird als Git-Commit in ihrem Ordner persistiert (Botschaft = Wunsch).
+ * Zustand genau EINER geöffneten App (ein Desktop-Fenster). Prompts beziehen
+ * sich stets auf diese App; jeder Stand wird als Git-Commit in ihrem Ordner
+ * persistiert (Botschaft = Wunsch).
+ *
+ * Es ist eine FABRIK: jedes Fenster erhält über useAppWindow(instanceId) seinen
+ * eigenen Store, sodass mehrere Apps gleichzeitig offen sein können. Pinia cacht
+ * je Id — gleiche instanceId ⇒ derselbe Store.
  */
-export const useAppStore = defineStore('app', {
+export function useAppWindow(instanceId: string) {
+  return defineStore(`app-window-${instanceId}`, {
   state: (): AppState => ({
     folder: null,
     id: null,
@@ -221,4 +227,13 @@ export const useAppStore = defineStore('app', {
       }
     },
   },
-});
+  })();
+}
+
+/**
+ * Rückwärtskompatibler Zugriff auf eine einzelne, gemeinsame App-Instanz.
+ * Wird beim Umbau auf die Fenster-Fabrik nach und nach abgelöst.
+ */
+export function useAppStore() {
+  return useAppWindow('main');
+}
