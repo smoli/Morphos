@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron';
 import type { OpenDialogOptions } from 'electron';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -314,26 +314,22 @@ ipcMain.handle('morphos:chooseAttachment', async (): Promise<{ ok: boolean; atta
 
 // Aus der Zwischenablage eingefügte Bilder (Cmd/Ctrl+V) landen als temporäre
 // Referenzdateien; der Pfad gilt damit als vom Anwender gewählt (freigegeben).
-const CLIPBOARD_MIME_EXT: Record<string, string> = {
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/gif': 'gif',
-  'image/webp': 'webp',
-};
+// Die Zwischenablage wird NATIV gelesen (Electron nativeImage) und stets nach
+// PNG gewandelt — unabhängig vom Ausgangsformat (auch TIFF, z. B. von Shottr).
 const MAX_CLIPBOARD_IMAGE_BYTES = 15_000_000;
 
-ipcMain.handle('morphos:saveClipboardImage', async (_e, data: ArrayBuffer, mime: string): Promise<{ ok: boolean; attachment?: Attachment; error?: string }> => {
-  const ext = CLIPBOARD_MIME_EXT[mime];
-  if (!ext) return { ok: false, error: 'Die Zwischenablage enthält kein unterstütztes Bildformat.' };
-  const buf = Buffer.from(data ?? new ArrayBuffer(0));
-  if (buf.length === 0) return { ok: false, error: 'Die Zwischenablage enthält kein Bild.' };
-  if (buf.length > MAX_CLIPBOARD_IMAGE_BYTES) return { ok: false, error: 'Das eingefügte Bild ist zu groß (max. 15 MB).' };
+ipcMain.handle('morphos:readClipboardImage', async (): Promise<{ ok: boolean; attachment?: Attachment; error?: string }> => {
   try {
+    const image = clipboard.readImage();
+    if (image.isEmpty()) return { ok: false, error: 'Die Zwischenablage enthält kein Bild.' };
+    const png = image.toPNG();
+    if (png.length === 0) return { ok: false, error: 'Das Bild der Zwischenablage konnte nicht gelesen werden.' };
+    if (png.length > MAX_CLIPBOARD_IMAGE_BYTES) return { ok: false, error: 'Das eingefügte Bild ist zu groß (max. 15 MB).' };
     const dir = path.join(app.getPath('temp'), 'morphos-refs');
     fs.mkdirSync(dir, { recursive: true });
-    const name = `einfuegen-${Date.now()}.${ext}`;
+    const name = `einfuegen-${Date.now()}.png`;
     const file = path.join(dir, name);
-    fs.writeFileSync(file, buf);
+    fs.writeFileSync(file, png);
     approvedAttachments.add(file);
     return { ok: true, attachment: { path: file, name, kind: 'image' } };
   } catch (err) {

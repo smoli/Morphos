@@ -180,10 +180,12 @@ export interface MorphosHost {
   chooseAttachment(): Promise<{ ok: boolean; attachment?: Attachment; error?: string }>;
 
   /**
-   * Speichert ein aus der Zwischenablage eingefügtes Bild (Cmd/Ctrl+V) als
-   * temporäre Referenzdatei und gibt sie als Anhang zurück.
+   * Liest ein Bild aus der System-Zwischenablage (Cmd/Ctrl+V), speichert es als
+   * temporäre Referenzdatei und gibt sie als Anhang zurück. Der Hauptprozess
+   * liest die Zwischenablage nativ (Electron) und wandelt jedes Format nach PNG —
+   * so funktionieren auch Screenshot-Tools, die TIFF ablegen (z. B. Shottr).
    */
-  saveClipboardImage(data: ArrayBuffer, mime: string): Promise<{ ok: boolean; attachment?: Attachment; error?: string }>;
+  readClipboardImage(): Promise<{ ok: boolean; attachment?: Attachment; error?: string }>;
 
   /** Speichert den Dialogverlauf einer App (chat.json). */
   saveChat(folder: string, id: string, chat: ChatMessage[]): Promise<SaveResult>;

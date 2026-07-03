@@ -135,26 +135,22 @@ function removeAttachment(path: string): void {
 async function onPaste(e: ClipboardEvent): Promise<void> {
   const items = e.clipboardData?.items;
   if (!items) return;
-  const images = Array.from(items).filter((item) => item.type.startsWith('image/'));
-  if (images.length === 0) return; // Text normal einfügen lassen
+  // Liegt ein Bild an? (Format egal — der Hauptprozess liest es nativ.)
+  const hasImage = Array.from(items).some((item) => item.type.startsWith('image/'));
+  if (!hasImage) return; // reinen Text normal einfügen lassen
   e.preventDefault();
   attachError.value = null;
-  for (const item of images) {
-    const file = item.getAsFile();
-    if (!file) continue;
-    try {
-      const data = await file.arrayBuffer();
-      const res = await getHost().saveClipboardImage(data, item.type);
-      if (!res.ok || !res.attachment) {
-        if (res.error) attachError.value = res.error;
-        continue;
-      }
-      if (!attachments.value.some((a) => a.path === res.attachment!.path)) {
-        attachments.value.push(res.attachment);
-      }
-    } catch (err) {
-      attachError.value = err instanceof Error ? err.message : String(err);
+  try {
+    const res = await getHost().readClipboardImage();
+    if (!res.ok || !res.attachment) {
+      if (res.error) attachError.value = res.error;
+      return;
     }
+    if (!attachments.value.some((a) => a.path === res.attachment!.path)) {
+      attachments.value.push(res.attachment);
+    }
+  } catch (err) {
+    attachError.value = err instanceof Error ? err.message : String(err);
   }
 }
 

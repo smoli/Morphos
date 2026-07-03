@@ -22,8 +22,8 @@ contextBridge.exposeInMainWorld('morphos', {
   chooseFolder: (): Promise<FolderResult> => ipcRenderer.invoke('morphos:chooseFolder'),
   chooseAttachment: (): Promise<{ ok: boolean; attachment?: Attachment; error?: string }> =>
     ipcRenderer.invoke('morphos:chooseAttachment'),
-  saveClipboardImage: (data: ArrayBuffer, mime: string): Promise<{ ok: boolean; attachment?: Attachment; error?: string }> =>
-    ipcRenderer.invoke('morphos:saveClipboardImage', data, mime),
+  readClipboardImage: (): Promise<{ ok: boolean; attachment?: Attachment; error?: string }> =>
+    ipcRenderer.invoke('morphos:readClipboardImage'),
 
   saveChat: (folder: string, id: string, chat: ChatMessage[]): Promise<SaveResult> =>
     ipcRenderer.invoke('morphos:saveChat', folder, id, chat),

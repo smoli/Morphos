@@ -14,7 +14,7 @@ function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
     generate: vi.fn(async () => ({ ok: true as const, files: [], html: '' })),
     chooseFolder: vi.fn(async () => ({ ok: false })),
     chooseAttachment: vi.fn(async () => ({ ok: false })),
-    saveClipboardImage: vi.fn(async () => ({ ok: false })),
+    readClipboardImage: vi.fn(async () => ({ ok: false })),
     loadSettings: vi.fn(async () => ({ recentFolders: [], accessRoots: {} })),
     saveSettings: vi.fn(async () => ({ ok: true })),
     listApps: vi.fn(async () => []),
@@ -176,13 +176,13 @@ describe('ChatDock', () => {
   });
 
   describe('Einfügen aus der Zwischenablage (Cmd/Ctrl+V)', () => {
-    function pasteEvent(items: { type: string; getAsFile: () => { arrayBuffer: () => Promise<ArrayBuffer>; type: string } | null }[]) {
-      return { clipboardData: { items } };
+    function pasteEvent(types: string[]) {
+      return { clipboardData: { items: types.map((type) => ({ type })) } };
     }
 
-    it('hängt ein eingefügtes Bild als Referenz an', async () => {
+    it('hängt ein eingefügtes Bild als Referenz an (nativ gelesen)', async () => {
       const host = makeHost({
-        saveClipboardImage: vi.fn(async () => ({
+        readClipboardImage: vi.fn(async () => ({
           ok: true,
           attachment: { path: '/tmp/einfuegen-1.png', name: 'einfuegen-1.png', kind: 'image' as const },
         })),
@@ -190,15 +190,10 @@ describe('ChatDock', () => {
       setHost(host);
       const wrapper = mountDock();
 
-      await wrapper.get('textarea').trigger('paste', pasteEvent([
-        {
-          type: 'image/png',
-          getAsFile: () => ({ arrayBuffer: async () => new ArrayBuffer(8), type: 'image/png' }),
-        },
-      ]));
+      await wrapper.get('textarea').trigger('paste', pasteEvent(['image/png']));
       await flushPromises();
 
-      expect(host.saveClipboardImage).toHaveBeenCalledWith(expect.any(ArrayBuffer), 'image/png');
+      expect(host.readClipboardImage).toHaveBeenCalled();
       expect(wrapper.text()).toContain('einfuegen-1.png');
 
       const input = wrapper.get('textarea');
@@ -210,32 +205,42 @@ describe('ChatDock', () => {
       ]);
     });
 
+    it('behandelt auch TIFF aus Screenshot-Tools (z. B. Shottr)', async () => {
+      const host = makeHost({
+        readClipboardImage: vi.fn(async () => ({
+          ok: true,
+          attachment: { path: '/tmp/einfuegen-2.png', name: 'einfuegen-2.png', kind: 'image' as const },
+        })),
+      });
+      setHost(host);
+      const wrapper = mountDock();
+
+      await wrapper.get('textarea').trigger('paste', pasteEvent(['image/tiff']));
+      await flushPromises();
+
+      expect(host.readClipboardImage).toHaveBeenCalled();
+      expect(wrapper.text()).toContain('einfuegen-2.png');
+    });
+
     it('lässt reines Text-Einfügen unangetastet', async () => {
       const host = makeHost();
       setHost(host);
       const wrapper = mountDock();
 
-      await wrapper.get('textarea').trigger('paste', pasteEvent([
-        { type: 'text/plain', getAsFile: () => null },
-      ]));
+      await wrapper.get('textarea').trigger('paste', pasteEvent(['text/plain']));
       await flushPromises();
 
-      expect(host.saveClipboardImage).not.toHaveBeenCalled();
+      expect(host.readClipboardImage).not.toHaveBeenCalled();
       expect(wrapper.find('.chip').exists()).toBe(false);
     });
 
-    it('zeigt einen Fehler, wenn das Bild nicht gespeichert werden kann', async () => {
+    it('zeigt einen Fehler, wenn das Bild nicht gelesen werden kann', async () => {
       setHost(makeHost({
-        saveClipboardImage: vi.fn(async () => ({ ok: false, error: 'zu groß' })),
+        readClipboardImage: vi.fn(async () => ({ ok: false, error: 'zu groß' })),
       }));
       const wrapper = mountDock();
 
-      await wrapper.get('textarea').trigger('paste', pasteEvent([
-        {
-          type: 'image/png',
-          getAsFile: () => ({ arrayBuffer: async () => new ArrayBuffer(8), type: 'image/png' }),
-        },
-      ]));
+      await wrapper.get('textarea').trigger('paste', pasteEvent(['image/png']));
       await flushPromises();
 
       expect(wrapper.get('.attach-error').text()).toContain('zu groß');
