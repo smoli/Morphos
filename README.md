@@ -13,9 +13,10 @@ Fenster** auf dem Desktop — mehrere gleichzeitig, jedes mit eigener Titelleist
 am unteren Rand und bezieht sich stets auf das **aktive Fenster**.
 
 Das Programmfenster selbst ist **rahmenlos** mit eigener Titelleiste
-(Ziehbereich, Minimieren/Maximieren/Schließen). Datenordner, Berechtigungen und
-Bibliotheks-Freigaben liegen hinter dem **⚙ Einstellungen**-Knopf in der
-Kopfleiste.
+(Ziehbereich). Die Fensterknöpfe sind **betriebssystemgerecht**: unter macOS die
+nativen Ampel-Knöpfe links, unter Windows/Linux eigene Minimieren/Maximieren/
+Schließen-Knöpfe rechts. Datenordner, Berechtigungen und Bibliotheks-Freigaben
+liegen hinter dem **⚙ Einstellungen**-Knopf in der Kopfleiste.
 
 In einer App gibt es zunächst nur ein Eingabefeld. Der Anwender schreibt hinein,
 *was die Anwendung sein soll* — ein Taschenrechner, ein Editor, eine

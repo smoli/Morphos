@@ -165,6 +165,9 @@ export interface FolderResult {
  * `window.morphos`; in Tests durch eine Attrappe ersetzbar.
  */
 export interface MorphosHost {
+  /** Betriebssystem des Hauptprozesses ('darwin' | 'win32' | 'linux' …). */
+  platform?: string;
+
   /**
    * Erzeugt bzw. verändert die App über die Claude CLI. `files` ist der aktuelle
    * Quelldatei-Satz (leer bei einer neuen App), `chat` der bisherige Dialog

@@ -127,6 +127,14 @@ describe('DesktopView', () => {
     expect(spy).toHaveBeenCalledWith('Ein Spiel', []);
   });
 
+  it('zeigt im Fenster-Modus den Namen der aktiven App an der Promptleiste', async () => {
+    const { wrapper } = await mountView();
+    const desktop = useDesktopStore();
+    desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+    await flushPromises();
+    expect(wrapper.get('.chat-context').text()).toContain('Rechner');
+  });
+
   it('zeigt im Einzel-Modus nur das aktive Fenster (Vollbild)', async () => {
     const ws = useWorkspaceStore();
     ws.uiMode = 'single';

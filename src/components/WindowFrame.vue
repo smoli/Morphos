@@ -255,7 +255,9 @@ function stopInteraction(): void {
   position: relative;
   flex: 1;
   overflow: hidden;
-  background: #fff;
+  /* Dunkler Untergrund für den Entwurf/WelcomeScreen; die laufende App bringt
+     ihren eigenen (weißen) Hintergrund über das iframe mit (AppCanvas). */
+  background: var(--panel);
 }
 .w-loading {
   position: absolute;

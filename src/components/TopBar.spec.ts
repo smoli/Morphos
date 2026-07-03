@@ -89,6 +89,18 @@ describe('TopBar', () => {
     expect(wrapper.emitted('open-settings')).toBeTruthy();
   });
 
+  it('zeigt unter macOS keine eigenen Fensterknöpfe (native Ampel) und lässt Platz', async () => {
+    const wrapper = await mountDesktop(makeHost({ platform: 'darwin' }));
+    expect(wrapper.find('.win-controls').exists()).toBe(false);
+    expect(wrapper.get('.topbar').classes()).toContain('mac');
+  });
+
+  it('zeigt unter Windows/Linux eigene Fensterknöpfe', async () => {
+    const wrapper = await mountDesktop(makeHost({ platform: 'win32' }));
+    expect(wrapper.find('.win-controls').exists()).toBe(true);
+    expect(wrapper.get('.topbar').classes()).not.toContain('mac');
+  });
+
   it('steuert das rahmenlose Fenster (minimieren/maximieren/schließen)', async () => {
     const host = makeHost({
       minimizeWindow: vi.fn(async () => {}),

@@ -247,6 +247,7 @@ async function generate(
 // ---- Fenster ----
 
 function createWindow(): void {
+  const mac = process.platform === 'darwin';
   const win = new BrowserWindow({
     width: 1200,
     height: 820,
@@ -254,8 +255,13 @@ function createWindow(): void {
     minHeight: 520,
     backgroundColor: '#0f1115',
     title: 'Morphos',
-    // Rahmenlos: die Titelleiste zeichnet der Renderer selbst (siehe TopBar).
-    frame: false,
+    // OS-abhängige Titelleiste: unter macOS bleibt die Titelzeile verborgen, die
+    // nativen Ampel-Knöpfe (Schließen/Minimieren/Vollbild) bleiben aber erhalten
+    // und werden auf die Höhe unserer Leiste ausgerichtet. Unter Windows/Linux ist
+    // das Fenster komplett rahmenlos und der Renderer zeichnet eigene Knöpfe.
+    ...(mac
+      ? { titleBarStyle: 'hidden' as const, trafficLightPosition: { x: 14, y: 15 } }
+      : { frame: false }),
     webPreferences: {
       // Das Preload wird als CommonJS (.cjs) gebaut — nur so kann der Renderer
       // im Chromium-Sandbox-Modus laufen (sandboxte Preloads können kein ESM).

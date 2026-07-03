@@ -144,6 +144,13 @@ describe('ChatDock', () => {
     expect(wrapper.text()).toContain('vorlage.png');
   });
 
+  it('zeigt das aktive Ziel (Kontext-Label) an, wenn gesetzt', () => {
+    const wrapper = mountDock({ contextLabel: '🧮 Rechner' });
+    expect(wrapper.get('.chat-context').text()).toContain('Rechner');
+    const none = mountDock({ contextLabel: null });
+    expect(none.find('.chat-context').exists()).toBe(false);
+  });
+
   it('rendert Antworten des LLM als Markdown-HTML ohne Sprechblase', async () => {
     const md: ChatMessage[] = [
       { role: 'user', text: '**nicht fett**', time: 1 },

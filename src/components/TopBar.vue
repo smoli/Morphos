@@ -13,6 +13,17 @@ const workspace = useWorkspaceStore();
 const onDesktop = computed(() => route.name === 'desktop');
 const brandTarget = computed(() => (workspace.hasFolder ? '/desktop' : '/'));
 
+// Unter macOS zeichnet das OS die (nativen) Ampel-Knöpfe links; wir lassen dort
+// Platz und rendern KEINE eigenen Fensterknöpfe. Unter Windows/Linux zeichnen
+// wir die Knöpfe rechts selbst.
+const isMac = (() => {
+  try {
+    return getHost().platform === 'darwin';
+  } catch {
+    return false;
+  }
+})();
+
 const maximized = ref(false);
 let offMaximize: (() => void) | undefined;
 
@@ -48,7 +59,7 @@ function closeWindow(): void {
 </script>
 
 <template>
-  <header class="topbar">
+  <header class="topbar" :class="{ mac: isMac }">
     <div class="left">
       <RouterLink :to="brandTarget" class="brand no-drag">
         <span class="logo">◈</span>
@@ -79,7 +90,7 @@ function closeWindow(): void {
         <RouterLink to="/" class="link">Ordner wechseln</RouterLink>
       </template>
 
-      <div class="win-controls">
+      <div v-if="!isMac" class="win-controls">
         <button type="button" class="win-btn" title="Minimieren" @click="minimize">─</button>
         <button type="button" class="win-btn" :title="maximized ? 'Wiederherstellen' : 'Maximieren'" @click="toggleMaximize">
           {{ maximized ? '❐' : '▢' }}
@@ -102,6 +113,10 @@ function closeWindow(): void {
   background: var(--panel);
   /* Der ganze Balken zieht das rahmenlose Fenster; interaktive Elemente heben das auf. */
   -webkit-app-region: drag;
+}
+/* Unter macOS Platz für die nativen Ampel-Knöpfe links lassen. */
+.topbar.mac {
+  padding-left: 84px;
 }
 .no-drag {
   -webkit-app-region: no-drag;

@@ -9,6 +9,8 @@ const props = defineProps<{
   messages: ChatMessage[];
   /** Offene Rückfrage des LLM — klappt den Verlauf automatisch auf. */
   pendingQuestion: string | null;
+  /** Name der App, an die die Eingabe geht (zeigt dem Anwender das Ziel an). */
+  contextLabel?: string | null;
 }>();
 
 const emit = defineEmits<{ submit: [text: string, attachments: Attachment[]] }>();
@@ -181,6 +183,11 @@ function fmt(ts: number): string {
               <div class="time">{{ fmt(msg.time) }}</div>
             </div>
           </template>
+        </div>
+
+            <div v-if="contextLabel" class="chat-context" :title="`Deine Eingabe geht an: ${contextLabel}`">
+          <span class="ctx-dot"></span>
+          <span class="ctx-name">{{ contextLabel }}</span>
         </div>
 
         <div v-if="attachments.length" class="chips">
@@ -377,6 +384,32 @@ function fmt(ts: number): string {
   font-size: 10px;
   opacity: 0.7;
   margin-top: 4px;
+}
+.chat-context {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 12px 3px 10px;
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 100%;
+}
+.ctx-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.ctx-name {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .chips {
   display: flex;

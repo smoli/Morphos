@@ -16,6 +16,9 @@ import type {
 
 // Sichere, minimale Brücke zwischen Renderer und Hauptprozess (window.morphos).
 contextBridge.exposeInMainWorld('morphos', {
+  // Betriebssystem, damit die Titelleiste die Fensterknöpfe passend anordnet.
+  platform: process.platform,
+
   generate: (prompt: string, files: SourceFile[], chat: ChatMessage[], attachments: Attachment[]): Promise<GenerateResult> =>
     ipcRenderer.invoke('morphos:generate', { prompt, files, chat, attachments }),
 

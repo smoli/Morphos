@@ -24,6 +24,14 @@ const chatMessages = computed(() => activeStore.value?.chat ?? []);
 const chatBusy = computed(() => activeStore.value?.busy ?? false);
 const chatPending = computed(() => activeStore.value?.pendingQuestion ?? null);
 
+// Im Fenster-Modus anzeigen, an welche App die Eingabe geht (Gewissheit für den
+// Anwender). Ohne offenes Fenster entsteht eine neue App.
+const chatContext = computed<string | null>(() => {
+  if (workspace.uiMode !== 'windows') return null;
+  const w = activeWindow.value;
+  return w ? `${w.icon} ${w.title}` : 'Neue App';
+});
+
 onMounted(() => {
   void workspace.refresh();
 });
@@ -104,6 +112,7 @@ function onPrompt(text: string, attachments: Attachment[] = []): void {
         :busy="chatBusy"
         :messages="chatMessages"
         :pending-question="chatPending"
+        :context-label="chatContext"
         @submit="onPrompt"
       />
     </footer>
