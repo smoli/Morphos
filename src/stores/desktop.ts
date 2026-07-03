@@ -1,4 +1,7 @@
 import { defineStore } from 'pinia';
+import type { Attachment } from '@/types';
+import { useAppWindow } from './app';
+import { useWorkspaceStore } from './workspace';
 
 /** Ein Fenster auf dem Desktop. Trägt nur Geometrie/Stapel — die App-Daten
  *  liegen im zugehörigen Instanz-Store (useAppWindow(instanceId)). */
@@ -14,6 +17,7 @@ export interface DesktopWindow {
   h: number;
   z: number;
   minimized: boolean;
+  maximized: boolean;
 }
 
 interface DesktopState {
@@ -88,6 +92,7 @@ export const useDesktopStore = defineStore('desktop', {
         h: DEFAULT_H,
         z: (this.nextZ += 1),
         minimized: false,
+        maximized: false,
       });
       return instanceId;
     },
@@ -126,6 +131,14 @@ export const useDesktopStore = defineStore('desktop', {
       win.h = Math.max(MIN_H, Math.round(h));
     },
 
+    /** Maximiert ein Fenster (füllt die Desktop-Fläche) bzw. stellt es wieder her. */
+    toggleMaximize(instanceId: string): void {
+      const w = this.find(instanceId);
+      if (!w) return;
+      w.maximized = !w.maximized;
+      this.focusWindow(instanceId);
+    },
+
     /** Ein Entwurf wurde zur echten App: Id, Titel und Icon übernehmen. */
     setAppMeta(instanceId: string, appId: string, title: string, icon: string): void {
       const w = this.find(instanceId);
@@ -133,6 +146,36 @@ export const useDesktopStore = defineStore('desktop', {
       w.appId = appId;
       w.title = title;
       w.icon = icon;
+    },
+
+    /**
+     * Führt eine Generierung für das Fenster `instanceId` aus und gleicht danach
+     * Titel/Icon (Entwurf → echte App) sowie die Desktop-Liste ab. Zentrale
+     * Stelle für die globale Promptleiste UND den WelcomeScreen eines Fensters.
+     */
+    async runGenerate(instanceId: string, text: string, attachments: Attachment[] = []): Promise<void> {
+      const app = useAppWindow(instanceId);
+      const wasDraft = app.isDraft;
+      await app.generate(text, attachments);
+      if (!app.isDraft && app.id) {
+        this.setAppMeta(instanceId, app.id, app.name, app.icon);
+        if (wasDraft) await useWorkspaceStore().refresh();
+      }
+    },
+
+    /**
+     * Nimmt eine Eingabe der globalen Promptleiste entgegen und richtet sie an
+     * das aktive Fenster. Ist keines offen, wird ein neuer Entwurf angelegt.
+     */
+    async submitToActive(text: string, attachments: Attachment[] = []): Promise<void> {
+      const ws = useWorkspaceStore();
+      if (!ws.folder) return;
+      let id = this.focusedId;
+      if (!id) {
+        id = this.openDraft();
+        useAppWindow(id).newDraft(ws.folder);
+      }
+      await this.runGenerate(id, text, attachments);
     },
   },
 });

@@ -51,7 +51,7 @@ describe('useWorkspaceStore', () => {
     expect(ws.folder).toBe('/neu');
     expect(ws.recentFolders[0]).toBe('/neu');
     expect(ws.apps).toHaveLength(2);
-    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [] });
+    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows' });
     expect(host.listApps).toHaveBeenCalledWith('/neu');
   });
 
@@ -236,6 +236,20 @@ describe('useWorkspaceStore', () => {
     expect(host.saveSettings).toHaveBeenLastCalledWith(
       expect.objectContaining({ libWhitelist: ['https://unpkg.com/'] }),
     );
+  });
+
+  it('lädt und schaltet den Desktop-Modus (persistiert)', async () => {
+    const host = makeHost({
+      loadSettings: vi.fn(async () => ({ recentFolders: [], accessRoots: {}, uiMode: 'single' as const })),
+    });
+    setHost(host);
+    const ws = useWorkspaceStore();
+    await ws.init();
+    expect(ws.uiMode).toBe('single');
+
+    ws.setUiMode('windows');
+    expect(ws.uiMode).toBe('windows');
+    expect(host.saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({ uiMode: 'windows' }));
   });
 
   it('verlässt das Verzeichnis über closeFolder', async () => {

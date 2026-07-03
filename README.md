@@ -7,7 +7,15 @@ Beim Start wählt der Anwender ein **Verzeichnis**, in dem seine Apps liegen
 dort gespeicherte App ein Icon; von hier lässt sich eine bestehende App öffnen
 oder eine neue anlegen. Apps öffnen sich als **frei bewegliche, überlappende
 Fenster** auf dem Desktop — mehrere gleichzeitig, jedes mit eigener Titelleiste
-(Ziehen, Größe ändern, Versionen, Minimieren in den Dock, Schließen).
+(Ziehen, Größe ändern, Maximieren, Versionen, Minimieren in den Dock, Schließen).
+Über die Kopfleiste lässt sich zwischen **Fenster-Modus** und **Einzel-Modus**
+(eine App im Vollbild) umschalten. Die Eingabe liegt als **globale Promptleiste**
+am unteren Rand und bezieht sich stets auf das **aktive Fenster**.
+
+Das Programmfenster selbst ist **rahmenlos** mit eigener Titelleiste
+(Ziehbereich, Minimieren/Maximieren/Schließen). Datenordner, Berechtigungen und
+Bibliotheks-Freigaben liegen hinter dem **⚙ Einstellungen**-Knopf in der
+Kopfleiste.
 
 In einer App gibt es zunächst nur ein Eingabefeld. Der Anwender schreibt hinein,
 *was die Anwendung sein soll* — ein Taschenrechner, ein Editor, eine
@@ -127,13 +135,14 @@ src/
     workspace.ts       Pinia-Store: Verzeichnis, zuletzt genutzte Ordner, App-Liste
     app.ts             Pinia-Store: EINE geöffnete App (Historie, generate/revert)
   components/          Präsentations-Komponenten (Props rein, Events raus)
-    ChatDock · WelcomeScreen · AppCanvas · HistoryList · TopBar · PermissionDialog
+    WindowFrame · ChatDock · WelcomeScreen · AppCanvas · HistoryList
+    TopBar (Titelleiste) · SettingsDialog · PermissionDialog
   views/
     StartView.vue      Startbildschirm: Ordnerauswahl + zuletzt genutzte Ordner
-    DesktopView.vue    Desktop: Icon je App, „Neue App“, Löschen
-    WorkspaceView.vue  Arbeitsansicht einer App (Entwurf bzw. laufende App)
-    VersionsView.vue   Versionsübersicht der geöffneten App
-  router/index.ts      Routen: / · /desktop · /app/new · /app/:id · /app/:id/versions
+    DesktopView.vue    Desktop: Launcher, App-Fenster, Dock, globale Promptleiste
+  stores/
+    desktop.ts         Fenster-Registry (Geometrie, z-Ordnung, Fokus, Maximieren)
+  router/index.ts      Routen: / · /desktop (Apps sind Fenster, keine Route)
   App.vue · main.ts    Wurzelkomponente & Einstiegspunkt des Renderers
 ```
 
@@ -178,8 +187,8 @@ npm start        # gebaute App starten
 ## Dateizugriff der Apps
 
 Erzeugte Apps können optional **Dateien lesen und schreiben**. Pro Workspace legt
-der Anwender auf dem Desktop einen **Datenordner** fest („📂 Datenordner der Apps“);
-alle Apps dieses Workspace teilen sich diesen Ordner.
+der Anwender unter **⚙ Einstellungen** einen **Datenordner** fest; alle Apps dieses
+Workspace teilen sich diesen Ordner.
 
 Im Sandbox-iframe steht dafür ein globales, asynchrones API bereit:
 
@@ -207,8 +216,7 @@ Schreiben/Ordner-anlegen/Löschen **fragen** beim ersten Aufruf nach.
 Bei „Fragen“ erscheint ein Dialog mit vier Optionen — *Einmal erlauben*,
 *Immer erlauben*, *Einmal ablehnen*, *Immer ablehnen*. Ein „Immer“-Entscheid wird
 für den Workspace gemerkt, sodass die Funktion danach still erlaubt bzw. abgelehnt
-wird. Vorab lässt sich alles auf dem **Desktop** unter „Berechtigungen der Apps“
-je Funktion einstellen.
+wird. Vorab lässt sich alles unter **⚙ Einstellungen** je Funktion einstellen.
 
 ## Sicherheit
 

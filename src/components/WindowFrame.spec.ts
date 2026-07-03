@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import WindowFrame from './WindowFrame.vue';
-import ChatDock from './ChatDock.vue';
+import WelcomeScreen from './WelcomeScreen.vue';
 import { useDesktopStore } from '@/stores/desktop';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { setHost } from '@/services/host';
@@ -125,10 +125,36 @@ describe('WindowFrame', () => {
 
     expect(win.appId).toBeNull();
 
-    wrapper.findComponent(ChatDock).vm.$emit('submit', 'Ein Rechner', []);
+    // Der WelcomeScreen eines leeren Entwurfs generiert über die zentrale Orchestrierung.
+    wrapper.findComponent(WelcomeScreen).vm.$emit('pick', 'Ein Rechner');
     await flushPromises();
 
     expect(win.appId).not.toBeNull();
     expect(win.title).toBe('Rechner');
+  });
+
+  it('maximiert und stellt über den Maximieren-Knopf wieder her', async () => {
+    const { wrapper, desktop, win } = await mountFrameForApp();
+    await wrapper.get('.w-max').trigger('click');
+    expect(desktop.find(win.instanceId)!.maximized).toBe(true);
+    expect(wrapper.get('.window-frame').classes()).toContain('full');
+    await wrapper.get('.w-max').trigger('click');
+    expect(desktop.find(win.instanceId)!.maximized).toBe(false);
+  });
+
+  it('zeigt im Einzel-Modus kein Maximieren und keinen Ziehgriff', async () => {
+    setActivePinia(createPinia());
+    setHost(makeHost());
+    const workspace = useWorkspaceStore();
+    workspace.folder = '/apps';
+    const desktop = useDesktopStore();
+    const id = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+    const win = desktop.windows.find((w) => w.instanceId === id)!;
+    const wrapper = mount(WindowFrame, { props: { win, single: true } });
+    await flushPromises();
+
+    expect(wrapper.find('.w-max').exists()).toBe(false);
+    expect(wrapper.find('.resize-handle').exists()).toBe(false);
+    expect(wrapper.get('.window-frame').classes()).toContain('full');
   });
 });

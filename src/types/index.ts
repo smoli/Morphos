@@ -99,7 +99,12 @@ export interface Settings {
    * die Shell Bibliotheken laden (einmalig, gecacht, offline eingebettet).
    */
   libWhitelist?: string[];
+  /** Darstellungsmodus des Desktops: überlappende Fenster oder eine App zur Zeit. */
+  uiMode?: UiMode;
 }
+
+/** Desktop-Modus: mehrere überlappende Fenster oder genau eine App im Vollbild. */
+export type UiMode = 'windows' | 'single';
 
 /** Von den erzeugten Apps aufrufbare Dateisystem-Operationen. */
 export type FsOp = 'read' | 'write' | 'list' | 'exists' | 'stat' | 'delete' | 'mkdir';
@@ -215,4 +220,17 @@ export interface MorphosHost {
    * im Hauptprozess strikt auf diesen Ordner eingegrenzt.
    */
   fs(root: string, req: FsRequest): Promise<FsResponse>;
+
+  // ---- Steuerung des rahmenlosen Electron-Fensters (optional; im Renderer/Test
+  //      fehlt die Anbindung — die Titelleiste ruft daher defensiv mit ?. auf) ----
+  /** Minimiert das Programmfenster. */
+  minimizeWindow?(): Promise<void>;
+  /** Maximiert das Programmfenster bzw. stellt es wieder her. */
+  toggleMaximizeWindow?(): Promise<void>;
+  /** Schließt das Programmfenster. */
+  closeWindow?(): Promise<void>;
+  /** Aktueller Maximierungszustand des Programmfensters. */
+  isWindowMaximized?(): Promise<boolean>;
+  /** Abonniert Änderungen des Maximierungszustands; liefert eine Abmeldefunktion. */
+  onWindowMaximize?(cb: (maximized: boolean) => void): () => void;
 }

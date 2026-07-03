@@ -1,6 +1,33 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useDesktopStore } from './desktop';
+import { useWorkspaceStore } from './workspace';
+import { setHost } from '@/services/host';
+import type { GenerateResult, MorphosHost, SourceFile } from '@/types';
+
+const DOC = (t = 'Rechner', icon = '🧮'): string =>
+  `<!DOCTYPE html><html><head><title>${t}</title><meta name="morphos:icon" content="${icon}"></head><body>x</body></html>`;
+const FILES = (): SourceFile[] => [{ path: 'src/index.html', content: DOC() }];
+
+function makeHost(over: Partial<MorphosHost> = {}): MorphosHost {
+  return {
+    generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(), html: DOC() })),
+    chooseFolder: vi.fn(async () => ({ ok: false })),
+    chooseAttachment: vi.fn(async () => ({ ok: false })),
+    readClipboardImage: vi.fn(async () => ({ ok: false })),
+    loadSettings: vi.fn(async () => ({ recentFolders: [], accessRoots: {} })),
+    saveSettings: vi.fn(async () => ({ ok: true })),
+    listApps: vi.fn(async () => []),
+    loadApp: vi.fn(async () => null),
+    saveApp: vi.fn(async () => ({ ok: true })),
+    saveChat: vi.fn(async () => ({ ok: true })),
+    deleteApp: vi.fn(async () => ({ ok: true })),
+    listVersions: vi.fn(async () => []),
+    revertApp: vi.fn(async () => ({ ok: true })),
+    fs: vi.fn(async () => ({ ok: true as const, result: null })),
+    ...over,
+  };
+}
 
 describe('useDesktopStore', () => {
   beforeEach(() => setActivePinia(createPinia()));
@@ -124,5 +151,50 @@ describe('useDesktopStore', () => {
     const b = d.openApp('b', { title: 'B', icon: '🅱' });
     d.focusWindow(a);
     expect(d.stacked.map((w) => w.instanceId)).toEqual([b, a]);
+  });
+
+  it('maximiert ein Fenster und stellt es wieder her', () => {
+    const d = useDesktopStore();
+    const a = d.openApp('a', { title: 'A', icon: '🅰' });
+    expect(d.find(a)!.maximized).toBe(false);
+    d.toggleMaximize(a);
+    expect(d.find(a)!.maximized).toBe(true);
+    d.toggleMaximize(a);
+    expect(d.find(a)!.maximized).toBe(false);
+  });
+
+  describe('Generieren aus der globalen Promptleiste', () => {
+    it('legt ohne offenes Fenster einen Entwurf an und richtet den Titel ein', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      ws.folder = '/apps';
+      const d = useDesktopStore();
+
+      await d.submitToActive('Ein Rechner');
+
+      expect(d.windows).toHaveLength(1);
+      expect(d.windows[0].appId).not.toBeNull();
+      expect(d.windows[0].title).toBe('Rechner');
+    });
+
+    it('richtet die Eingabe an das aktive (fokussierte) Fenster', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      ws.folder = '/apps';
+      const d = useDesktopStore();
+      const a = d.openApp('a-1', { title: 'A', icon: '🅰' });
+      const b = d.openApp('b-2', { title: 'B', icon: '🅱' }); // b ist jetzt aktiv
+      // Die Instanz-Stores brauchen einen Ordner (sonst kein Persistieren).
+      const { useAppWindow } = await import('./app');
+      useAppWindow(a).newDraft('/apps');
+      useAppWindow(b).newDraft('/apps');
+
+      await d.submitToActive('mach was');
+
+      // Kein neues Fenster — die aktive Instanz b hat generiert.
+      expect(d.windows).toHaveLength(2);
+      expect(d.focusedId).toBe(b);
+    });
   });
 });

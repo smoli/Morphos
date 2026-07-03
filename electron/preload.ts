@@ -46,4 +46,15 @@ contextBridge.exposeInMainWorld('morphos', {
     ipcRenderer.invoke('morphos:revertApp', folder, id, sha),
 
   fs: (root: string, req: FsRequest): Promise<FsResponse> => ipcRenderer.invoke('morphos:fs', root, req),
+
+  // Steuerung des rahmenlosen Programmfensters.
+  minimizeWindow: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
+  toggleMaximizeWindow: (): Promise<void> => ipcRenderer.invoke('window:toggleMaximize'),
+  closeWindow: (): Promise<void> => ipcRenderer.invoke('window:close'),
+  isWindowMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized'),
+  onWindowMaximize: (cb: (maximized: boolean) => void): (() => void) => {
+    const handler = (_e: unknown, maximized: boolean): void => cb(maximized);
+    ipcRenderer.on('window:maximized', handler);
+    return () => ipcRenderer.removeListener('window:maximized', handler);
+  },
 });

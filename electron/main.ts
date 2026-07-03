@@ -57,9 +57,10 @@ function readSettings(): Settings {
     const libWhitelist = Array.isArray(parsed.libWhitelist)
       ? parsed.libWhitelist.filter((p) => typeof p === 'string')
       : [];
-    return { recentFolders: recent, accessRoots, permissions, libWhitelist };
+    const uiMode = parsed.uiMode === 'single' ? 'single' : 'windows';
+    return { recentFolders: recent, accessRoots, permissions, libWhitelist, uiMode };
   } catch {
-    return { recentFolders: [], accessRoots: {}, permissions: {}, libWhitelist: [] };
+    return { recentFolders: [], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows' };
   }
 }
 
@@ -253,6 +254,8 @@ function createWindow(): void {
     minHeight: 520,
     backgroundColor: '#0f1115',
     title: 'Morphos',
+    // Rahmenlos: die Titelleiste zeichnet der Renderer selbst (siehe TopBar).
+    frame: false,
     webPreferences: {
       // Das Preload wird als CommonJS (.cjs) gebaut — nur so kann der Renderer
       // im Chromium-Sandbox-Modus laufen (sandboxte Preloads können kein ESM).
@@ -267,6 +270,10 @@ function createWindow(): void {
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null;
   });
+
+  // Maximierungszustand an die eigene Titelleiste melden (Icon umschalten).
+  win.on('maximize', () => win.webContents.send('window:maximized', true));
+  win.on('unmaximize', () => win.webContents.send('window:maximized', false));
 
   if (DEV_SERVER_URL) {
     void win.loadURL(DEV_SERVER_URL);
@@ -367,6 +374,7 @@ ipcMain.handle('morphos:saveSettings', async (_e, settings: Settings): Promise<S
       accessRoots: settings?.accessRoots ?? {},
       permissions: settings?.permissions ?? {},
       libWhitelist: (settings?.libWhitelist ?? []).filter((p) => typeof p === 'string' && p.trim()).slice(0, 100),
+      uiMode: settings?.uiMode === 'single' ? 'single' : 'windows',
     };
     fs.writeFileSync(settingsFile(), JSON.stringify(clean, null, 2), 'utf8');
     return { ok: true };
@@ -475,6 +483,16 @@ ipcMain.handle('morphos:revertApp', async (_e, folder: string, id: string, sha: 
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 });
+
+// Steuerung des rahmenlosen Programmfensters (aus der eigenen Titelleiste).
+ipcMain.handle('window:minimize', () => { mainWindow?.minimize(); });
+ipcMain.handle('window:toggleMaximize', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMaximized()) mainWindow.unmaximize();
+  else mainWindow.maximize();
+});
+ipcMain.handle('window:close', () => { mainWindow?.close(); });
+ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false);
 
 // Externe Links im Systembrowser öffnen; das leere Chat-Fenster (Portal aus dem
 // Renderer, same-origin about:blank) zulassen. Die generierten Apps können hier

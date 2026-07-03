@@ -1,16 +1,15 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useAppWindow } from '@/stores/app';
 import { useDesktopStore } from '@/stores/desktop';
 import { useWorkspaceStore } from '@/stores/workspace';
 import AppCanvas from './AppCanvas.vue';
 import WelcomeScreen from './WelcomeScreen.vue';
-import ChatDock from './ChatDock.vue';
 import HistoryList from './HistoryList.vue';
 import type { DesktopWindow } from '@/stores/desktop';
 import type { Attachment } from '@/types';
 
-const props = defineProps<{ win: DesktopWindow }>();
+const props = defineProps<{ win: DesktopWindow; single?: boolean }>();
 
 const desktop = useDesktopStore();
 const workspace = useWorkspaceStore();
@@ -19,11 +18,14 @@ const store = useAppWindow(props.win.instanceId);
 const showVersions = ref(false);
 const interacting = ref(false); // Ziehen/Größe ändern → Schutzschicht über den iframes
 
+// Vollflächig (kein Ziehen/Größe): im Einzel-Modus oder wenn maximiert.
+const full = computed(() => props.single || props.win.maximized);
+
 onMounted(async () => {
   if (props.win.appId && workspace.folder) {
     await store.open(workspace.folder, props.win.appId);
     syncMeta();
-  } else if (workspace.folder) {
+  } else if (workspace.folder && !store.folder) {
     store.newDraft(workspace.folder);
   }
 });
@@ -47,14 +49,14 @@ function close(): void {
 function minimize(): void {
   desktop.minimizeWindow(props.win.instanceId);
 }
+function toggleMaximize(): void {
+  desktop.toggleMaximize(props.win.instanceId);
+}
 
-async function onRequest(text: string, attachments: Attachment[] = []): Promise<void> {
-  const wasDraft = store.isDraft;
-  await store.generate(text, attachments);
-  if (!store.isDraft) {
-    syncMeta();
-    if (wasDraft) void workspace.refresh();
-  }
+// Der WelcomeScreen eines leeren Entwurfsfensters generiert über die zentrale
+// Orchestrierung (wie die globale Promptleiste).
+async function onWelcomePick(text: string, attachments: Attachment[] = []): Promise<void> {
+  await desktop.runGenerate(props.win.instanceId, text, attachments);
 }
 
 async function onRevert(sha: string): Promise<void> {
@@ -107,16 +109,17 @@ function stopInteraction(): void {
 <template>
   <section
     class="window-frame"
-    :style="{ left: win.x + 'px', top: win.y + 'px', width: win.w + 'px', height: win.h + 'px', zIndex: win.z }"
+    :class="{ full }"
+    :style="full ? { zIndex: win.z } : { left: win.x + 'px', top: win.y + 'px', width: win.w + 'px', height: win.h + 'px', zIndex: win.z }"
     @mousedown="focus"
   >
     <!-- Vollflächige Schutzschicht: verhindert, dass die iframes beim Ziehen/
          Größenändern die Maus schlucken. -->
     <div v-if="interacting" class="drag-shield"></div>
 
-    <header class="titlebar" @mousedown.self="startDrag">
+    <header class="titlebar" @mousedown.self="!full && startDrag($event)" @dblclick="!single && toggleMaximize()">
       <span class="w-icon" @mousedown.stop>{{ store.icon || win.icon }}</span>
-      <span class="w-title" @mousedown.stop="startDrag">{{ store.name || win.title }}</span>
+      <span class="w-title" @mousedown.self="!full && startDrag($event)">{{ store.name || win.title }}</span>
       <span class="w-actions">
         <button
           v-if="!store.isDraft"
@@ -129,6 +132,16 @@ function stopInteraction(): void {
           ⟲ {{ store.versionCount }}
         </button>
         <button type="button" class="w-min" title="Minimieren" @mousedown.stop @click="minimize">—</button>
+        <button
+          v-if="!single"
+          type="button"
+          class="w-max"
+          :title="win.maximized ? 'Wiederherstellen' : 'Maximieren'"
+          @mousedown.stop
+          @click="toggleMaximize"
+        >
+          {{ win.maximized ? '❐' : '▢' }}
+        </button>
         <button type="button" class="w-close" title="Schließen" @mousedown.stop @click="close">✕</button>
       </span>
     </header>
@@ -140,12 +153,14 @@ function stopInteraction(): void {
         :access-root="workspace.accessRoot"
         :authorize="workspace.authorizeFs"
       />
-      <WelcomeScreen v-else @pick="onRequest" />
+      <WelcomeScreen v-else @pick="onWelcomePick" />
 
       <div v-if="store.busy" class="w-loading">
         <div class="spinner"></div>
         <div>{{ store.hasApp ? 'Die Änderung wird umgesetzt …' : 'Die Anwendung wird entwickelt …' }}</div>
       </div>
+
+      <div v-if="store.error" class="w-error">{{ store.error }}</div>
 
       <div v-if="showVersions" class="w-versions-panel">
         <div class="w-versions-head">
@@ -156,17 +171,7 @@ function stopInteraction(): void {
       </div>
     </div>
 
-    <footer class="w-foot">
-      <div v-if="store.error" class="w-error">{{ store.error }}</div>
-      <ChatDock
-        :busy="store.busy"
-        :messages="store.chat"
-        :pending-question="store.pendingQuestion"
-        @submit="onRequest"
-      />
-    </footer>
-
-    <div class="resize-handle" title="Größe ändern" @mousedown.stop="startResize"></div>
+    <div v-if="!full" class="resize-handle" title="Größe ändern" @mousedown.stop="startResize"></div>
   </section>
 </template>
 
@@ -183,6 +188,18 @@ function stopInteraction(): void {
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   pointer-events: auto;
+}
+/* Vollflächig: maximiert oder Einzel-Modus. */
+.window-frame.full {
+  inset: 0;
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.window-frame.full .titlebar {
+  cursor: default;
 }
 .drag-shield {
   position: fixed;
@@ -288,20 +305,19 @@ function stopInteraction(): void {
   font-size: 12px;
   cursor: pointer;
 }
-.w-foot {
-  border-top: 1px solid var(--border);
-  background: var(--panel);
-  padding: 10px 12px;
-}
 .w-error {
-  background: rgba(255, 108, 108, 0.12);
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  background: rgba(40, 12, 12, 0.95);
   border: 1px solid var(--danger);
   color: #ffb3b3;
   padding: 8px 12px;
   border-radius: 9px;
-  margin-bottom: 8px;
   font-size: 12px;
   white-space: pre-wrap;
+  z-index: 5;
 }
 .resize-handle {
   position: absolute;

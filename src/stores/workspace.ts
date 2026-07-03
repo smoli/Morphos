@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import type { AppSummary, FsOp, FsPermissions, PermDecision, PermMode } from '@/types';
+import type { AppSummary, FsOp, FsPermissions, PermDecision, PermMode, UiMode } from '@/types';
 import { getHost } from '@/services/host';
 import { decideOutcome, effectivePermission } from '@/core/permissions';
 
@@ -17,6 +17,8 @@ interface WorkspaceState {
   permissions: Record<string, FsPermissions>;
   /** Freigegebene Bibliotheks-Quellen (global, siehe core/libs). */
   libWhitelist: string[];
+  /** Desktop-Darstellung: überlappende Fenster oder eine App zur Zeit. */
+  uiMode: UiMode;
   /** Aktuell zur Genehmigung anstehende Anfrage (für den Dialog). */
   pendingPermission: PendingPermission | null;
   apps: AppSummary[];
@@ -40,6 +42,7 @@ export const useWorkspaceStore = defineStore('workspace', {
     accessRoots: {},
     permissions: {},
     libWhitelist: [],
+    uiMode: 'windows',
     pendingPermission: null,
     apps: [],
     loading: false,
@@ -65,11 +68,13 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.accessRoots = settings?.accessRoots && typeof settings.accessRoots === 'object' ? settings.accessRoots : {};
         this.permissions = settings?.permissions && typeof settings.permissions === 'object' ? settings.permissions : {};
         this.libWhitelist = Array.isArray(settings?.libWhitelist) ? settings.libWhitelist : [];
+        this.uiMode = settings?.uiMode === 'single' ? 'single' : 'windows';
       } catch {
         this.recentFolders = [];
         this.accessRoots = {};
         this.permissions = {};
         this.libWhitelist = [];
+        this.uiMode = 'windows';
       }
     },
 
@@ -115,6 +120,12 @@ export const useWorkspaceStore = defineStore('workspace', {
       this.recentFolders = [path, ...this.recentFolders.filter((f) => f !== path)].slice(0, MAX_RECENT);
       void this.persistSettings();
       await this.refresh();
+    },
+
+    /** Schaltet den Desktop-Modus um (überlappende Fenster ⇄ eine App zur Zeit). */
+    setUiMode(mode: UiMode): void {
+      this.uiMode = mode;
+      void this.persistSettings();
     },
 
     /** Gibt eine Bibliotheks-Quelle frei (Hostname oder https-URL-Präfix). */
@@ -205,8 +216,9 @@ export const useWorkspaceStore = defineStore('workspace', {
       const accessRoots = { ...this.accessRoots };
       const permissions = JSON.parse(JSON.stringify(this.permissions)) as Record<string, FsPermissions>;
       const libWhitelist = [...this.libWhitelist];
+      const uiMode = this.uiMode;
       try {
-        await getHost().saveSettings({ recentFolders, accessRoots, permissions, libWhitelist });
+        await getHost().saveSettings({ recentFolders, accessRoots, permissions, libWhitelist, uiMode });
       } catch {
         /* nicht kritisch */
       }

@@ -108,43 +108,38 @@ describe('DesktopView', () => {
     expect(desktop.windows[0].minimized).toBe(false);
   });
 
-  it('setzt eine Funktions-Berechtigung über die Berechtigungsliste', async () => {
+  it('enthält keine Einstellungs-Panels mehr (sie liegen im Einstellungs-Dialog)', async () => {
     const { wrapper } = await mountView();
-    const ws = useWorkspaceStore();
-    expect(ws.permissionFor('write')).toBe('ask'); // Vorgabe
-
-    const row = wrapper.findAll('.perms li').find((li) => li.text().includes('Datei schreiben'))!;
-    const allowBtn = row.findAll('button').find((b) => b.text() === 'Erlauben')!;
-    await allowBtn.trigger('click');
-
-    expect(ws.permissionFor('write')).toBe('allow');
+    expect(wrapper.find('.perms').exists()).toBe(false);
+    expect(wrapper.find('.lib-add').exists()).toBe(false);
+    expect(wrapper.find('.access-bar').exists()).toBe(false);
   });
 
-  it('verwaltet die Bibliotheks-Freigaben über das Bibliotheken-Panel', async () => {
+  it('richtet die globale Promptleiste an das aktive Fenster (Entwurf, wenn keins offen)', async () => {
     const { wrapper } = await mountView();
-    const ws = useWorkspaceStore();
+    const desktop = useDesktopStore();
+    const spy = vi.spyOn(desktop, 'submitToActive').mockResolvedValue();
 
-    const input = wrapper.get('.lib-add input');
-    await input.setValue('cdn.jsdelivr.net');
-    await wrapper.get('.lib-add').trigger('submit');
-    expect(ws.libWhitelist).toEqual(['cdn.jsdelivr.net']);
-    await flushPromises();
-    expect(wrapper.text()).toContain('cdn.jsdelivr.net');
+    // ChatDock unten absenden.
+    await wrapper.get('textarea').setValue('Ein Spiel');
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' });
 
-    await wrapper.get('.lib-del').trigger('click');
-    expect(ws.libWhitelist).toEqual([]);
+    expect(spy).toHaveBeenCalledWith('Ein Spiel', []);
   });
 
-  it('legt den Datenordner über die Zugriffsleiste fest', async () => {
-    const host = makeHost({ chooseFolder: vi.fn(async () => ({ ok: true, path: '/daten' })) });
-    setHost(host);
+  it('zeigt im Einzel-Modus nur das aktive Fenster (Vollbild)', async () => {
+    const ws = useWorkspaceStore();
+    ws.uiMode = 'single';
     const { wrapper } = await mountView();
+    const desktop = useDesktopStore();
 
-    await wrapper.get('.access-btn').trigger('click');
+    desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+    desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });
     await flushPromises();
 
-    expect(host.chooseFolder).toHaveBeenCalledOnce();
-    expect(useWorkspaceStore().accessRoot).toBe('/daten');
-    expect(wrapper.text()).toContain('/daten');
+    const frames = wrapper.findAllComponents(WindowFrame);
+    expect(frames).toHaveLength(1);
+    expect(frames[0].props('single')).toBe(true);
+    expect(frames[0].props('win').appId).toBe('editor-2'); // das zuletzt fokussierte
   });
 });
