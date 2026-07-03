@@ -105,4 +105,40 @@ describe('runFs', () => {
   it('lehnt unbekannte Operationen ab', () => {
     expect(runFs(root, { op: 'boom' as never, path: 'x' }).ok).toBe(false);
   });
+
+  describe('Symlinks', () => {
+    let outside: string;
+
+    beforeEach(() => {
+      outside = fs.mkdtempSync(path.join(os.tmpdir(), 'morphos-outside-'));
+      fs.writeFileSync(path.join(outside, 'geheim.txt'), 'streng geheim', 'utf8');
+    });
+    afterEach(() => {
+      fs.rmSync(outside, { recursive: true, force: true });
+    });
+
+    it('verweigert Lesen durch einen Symlink-Ordner nach außen', () => {
+      fs.symlinkSync(outside, path.join(root, 'link'));
+      expect(runFs(root, { op: 'read', path: 'link/geheim.txt' }).ok).toBe(false);
+      expect(runFs(root, { op: 'list', path: 'link' }).ok).toBe(false);
+    });
+
+    it('verweigert Schreiben durch einen Symlink nach außen', () => {
+      fs.symlinkSync(outside, path.join(root, 'link'));
+      expect(runFs(root, { op: 'write', path: 'link/neu.txt', data: 'x' }).ok).toBe(false);
+      expect(fs.existsSync(path.join(outside, 'neu.txt'))).toBe(false);
+    });
+
+    it('verweigert Zugriff auf eine direkt verlinkte Datei außerhalb', () => {
+      fs.symlinkSync(path.join(outside, 'geheim.txt'), path.join(root, 'datei.txt'));
+      expect(runFs(root, { op: 'read', path: 'datei.txt' }).ok).toBe(false);
+    });
+
+    it('erlaubt Symlinks, die innerhalb des Ordners bleiben', () => {
+      fs.mkdirSync(path.join(root, 'echt'));
+      fs.writeFileSync(path.join(root, 'echt/inhalt.txt'), 'ok', 'utf8');
+      fs.symlinkSync(path.join(root, 'echt'), path.join(root, 'alias'));
+      expect(runFs(root, { op: 'read', path: 'alias/inhalt.txt' })).toEqual({ ok: true, result: 'ok' });
+    });
+  });
 });

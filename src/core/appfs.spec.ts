@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { BRIDGE_SDK, injectBridge, dispatchFsRequest, ALLOWED_OPS } from './appfs';
+import { BRIDGE_SDK, CSP_META, injectBridge, dispatchFsRequest, ALLOWED_OPS } from './appfs';
 import type { FsResponse } from '@/types';
 
 describe('BRIDGE_SDK', () => {
@@ -38,6 +38,19 @@ describe('injectBridge', () => {
 
   it('lässt leeres HTML unangetastet', () => {
     expect(injectBridge('')).toBe('');
+  });
+
+  it('erzwingt Offline-Betrieb per Content-Security-Policy', () => {
+    const out = injectBridge('<!DOCTYPE html><html><head></head><body></body></html>');
+    expect(out).toContain('Content-Security-Policy');
+    expect(out).toContain("default-src 'none'");
+    // Inline-Skripte und -Styles der erzeugten App müssen weiter funktionieren.
+    expect(CSP_META).toContain("script-src 'unsafe-inline'");
+    expect(CSP_META).toContain("style-src 'unsafe-inline'");
+    // Die CSP muss VOR dem Bridge-Skript stehen, damit sie früh greift.
+    expect(out.indexOf('Content-Security-Policy')).toBeLessThan(out.indexOf('data-morphos-bridge'));
+    // Nicht doppelt injizieren.
+    expect(injectBridge(out).match(/Content-Security-Policy/g)).toHaveLength(1);
   });
 });
 

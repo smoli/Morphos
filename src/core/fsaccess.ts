@@ -17,10 +17,45 @@ export function confineWithin(root: string, relPath: string): string | null {
     .replace(/^[a-zA-Z]:[\\/]?/, '') // Laufwerksbuchstabe
     .replace(/^[\\/]+/, ''); // führende Trenner
   const target = path.resolve(base, cleaned);
-  const rel = path.relative(base, target);
-  if (rel === '') return base;
-  if (rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel)) return null;
+  if (!staysWithin(base, target)) return null;
   return target;
+}
+
+/** Lexikalische Prüfung: liegt `target` innerhalb von `base` (oder ist `base` selbst)? */
+function staysWithin(base: string, target: string): boolean {
+  const rel = path.relative(base, target);
+  if (rel === '') return true;
+  return rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel);
+}
+
+/** Existenzprüfung, die Symlinks selbst sieht (auch kaputte), statt ihnen zu folgen. */
+function lexists(p: string): boolean {
+  try {
+    fs.lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * confineWithin prüft nur lexikalisch — ein Symlink INNERHALB des Ordners kann
+ * trotzdem nach außen zeigen. Hier wird der tiefste existierende Teil des Ziels
+ * real aufgelöst (Symlinks folgen) und geprüft, dass er im real aufgelösten
+ * Ordner bleibt. Kaputte Symlinks lassen realpathSync werfen → Zugriff scheitert.
+ */
+function escapesViaSymlink(root: string, target: string): boolean {
+  const base = fs.realpathSync(path.resolve(root));
+  let probe = target;
+  const rest: string[] = [];
+  while (!lexists(probe)) {
+    rest.unshift(path.basename(probe));
+    const parent = path.dirname(probe);
+    if (parent === probe) break;
+    probe = parent;
+  }
+  const real = path.resolve(fs.realpathSync(probe), ...rest);
+  return !staysWithin(base, real);
 }
 
 function ok(result?: FsResult): FsResponse {
@@ -39,6 +74,7 @@ export function runFs(root: string, req: FsRequest): FsResponse {
   if (target === null) return deny();
 
   try {
+    if (escapesViaSymlink(root, target)) return deny();
     switch (req.op) {
       case 'read':
         return ok(fs.readFileSync(target, 'utf8'));

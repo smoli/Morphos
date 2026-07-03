@@ -32,11 +32,32 @@ export const BRIDGE_SDK = `(function(){
   };
 })();`;
 
-/** Fügt das Bridge-SDK als <script> in ein HTML-Dokument ein (einmalig). */
+/**
+ * Content-Security-Policy für die erzeugte App: erzwingt den Offline-Betrieb.
+ * Die iframe-Sandbox blockiert KEINE Netzwerk-Requests — erst diese CSP
+ * verhindert, dass generierter Code Daten nach außen sendet (img, fetch, …).
+ * Inline-Skripte/-Styles bleiben erlaubt, Ressourcen nur als data:/blob:.
+ */
+export const CSP_META =
+  '<meta http-equiv="Content-Security-Policy" content="' +
+  [
+    "default-src 'none'",
+    "script-src 'unsafe-inline'",
+    "style-src 'unsafe-inline'",
+    'img-src data: blob:',
+    'media-src data: blob:',
+    'font-src data:',
+    'worker-src blob:',
+    "form-action 'none'",
+    "base-uri 'none'",
+  ].join('; ') +
+  '">';
+
+/** Fügt CSP und Bridge-SDK (<script>) in ein HTML-Dokument ein (einmalig). */
 export function injectBridge(html: string): string {
   if (!html) return html;
   if (html.includes('data-morphos-bridge')) return html;
-  const script = `<script data-morphos-bridge>${BRIDGE_SDK}</script>`;
+  const script = `${CSP_META}<script data-morphos-bridge>${BRIDGE_SDK}</script>`;
 
   const head = html.match(/<head[^>]*>/i);
   if (head && head.index !== undefined) {

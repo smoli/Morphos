@@ -18,4 +18,16 @@ describe('AppCanvas', () => {
     expect(sandbox).toContain('allow-scripts');
     expect(sandbox).not.toContain('allow-same-origin');
   });
+
+  it('erlaubt keine Popups (kein Kanal nach außen)', () => {
+    const wrapper = mount(AppCanvas, { props: { html: '<html></html>' } });
+    const sandbox = wrapper.get('iframe').attributes('sandbox') ?? '';
+    expect(sandbox).not.toContain('allow-popups');
+  });
+
+  it('injiziert die Content-Security-Policy in das Dokument', () => {
+    const wrapper = mount(AppCanvas, { props: { html: '<html><head></head><body></body></html>' } });
+    const srcdoc = wrapper.get('iframe').attributes('srcdoc') ?? '';
+    expect(srcdoc).toContain('Content-Security-Policy');
+  });
 });

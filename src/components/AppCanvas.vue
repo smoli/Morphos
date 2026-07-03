@@ -13,7 +13,9 @@ const props = defineProps<{
 // Bewusst OHNE allow-same-origin: der generierte Code bleibt isoliert und
 // kann weder auf die Host-App noch auf Storage zugreifen. Der Dateisystem-
 // Zugriff läuft ausschließlich über die kontrollierte postMessage-Brücke.
-const SANDBOX = 'allow-scripts allow-forms allow-modals allow-popups allow-pointer-lock';
+// Ebenso OHNE allow-popups: window.open wäre ein Kanal nach außen (URL-Parameter).
+// Netzwerk-Requests blockiert die in injectBridge injizierte CSP.
+const SANDBOX = 'allow-scripts allow-forms allow-modals allow-pointer-lock';
 
 // Das Bridge-SDK (window.morphosFS) wird in das Dokument injiziert.
 const srcdoc = computed(() => injectBridge(props.html));
