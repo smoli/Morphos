@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type {
   AppData,
   AppSummary,
+  Attachment,
+  ChatMessage,
   FolderResult,
   FsRequest,
   FsResponse,
@@ -14,10 +16,17 @@ import type {
 
 // Sichere, minimale Brücke zwischen Renderer und Hauptprozess (window.morphos).
 contextBridge.exposeInMainWorld('morphos', {
-  generate: (prompt: string, files: SourceFile[]): Promise<GenerateResult> =>
-    ipcRenderer.invoke('morphos:generate', { prompt, files }),
+  generate: (prompt: string, files: SourceFile[], chat: ChatMessage[], attachments: Attachment[]): Promise<GenerateResult> =>
+    ipcRenderer.invoke('morphos:generate', { prompt, files, chat, attachments }),
 
   chooseFolder: (): Promise<FolderResult> => ipcRenderer.invoke('morphos:chooseFolder'),
+  chooseAttachment: (): Promise<{ ok: boolean; attachment?: Attachment; error?: string }> =>
+    ipcRenderer.invoke('morphos:chooseAttachment'),
+  saveClipboardImage: (data: ArrayBuffer, mime: string): Promise<{ ok: boolean; attachment?: Attachment; error?: string }> =>
+    ipcRenderer.invoke('morphos:saveClipboardImage', data, mime),
+
+  saveChat: (folder: string, id: string, chat: ChatMessage[]): Promise<SaveResult> =>
+    ipcRenderer.invoke('morphos:saveChat', folder, id, chat),
 
   loadSettings: (): Promise<Settings> => ipcRenderer.invoke('morphos:loadSettings'),
   saveSettings: (settings: Settings): Promise<SaveResult> =>

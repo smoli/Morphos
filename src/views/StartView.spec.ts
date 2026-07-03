@@ -10,6 +10,9 @@ function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
   return {
     generate: vi.fn(async () => ({ ok: true as const, files: [], html: '' })),
     chooseFolder: vi.fn(async () => ({ ok: false })),
+    chooseAttachment: vi.fn(async () => ({ ok: false })),
+    saveClipboardImage: vi.fn(async () => ({ ok: false })),
+    saveChat: vi.fn(async () => ({ ok: true })),
     loadSettings: vi.fn(async () => ({ recentFolders: ['C:/Apps/Alpha', 'C:/Apps/Beta'], accessRoots: {} })),
     saveSettings: vi.fn(async () => ({ ok: true })),
     listApps: vi.fn(async () => []),

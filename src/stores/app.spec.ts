@@ -16,11 +16,14 @@ function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
   return {
     generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(DOC('x')), html: DOC('x') })),
     chooseFolder: vi.fn(async () => ({ ok: false })),
+    chooseAttachment: vi.fn(async () => ({ ok: false })),
+    saveClipboardImage: vi.fn(async () => ({ ok: false })),
     loadSettings: vi.fn(async () => ({ recentFolders: [], accessRoots: {} })),
     saveSettings: vi.fn(async () => ({ ok: true })),
     listApps: vi.fn(async () => []),
     loadApp: vi.fn(async () => null),
     saveApp: vi.fn(async () => ({ ok: true })),
+    saveChat: vi.fn(async () => ({ ok: true })),
     deleteApp: vi.fn(async () => ({ ok: true })),
     listVersions: vi.fn(async (): Promise<VersionInfo[]> => []),
     revertApp: vi.fn(async () => ({ ok: true })),
@@ -57,7 +60,7 @@ describe('useAppStore', () => {
 
     await store.generate('Ein Taschenrechner');
 
-    expect(host.generate).toHaveBeenCalledWith('Ein Taschenrechner', []);
+    expect(host.generate).toHaveBeenCalledWith('Ein Taschenrechner', [], [], []);
     expect(store.name).toBe('Taschenrechner');
     expect(store.icon).toBe('🧮');
     expect(store.id).toMatch(/^taschenrechner-/);
@@ -136,6 +139,90 @@ describe('useAppStore', () => {
     expect(store.currentHtml).toContain('v2');
   });
 
+  it('führt den Dialog: Nutzer- und Antwort-Nachrichten landen im Chat und werden gespeichert', async () => {
+    const host = makeHost();
+    setHost(host);
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    await store.generate('Ein Taschenrechner');
+
+    expect(store.chat).toHaveLength(2);
+    expect(store.chat[0]).toMatchObject({ role: 'user', text: 'Ein Taschenrechner' });
+    expect(store.chat[1].role).toBe('assistant');
+    expect(host.saveChat).toHaveBeenCalledWith('/apps', store.id, expect.any(Array));
+  });
+
+  it('reicht den bisherigen Dialog (ohne den aktuellen Wunsch) an den Host weiter', async () => {
+    const host = makeHost();
+    setHost(host);
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    await store.generate('erste');
+    await store.generate('zweite');
+
+    const secondCall = (host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[1];
+    const chatArg = secondCall[2] as { role: string; text: string }[];
+    expect(chatArg.map((m) => m.text)).toEqual(['erste', 'Umgesetzt.']);
+    expect(chatArg.map((m) => m.text)).not.toContain('zweite');
+  });
+
+  it('behandelt eine reine Rückfrage: kein Speichern, Frage im Chat, pendingQuestion gesetzt', async () => {
+    const host = makeHost({
+      generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, say: 'Welche Art von Spiel?' })),
+    });
+    setHost(host);
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    await store.generate('Ein Spiel');
+
+    expect(store.pendingQuestion).toBe('Welche Art von Spiel?');
+    expect(store.chat).toHaveLength(2);
+    expect(store.chat[1]).toMatchObject({ role: 'assistant', text: 'Welche Art von Spiel?' });
+    expect(store.isDraft).toBe(true);
+    expect(host.saveApp).not.toHaveBeenCalled();
+    expect(host.saveChat).not.toHaveBeenCalled(); // Entwurf hat noch keinen Ordner
+    expect(store.error).toBeNull();
+  });
+
+  it('löst die Rückfrage bei der nächsten Generierung mit Änderungen auf', async () => {
+    let call = 0;
+    const host = makeHost({
+      generate: vi.fn(async (): Promise<GenerateResult> => {
+        call += 1;
+        if (call === 1) return { ok: true, say: 'Snake oder Tetris?' };
+        return { ok: true, files: FILES(DOC('snake', 'Snake', '🐍')), html: DOC('snake', 'Snake', '🐍'), say: 'Snake ist fertig.' };
+      }),
+    });
+    setHost(host);
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    await store.generate('Ein Spiel');
+    expect(store.pendingQuestion).toBeTruthy();
+
+    await store.generate('Snake bitte');
+
+    expect(store.pendingQuestion).toBeNull();
+    expect(store.name).toBe('Snake');
+    expect(store.chat.map((m) => m.text)).toEqual(['Ein Spiel', 'Snake oder Tetris?', 'Snake bitte', 'Snake ist fertig.']);
+  });
+
+  it('vermerkt Referenzdateien in der Nutzer-Nachricht und reicht sie an den Host weiter', async () => {
+    const host = makeHost();
+    setHost(host);
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    await store.generate('Nutze diese Vorlage', [{ path: '/tmp/vorlage.png', name: 'vorlage.png', kind: 'image' }]);
+
+    const call = (host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[0];
+    expect(call[3]).toEqual([{ path: '/tmp/vorlage.png', name: 'vorlage.png', kind: 'image' }]);
+    expect(store.chat[0].attachments).toEqual(['vorlage.png']);
+  });
+
   it('verweigert leere Eingaben und ruft den Host nicht auf', async () => {
     const host = makeHost();
     setHost(host);
@@ -188,6 +275,7 @@ describe('useAppStore', () => {
       updatedAt: 9,
       files: FILES('<html>alt</html>'),
       html: '<html>alt</html>',
+      chat: [],
     };
     const host = makeHost({
       loadApp: vi.fn(async () => restored),
@@ -230,6 +318,7 @@ describe('useAppStore', () => {
       updatedAt: 2,
       files: FILES('<html>2</html>', [{ path: 'src/app.js', content: 'x' }]),
       html: '<html>2</html>',
+      chat: [{ role: 'user', text: 'b', time: 2 }],
     };
     const versions: VersionInfo[] = [
       { sha: 'b', prompt: 'b', time: 2 },

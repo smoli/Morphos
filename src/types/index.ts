@@ -4,18 +4,41 @@ export interface SourceFile {
   content: string;
 }
 
-/** Vom LLM gelieferte Änderungen: geänderte/neue Dateien plus gelöschte Pfade. */
+/**
+ * Vom LLM gelieferte Änderungen: geänderte/neue Dateien plus gelöschte Pfade,
+ * optional eine Mitteilung an den Anwender (Rückfrage oder Erläuterung).
+ */
 export interface FileChanges {
   files: SourceFile[];
   deletions: string[];
+  say?: string;
+}
+
+/** Eine Nachricht im Dialog zwischen Anwender und LLM (pro App). */
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  text: string;
+  /** Dateinamen mitgeschickter Referenzen (nur zur Anzeige). */
+  attachments?: string[];
+  time: number;
+}
+
+/** Eine vom Anwender gewählte Referenzdatei für den nächsten Wunsch. */
+export interface Attachment {
+  /** Absoluter Pfad (aus dem nativen Dialog). */
+  path: string;
+  name: string;
+  kind: 'image' | 'text';
 }
 
 /**
- * Ergebnis einer Generierung durch das LLM: der vollständige NEUE Quelldatei-Satz
- * (Änderungen bereits angewendet) plus das daraus gebündelte HTML-Artefakt.
+ * Ergebnis einer Generierung durch das LLM. Bei Dateiänderungen kommt der
+ * vollständige NEUE Quelldatei-Satz plus gebündeltes Artefakt zurück; `say`
+ * trägt eine etwaige Rückfrage/Erläuterung. Eine reine Rückfrage hat KEINE
+ * files/html — es wird nichts committet.
  */
 export type GenerateResult =
-  | { ok: true; files: SourceFile[]; html: string }
+  | { ok: true; files?: SourceFile[]; html?: string; say?: string }
   | { ok: false; error: string };
 
 /** Eine Version aus der Git-Historie einer App. */
@@ -50,6 +73,8 @@ export interface AppMeta {
 export interface AppData extends AppMeta {
   files: SourceFile[];
   html: string;
+  /** Dialogverlauf der App (chat.json — von Git ausgenommen, kein Revert). */
+  chat: ChatMessage[];
 }
 
 /** Kurzfassung einer App für die Desktop-Kacheln. */
@@ -137,13 +162,31 @@ export interface FolderResult {
 export interface MorphosHost {
   /**
    * Erzeugt bzw. verändert die App über die Claude CLI. `files` ist der aktuelle
-   * Quelldatei-Satz (leer bei einer neuen App); zurück kommt der neue Satz plus
-   * das gebündelte Artefakt.
+   * Quelldatei-Satz (leer bei einer neuen App), `chat` der bisherige Dialog
+   * (für den Kontext), `attachments` mitgeschickte Referenzdateien. Zurück
+   * kommen Dateiänderungen und/oder eine Rückfrage (`say`).
    */
-  generate(prompt: string, files: SourceFile[]): Promise<GenerateResult>;
+  generate(
+    prompt: string,
+    files: SourceFile[],
+    chat: ChatMessage[],
+    attachments: Attachment[],
+  ): Promise<GenerateResult>;
 
   /** Öffnet den nativen Ordner-Auswahldialog. */
   chooseFolder(): Promise<FolderResult>;
+
+  /** Öffnet den nativen Dateidialog für eine Referenzdatei (Bild oder Text). */
+  chooseAttachment(): Promise<{ ok: boolean; attachment?: Attachment; error?: string }>;
+
+  /**
+   * Speichert ein aus der Zwischenablage eingefügtes Bild (Cmd/Ctrl+V) als
+   * temporäre Referenzdatei und gibt sie als Anhang zurück.
+   */
+  saveClipboardImage(data: ArrayBuffer, mime: string): Promise<{ ok: boolean; attachment?: Attachment; error?: string }>;
+
+  /** Speichert den Dialogverlauf einer App (chat.json). */
+  saveChat(folder: string, id: string, chat: ChatMessage[]): Promise<SaveResult>;
 
   /** Lädt die App-übergreifenden Einstellungen (zuletzt genutzte Ordner). */
   loadSettings(): Promise<Settings>;

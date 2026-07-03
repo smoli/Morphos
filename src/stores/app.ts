@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import type { AppData, SourceFile, VersionInfo } from '@/types';
+import type { AppData, Attachment, ChatMessage, SourceFile, VersionInfo } from '@/types';
 import { getHost } from '@/services/host';
 import { extractIcon, extractTitle } from '@/core/html';
 import { DEFAULT_ICON, DEFAULT_NAME, makeAppId } from '@/core/app';
@@ -16,6 +16,10 @@ interface AppState {
   currentHtml: string;
   /** Git-Historie, neueste zuerst (HEAD = aktiver Stand). */
   versions: VersionInfo[];
+  /** Dialogverlauf mit dem LLM (persistiert als chat.json, ohne Revert). */
+  chat: ChatMessage[];
+  /** Offene Rückfrage des LLM — die Oberfläche klappt dann den Chat auf. */
+  pendingQuestion: string | null;
   busy: boolean;
   error: string | null;
 }
@@ -34,6 +38,8 @@ export const useAppStore = defineStore('app', {
     files: [],
     currentHtml: '',
     versions: [],
+    chat: [],
+    pendingQuestion: null,
     busy: false,
     error: null,
   }),
@@ -78,6 +84,8 @@ export const useAppStore = defineStore('app', {
         this.createdAt = data.createdAt;
         this.files = data.files;
         this.currentHtml = data.html;
+        this.chat = data.chat ?? [];
+        this.pendingQuestion = null;
         this.busy = false;
         this.error = null;
         await this.loadVersions();
@@ -88,8 +96,12 @@ export const useAppStore = defineStore('app', {
       }
     },
 
-    /** Erzeugt oder verändert die App anhand des Wunsches. */
-    async generate(prompt: string): Promise<void> {
+    /**
+     * Erzeugt oder verändert die App anhand des Wunsches. Das LLM kann statt
+     * Änderungen auch eine Rückfrage stellen (pendingQuestion) — dann wird
+     * nichts committet und der Anwender antwortet im Chat.
+     */
+    async generate(prompt: string, attachments: Attachment[] = []): Promise<void> {
       if (this.busy) return;
       const text = prompt.trim();
       if (!text) {
@@ -102,24 +114,46 @@ export const useAppStore = defineStore('app', {
       try {
         // Reine Werte übergeben (kein reaktiver Proxy) — Electron-IPC nutzt structured clone.
         const plainFiles = this.files.map((f) => ({ path: f.path, content: f.content }));
-        const res = await getHost().generate(text, plainFiles);
+        const plainAtts = attachments.map((a) => ({ path: a.path, name: a.name, kind: a.kind }));
+        // Der bisherige Dialog OHNE den aktuellen Wunsch — der geht separat in den Prompt.
+        const priorChat = JSON.parse(JSON.stringify(this.chat)) as ChatMessage[];
+
+        this.chat.push({
+          role: 'user',
+          text,
+          ...(plainAtts.length ? { attachments: plainAtts.map((a) => a.name) } : {}),
+          time: Date.now(),
+        });
+        this.pendingQuestion = null;
+
+        const res = await getHost().generate(text, plainFiles, priorChat, plainAtts);
         if (!res.ok) {
           this.error = res.error;
           return;
         }
-        this.files = res.files;
-        this.currentHtml = res.html;
 
-        // Erste Version: Name und Icon aus dem Artefakt ableiten und Id/Ordner festlegen.
-        if (this.id === null) {
-          this.name = extractTitle(res.html) || DEFAULT_NAME;
-          this.icon = extractIcon(res.html) || DEFAULT_ICON;
-          this.id = makeAppId(this.name);
-          this.createdAt = Date.now();
+        if (res.files && res.html) {
+          this.files = res.files;
+          this.currentHtml = res.html;
+
+          // Erste Version: Name und Icon aus dem Artefakt ableiten und Id/Ordner festlegen.
+          if (this.id === null) {
+            this.name = extractTitle(res.html) || DEFAULT_NAME;
+            this.icon = extractIcon(res.html) || DEFAULT_ICON;
+            this.id = makeAppId(this.name);
+            this.createdAt = Date.now();
+          }
+
+          this.chat.push({ role: 'assistant', text: res.say || 'Umgesetzt.', time: Date.now() });
+          await this.persist(text);
+          await this.loadVersions();
+        } else if (res.say) {
+          // Reine Rückfrage: kein neuer Stand, der Chat wartet auf die Antwort.
+          this.chat.push({ role: 'assistant', text: res.say, time: Date.now() });
+          this.pendingQuestion = res.say;
         }
 
-        await this.persist(text);
-        await this.loadVersions();
+        await this.persistChat();
       } catch (err) {
         this.error = err instanceof Error ? err.message : String(err);
       } finally {
@@ -150,6 +184,17 @@ export const useAppStore = defineStore('app', {
         this.versions = await getHost().listVersions(this.folder, this.id);
       } catch {
         this.versions = [];
+      }
+    },
+
+    /** Persistiert den Dialogverlauf (erst möglich, sobald die App einen Ordner hat). */
+    async persistChat(): Promise<void> {
+      if (!this.folder || this.id === null) return;
+      try {
+        const plain = JSON.parse(JSON.stringify(this.chat)) as ChatMessage[];
+        await getHost().saveChat(this.folder, this.id, plain);
+      } catch {
+        /* nicht kritisch */
       }
     },
 

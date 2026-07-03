@@ -5,7 +5,8 @@ import { useAppStore } from '@/stores/app';
 import { useWorkspaceStore } from '@/stores/workspace';
 import WelcomeScreen from '@/components/WelcomeScreen.vue';
 import AppCanvas from '@/components/AppCanvas.vue';
-import PromptBar from '@/components/PromptBar.vue';
+import ChatDock from '@/components/ChatDock.vue';
+import type { Attachment } from '@/types';
 
 const store = useAppStore();
 const workspace = useWorkspaceStore();
@@ -31,14 +32,14 @@ async function load(): Promise<void> {
 onMounted(load);
 watch(() => route.params.id, load);
 
-async function onRequest(text: string): Promise<void> {
+async function onRequest(text: string, attachments: Attachment[] = []): Promise<void> {
   const wasDraft = store.isDraft;
-  await store.generate(text);
+  await store.generate(text, attachments);
   // Aus einem Entwurf wurde eine gespeicherte App → Route auf ihre Id umstellen.
   if (wasDraft && store.id) {
     await workspace.refresh();
     void router.replace(`/app/${store.id}`);
-  } else {
+  } else if (!store.isDraft) {
     void workspace.refresh();
   }
 }
@@ -63,7 +64,12 @@ async function onRequest(text: string): Promise<void> {
 
     <footer class="promptbar-wrap">
       <div v-if="store.error" class="error">{{ store.error }}</div>
-      <PromptBar :busy="store.busy" @submit="onRequest" />
+      <ChatDock
+        :busy="store.busy"
+        :messages="store.chat"
+        :pending-question="store.pendingQuestion"
+        @submit="onRequest"
+      />
     </footer>
   </div>
 </template>

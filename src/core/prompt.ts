@@ -1,5 +1,24 @@
-import type { SourceFile } from '@/types';
+import type { ChatMessage, SourceFile } from '@/types';
 import { serializeFiles } from './files';
+
+/** Für den Prompt aufbereitete Referenzdatei: Text inline, Bild als Pfad. */
+export interface PromptAttachment {
+  name: string;
+  kind: 'image' | 'text';
+  /** Inhalt (nur kind=text). */
+  content?: string;
+  /** Absoluter Pfad (nur kind=image) — wird über das Read-Tool gelesen. */
+  path?: string;
+}
+
+/** Zusatzkontext für buildPrompt: bisheriger Dialog und Referenzdateien. */
+export interface PromptContext {
+  chat?: ChatMessage[];
+  attachments?: PromptAttachment[];
+}
+
+const MAX_CHAT_MESSAGES = 10;
+const MAX_CHAT_CHARS = 1500;
 
 /**
  * Systemprompt für die Claude CLI: legt die "Engine"-Rolle fest — das LLM
@@ -19,24 +38,38 @@ export const SYSTEM_PROMPT = [
   '- Teile größere Apps sinnvoll auf (z. B. src/style.css, src/app.js, src/ui/…).',
   '',
   'HARTE REGELN FÜR DEINE AUSGABE:',
-  '1. Gib AUSSCHLIESSLICH Datei-Blöcke in genau diesem Format aus — keinen weiteren Text:',
+  '1. Gib AUSSCHLIESSLICH markierte Blöcke aus — keinen weiteren Text. Datei-Blöcke:',
   '   ===MORPHOS:FILE src/pfad===',
   '   <vollständiger neuer Inhalt der Datei>',
   '   ===MORPHOS:END===',
   '   Zum Löschen einer Datei: ===MORPHOS:DELETE src/pfad===',
+  '   Für eine Mitteilung an den Anwender (optional, höchstens eine; einfaches',
+  '   Markdown wie **fett**, Listen und `Code` ist erlaubt):',
+  '   ===MORPHOS:SAY===',
+  '   <kurze Mitteilung>',
+  '   ===MORPHOS:END===',
   '2. Gib NUR geänderte oder neue Dateien aus — unveränderte Dateien NICHT wiederholen.',
   '   Jede ausgegebene Datei aber IMMER vollständig (kein Diff, keine Auslassungen).',
   '   Bei einer NEUEN App: der vollständige Dateisatz inklusive src/index.html.',
   '3. Kein Markdown, keine Code-Fences, keine Erklärungen außerhalb der Blöcke.',
-  '4. Keine externen Dateien, keine CDNs, keine Netzwerk-Requests, keine externen',
+  '4. Ist der Wunsch zu unklar, um ihn sinnvoll umzusetzen, stelle GENAU EINE kurze',
+  '   Rückfrage im SAY-Block und gib dann KEINE Datei-Blöcke aus. Frage nur, wenn es',
+  '   wirklich nötig ist — triff sonst selbst eine vernünftige Annahme und erwähne sie',
+  '   knapp im SAY-Block neben den Datei-Blöcken.',
+  '5. Keine externen Dateien, keine CDNs, keine Netzwerk-Requests, keine externen',
   '   Schriftarten. Die App läuft offline — eine Content-Security-Policy blockiert',
   '   jeden Netzwerkzugriff technisch. Bilder/Medien nur als data:-URI oder Canvas/SVG.',
-  '5. Die App läuft in einem gesicherten Sandbox-iframe OHNE same-origin-Zugriff.',
+  '6. Die App läuft in einem gesicherten Sandbox-iframe OHNE same-origin-Zugriff.',
   '   Verwende daher KEIN localStorage, sessionStorage, keine Cookies und kein window.parent.',
-  '6. Baue eine ansprechende, moderne, benutzbare Oberfläche.',
-  '7. Setze im <head> von src/index.html immer einen kurzen, sprechenden <title>',
+  '7. Baue eine ansprechende, moderne, benutzbare Oberfläche.',
+  '8. Setze im <head> von src/index.html immer einen kurzen, sprechenden <title>',
   '   (der Name der App, höchstens drei Wörter) sowie ein Icon als',
   '   <meta name="morphos:icon" content="…"> mit GENAU EINEM passenden Emoji.',
+  '',
+  'REFERENZDATEIEN (optional):',
+  '- Der Anwender kann Dateien mitschicken. Text-Referenzen stehen unten mit Inhalt;',
+  '  Bild-Referenzen (z. B. Screenshots) sind als Pfad angegeben — lies sie mit dem',
+  '  Read-Tool und orientiere dich an dem, was du siehst.',
   '',
   'BIBLIOTHEKEN (optional):',
   '- Eine Bibliothek deklarierst du in src/index.html als',
@@ -67,12 +100,22 @@ export const SYSTEM_PROMPT = [
   '- Setze die gewünschte Änderung um und gib die geänderten Dateien vollständig zurück.',
 ].join('\n');
 
+/** Kürzt eine Dialognachricht für den Prompt-Kontext. */
+function clip(text: string): string {
+  return text.length > MAX_CHAT_CHARS ? `${text.slice(0, MAX_CHAT_CHARS)} …` : text;
+}
+
 /**
  * Setzt den an das LLM gesendeten Prompt zusammen: freigegebene
- * Bibliotheks-Quellen, aktueller Quelldatei-Satz (falls vorhanden) und der
- * neue Wunsch des Anwenders.
+ * Bibliotheks-Quellen, bisheriger Dialog, Referenzdateien, aktueller
+ * Quelldatei-Satz (falls vorhanden) und der neue Wunsch des Anwenders.
  */
-export function buildPrompt(userRequest: string, files: SourceFile[], libPatterns: string[]): string {
+export function buildPrompt(
+  userRequest: string,
+  files: SourceFile[],
+  libPatterns: string[],
+  context: PromptContext = {},
+): string {
   const parts: string[] = [];
 
   parts.push('FREIGEGEBENE BIBLIOTHEKS-QUELLEN:');
@@ -82,6 +125,30 @@ export function buildPrompt(userRequest: string, files: SourceFile[], libPattern
     parts.push('(keine — es sind KEINE Bibliotheken verfügbar)');
   }
   parts.push('');
+
+  const chat = context.chat ?? [];
+  if (chat.length > 0) {
+    parts.push('BISHERIGER DIALOG (zur Einordnung des Wunsches):');
+    for (const msg of chat.slice(-MAX_CHAT_MESSAGES)) {
+      parts.push(`[${msg.role === 'user' ? 'Anwender' : 'Morphos'}] ${clip(msg.text)}`);
+    }
+    parts.push('');
+  }
+
+  const attachments = context.attachments ?? [];
+  if (attachments.length > 0) {
+    parts.push('REFERENZDATEIEN DES ANWENDERS:');
+    for (const a of attachments) {
+      if (a.kind === 'text') {
+        parts.push(`--- ${a.name} ---`);
+        parts.push(a.content ?? '');
+        parts.push('--- Ende ---');
+      } else {
+        parts.push(`- Bild "${a.name}": Lies es mit dem Read-Tool unter ${a.path ?? ''}`);
+      }
+    }
+    parts.push('');
+  }
 
   if (files.length > 0) {
     parts.push('AKTUELLE QUELLDATEIEN:');

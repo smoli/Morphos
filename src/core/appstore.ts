@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AppData, AppMeta, LegacyHistoryEntry, SourceFile } from '@/types';
+import type { AppData, AppMeta, ChatMessage, LegacyHistoryEntry, SourceFile } from '@/types';
 import { isValidSourcePath } from './files';
 import { ENTRY_FILE } from './bundle';
 import { commitAll, ensureRepo } from './gitstore';
@@ -10,6 +10,7 @@ import { commitAll, ensureRepo } from './gitstore';
  *   <app>/app.json     Manifest (Kopfdaten, ohne Historie)
  *   <app>/src/…        Quelldateien
  *   <app>/index.html   gebündeltes Artefakt (eigenständig öffenbar)
+ *   <app>/chat.json    Dialogverlauf (von Git ausgenommen — kein Revert)
  *   <app>/.git         Versionshistorie (ein Commit je Generierung)
  */
 
@@ -65,9 +66,44 @@ function syncSourceFiles(dir: string, files: SourceFile[]): void {
   }
 }
 
+/**
+ * Der Dialogverlauf ist bewusst KEIN Teil der Versionierung: Ein Revert stellt
+ * den App-Stand wieder her, spult aber das Gespräch nicht zurück.
+ */
+function ensureGitignore(dir: string): void {
+  const file = path.join(dir, '.gitignore');
+  let current = '';
+  try {
+    current = fs.readFileSync(file, 'utf8');
+  } catch {
+    /* noch keine .gitignore */
+  }
+  if (!current.split(/\r?\n/).includes('/chat.json')) {
+    fs.writeFileSync(file, current ? `${current.replace(/\n?$/, '\n')}/chat.json\n` : '/chat.json\n', 'utf8');
+  }
+}
+
+/** Liest den Dialogverlauf (chat.json) — leer, wenn keiner vorhanden/lesbar. */
+export function readChat(dir: string): ChatMessage[] {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(dir, 'chat.json'), 'utf8')) as { messages?: ChatMessage[] };
+    return Array.isArray(parsed.messages) ? parsed.messages : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Schreibt den Dialogverlauf (chat.json). */
+export function writeChat(dir: string, chat: ChatMessage[]): void {
+  fs.mkdirSync(dir, { recursive: true });
+  ensureGitignore(dir);
+  fs.writeFileSync(path.join(dir, 'chat.json'), JSON.stringify({ messages: chat }, null, 2), 'utf8');
+}
+
 /** Schreibt den kompletten App-Stand (Manifest, Quellen, Artefakt) — ohne Commit. */
 export function writeAppState(dir: string, meta: AppMeta, files: SourceFile[], html: string): void {
   fs.mkdirSync(dir, { recursive: true });
+  ensureGitignore(dir);
   syncSourceFiles(dir, files);
   writeManifest(dir, meta);
   fs.writeFileSync(path.join(dir, 'index.html'), html, 'utf8');
@@ -141,5 +177,6 @@ export async function loadAppFromDisk(dir: string): Promise<AppData | null> {
     updatedAt: meta.updatedAt ?? 0,
     files: readSourceFiles(dir),
     html,
+    chat: readChat(dir),
   };
 }

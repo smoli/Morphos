@@ -10,12 +10,15 @@ import { applyChanges, isValidSourcePath, parseLLMOutput } from '../src/core/fil
 import { bundle, ENTRY_FILE } from '../src/core/bundle';
 import { extractLibs } from '../src/core/libs';
 import { commitAll, countVersions, ensureRepo, listVersions, restoreTree } from '../src/core/gitstore';
-import { loadAppFromDisk, readManifest, touchManifest, writeAppState } from '../src/core/appstore';
+import { loadAppFromDisk, readManifest, touchManifest, writeAppState, writeChat } from '../src/core/appstore';
 import { runFs } from '../src/core/fsaccess';
 import { resolveLibs } from './libcache';
+import type { PromptAttachment, PromptContext } from '../src/core/prompt';
 import type {
   AppData,
   AppSummary,
+  Attachment,
+  ChatMessage,
   FolderResult,
   FsRequest,
   FsResponse,
@@ -82,14 +85,57 @@ function appDir(folder: string, id: string): string {
   return path.join(folder, safeId(id));
 }
 
+// ---- Referenzdateien (Anhänge) ----
+
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+const TEXT_EXTENSIONS = ['txt', 'md', 'json', 'csv', 'js', 'ts', 'html', 'css', 'xml', 'svg'];
+const MAX_TEXT_ATTACHMENT_BYTES = 100_000;
+
+// Nur Pfade, die der Anwender selbst im nativen Dialog gewählt hat, dürfen als
+// Referenz gelesen werden — der Hauptprozess vertraut nicht dem Renderer allein.
+const approvedAttachments = new Set<string>();
+
+function attachmentKind(filePath: string): 'image' | 'text' | null {
+  const ext = path.extname(filePath).slice(1).toLowerCase();
+  if (IMAGE_EXTENSIONS.includes(ext)) return 'image';
+  if (TEXT_EXTENSIONS.includes(ext)) return 'text';
+  return null;
+}
+
+/** Bereitet die Anhänge für den Prompt vor: Text inline (mit Größendeckel), Bild als Pfad. */
+function preparePromptAttachments(attachments: Attachment[]): { atts: PromptAttachment[]; error?: string } {
+  const atts: PromptAttachment[] = [];
+  for (const a of attachments) {
+    if (!approvedAttachments.has(a.path)) {
+      return { atts: [], error: `Diese Referenzdatei wurde nicht über den Dateidialog gewählt: ${a.name}` };
+    }
+    const kind = attachmentKind(a.path);
+    if (!kind) return { atts: [], error: `Nicht unterstützter Dateityp: ${a.name}` };
+    if (kind === 'text') {
+      try {
+        const stat = fs.statSync(a.path);
+        if (stat.size > MAX_TEXT_ATTACHMENT_BYTES) {
+          return { atts: [], error: `Die Referenzdatei ist zu groß (max. 100 KB Text): ${a.name}` };
+        }
+        atts.push({ name: a.name, kind, content: fs.readFileSync(a.path, 'utf8') });
+      } catch (err) {
+        return { atts: [], error: `Die Referenzdatei konnte nicht gelesen werden (${a.name}): ${err instanceof Error ? err.message : String(err)}` };
+      }
+    } else {
+      atts.push({ name: a.name, kind, path: a.path });
+    }
+  }
+  return { atts };
+}
+
 // ---- Claude CLI ----
 
 const CLAUDE_TIMEOUT_MS = 5 * 60 * 1000;
 
 /** Ruft die Claude CLI im Print-Modus auf und liefert deren Roh-Ausgabe zurück. */
-function runClaude(prompt: string): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+function runClaude(prompt: string, extraArgs: string[] = []): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
   return new Promise((resolve) => {
-    const args = ['-p', '--output-format', 'json', '--append-system-prompt', SYSTEM_PROMPT];
+    const args = ['-p', '--output-format', 'json', '--append-system-prompt', SYSTEM_PROMPT, ...extraArgs];
 
     const child = spawn('claude', args, { stdio: ['pipe', 'pipe', 'pipe'] });
 
@@ -150,17 +196,36 @@ function runClaude(prompt: string): Promise<{ ok: true; text: string } | { ok: f
 }
 
 /**
- * Eine Generierung: Prompt bauen, Claude CLI aufrufen, Datei-Blöcke lesen,
- * auf den Dateisatz anwenden, Bibliotheken auflösen (Whitelist + Cache) und
- * zum Artefakt bündeln.
+ * Eine Generierung: Prompt bauen (samt Dialog und Referenzen), Claude CLI
+ * aufrufen, Datei-Blöcke und Rückfrage lesen, Änderungen anwenden,
+ * Bibliotheken auflösen (Whitelist + Cache) und zum Artefakt bündeln.
+ * Eine reine Rückfrage kommt ohne files/html zurück — es wird nichts committet.
  */
-async function generate(userRequest: string, current: SourceFile[]): Promise<GenerateResult> {
+async function generate(
+  userRequest: string,
+  current: SourceFile[],
+  chat: ChatMessage[],
+  attachments: Attachment[],
+): Promise<GenerateResult> {
   const whitelist = readSettings().libWhitelist ?? [];
-  const res = await runClaude(buildPrompt(userRequest, current, whitelist));
+
+  const prepared = preparePromptAttachments(attachments);
+  if (prepared.error) return { ok: false, error: prepared.error };
+  const context: PromptContext = { chat, attachments: prepared.atts };
+
+  // Bild-Referenzen liest die CLI selbst — Read nur für genau diese Pfade freigeben.
+  const extraArgs = prepared.atts
+    .filter((a) => a.kind === 'image' && a.path)
+    .flatMap((a) => ['--allowedTools', `Read(${a.path})`]);
+
+  const res = await runClaude(buildPrompt(userRequest, current, whitelist, context), extraArgs);
   if (!res.ok) return res;
 
   const changes = parseLLMOutput(res.text);
+
+  // Reine Rückfrage: nichts anwenden, nichts bündeln.
   if (changes.files.length === 0 && changes.deletions.length === 0) {
+    if (changes.say) return { ok: true, say: changes.say };
     return { ok: false, error: 'Es wurden keine verwertbaren Dateien erzeugt. Bitte den Wunsch anders formulieren.' };
   }
 
@@ -175,7 +240,7 @@ async function generate(userRequest: string, current: SourceFile[]): Promise<Gen
 
   const html = bundle(files, libRes.libs);
   if (!html) return { ok: false, error: 'Das Bündeln der App ist fehlgeschlagen.' };
-  return { ok: true, files, html };
+  return { ok: true, files, html, ...(changes.say ? { say: changes.say } : {}) };
 }
 
 // ---- Fenster ----
@@ -212,12 +277,80 @@ function createWindow(): void {
 
 // ---- IPC ----
 
-ipcMain.handle('morphos:generate', async (_e, payload: { prompt: string; files: SourceFile[] }): Promise<GenerateResult> => {
+ipcMain.handle('morphos:generate', async (
+  _e,
+  payload: { prompt: string; files: SourceFile[]; chat: ChatMessage[]; attachments: Attachment[] },
+): Promise<GenerateResult> => {
   if (!payload?.prompt?.trim()) return { ok: false, error: 'Bitte gib einen Wunsch ein.' };
   const current = Array.isArray(payload.files)
     ? payload.files.filter((f) => f && isValidSourcePath(f.path) && typeof f.content === 'string')
     : [];
-  return generate(payload.prompt, current);
+  const chat = Array.isArray(payload.chat)
+    ? payload.chat.filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.text === 'string')
+    : [];
+  const attachments = Array.isArray(payload.attachments)
+    ? payload.attachments.filter((a) => a && typeof a.path === 'string' && typeof a.name === 'string')
+    : [];
+  return generate(payload.prompt, current, chat, attachments);
+});
+
+ipcMain.handle('morphos:chooseAttachment', async (): Promise<{ ok: boolean; attachment?: Attachment; error?: string }> => {
+  const opts: OpenDialogOptions = {
+    properties: ['openFile'],
+    filters: [
+      { name: 'Referenzen (Bilder & Text)', extensions: [...IMAGE_EXTENSIONS, ...TEXT_EXTENSIONS] },
+      { name: 'Bilder', extensions: [...IMAGE_EXTENSIONS] },
+      { name: 'Textdateien', extensions: [...TEXT_EXTENSIONS] },
+    ],
+  };
+  const result = mainWindow ? await dialog.showOpenDialog(mainWindow, opts) : await dialog.showOpenDialog(opts);
+  if (result.canceled || result.filePaths.length === 0) return { ok: false };
+  const filePath = result.filePaths[0];
+  const kind = attachmentKind(filePath);
+  if (!kind) return { ok: false, error: 'Dieser Dateityp wird nicht unterstützt.' };
+  approvedAttachments.add(filePath);
+  return { ok: true, attachment: { path: filePath, name: path.basename(filePath), kind } };
+});
+
+// Aus der Zwischenablage eingefügte Bilder (Cmd/Ctrl+V) landen als temporäre
+// Referenzdateien; der Pfad gilt damit als vom Anwender gewählt (freigegeben).
+const CLIPBOARD_MIME_EXT: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+};
+const MAX_CLIPBOARD_IMAGE_BYTES = 15_000_000;
+
+ipcMain.handle('morphos:saveClipboardImage', async (_e, data: ArrayBuffer, mime: string): Promise<{ ok: boolean; attachment?: Attachment; error?: string }> => {
+  const ext = CLIPBOARD_MIME_EXT[mime];
+  if (!ext) return { ok: false, error: 'Die Zwischenablage enthält kein unterstütztes Bildformat.' };
+  const buf = Buffer.from(data ?? new ArrayBuffer(0));
+  if (buf.length === 0) return { ok: false, error: 'Die Zwischenablage enthält kein Bild.' };
+  if (buf.length > MAX_CLIPBOARD_IMAGE_BYTES) return { ok: false, error: 'Das eingefügte Bild ist zu groß (max. 15 MB).' };
+  try {
+    const dir = path.join(app.getPath('temp'), 'morphos-refs');
+    fs.mkdirSync(dir, { recursive: true });
+    const name = `einfuegen-${Date.now()}.${ext}`;
+    const file = path.join(dir, name);
+    fs.writeFileSync(file, buf);
+    approvedAttachments.add(file);
+    return { ok: true, attachment: { path: file, name, kind: 'image' } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle('morphos:saveChat', async (_e, folder: string, id: string, chat: ChatMessage[]): Promise<SaveResult> => {
+  try {
+    const clean = (Array.isArray(chat) ? chat : []).filter(
+      (m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.text === 'string',
+    );
+    writeChat(appDir(folder, id), clean);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 });
 
 ipcMain.handle('morphos:chooseFolder', async (): Promise<FolderResult> => {
@@ -347,10 +480,28 @@ ipcMain.handle('morphos:revertApp', async (_e, folder: string, id: string, sha: 
   }
 });
 
-// Externe Links im Systembrowser öffnen.
+// Externe Links im Systembrowser öffnen; das leere Chat-Fenster (Portal aus dem
+// Renderer, same-origin about:blank) zulassen. Die generierten Apps können hier
+// nicht ankommen — ihre iframe-Sandbox hat kein allow-popups.
 app.on('web-contents-created', (_e, contents) => {
   contents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http://') || url.startsWith('https://')) void shell.openExternal(url);
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      void shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    if (url === 'about:blank' || url === '') {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 440,
+          height: 680,
+          title: 'Morphos – Chat',
+          backgroundColor: '#0f1115',
+          autoHideMenuBar: true,
+          webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+        },
+      };
+    }
     return { action: 'deny' };
   });
 });

@@ -20,12 +20,16 @@ const existing: AppData = {
   updatedAt: 2,
   files: [{ path: 'src/index.html', content: existingHtml }],
   html: existingHtml,
+  chat: [],
 };
 
 function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
   return {
     generate: vi.fn(async () => ({ ok: true as const, files: [], html: '<html></html>' })),
     chooseFolder: vi.fn(async () => ({ ok: false })),
+    chooseAttachment: vi.fn(async () => ({ ok: false })),
+    saveClipboardImage: vi.fn(async () => ({ ok: false })),
+    saveChat: vi.fn(async () => ({ ok: true })),
     loadSettings: vi.fn(async () => ({ recentFolders: [], accessRoots: {} })),
     saveSettings: vi.fn(async () => ({ ok: true })),
     listApps: vi.fn(async () => []),
@@ -84,15 +88,15 @@ describe('WorkspaceView', () => {
     expect(useAppStore().currentHtml).toContain('doc');
   });
 
-  it('löst generate aus, wenn die Promptleiste absendet', async () => {
+  it('löst generate aus, wenn der Chat absendet', async () => {
     const { wrapper } = await mountAt('/app/new');
     const store = useAppStore();
     const spy = vi.spyOn(store, 'generate').mockResolvedValue();
 
-    await wrapper.get('input').setValue('Ein Spiel');
-    await wrapper.get('form').trigger('submit.prevent');
+    await wrapper.get('textarea').setValue('Ein Spiel');
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' });
 
-    expect(spy).toHaveBeenCalledWith('Ein Spiel');
+    expect(spy).toHaveBeenCalledWith('Ein Spiel', []);
   });
 
   it('löst generate aus, wenn ein Beispiel gewählt wird', async () => {

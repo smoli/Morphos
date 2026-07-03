@@ -108,6 +108,44 @@ describe('parseLLMOutput', () => {
     const changes = parseLLMOutput('Ich kann dazu nichts sagen.');
     expect(changes.files).toEqual([]);
     expect(changes.deletions).toEqual([]);
+    expect(changes.say).toBeUndefined();
+  });
+
+  it('liest eine reine Rückfrage (SAY ohne Dateien)', () => {
+    const raw = [
+      '===MORPHOS:SAY===',
+      'Soll der Rechner auch Prozent können?',
+      '===MORPHOS:END===',
+    ].join('\n');
+    const changes = parseLLMOutput(raw);
+    expect(changes.say).toBe('Soll der Rechner auch Prozent können?');
+    expect(changes.files).toEqual([]);
+    expect(changes.deletions).toEqual([]);
+  });
+
+  it('liest SAY zusammen mit Dateiänderungen', () => {
+    const raw = [
+      '===MORPHOS:SAY===',
+      'Ich habe die Buttons vergrößert.',
+      '===MORPHOS:END===',
+      '===MORPHOS:FILE src/app.js===',
+      'x();',
+      '===MORPHOS:END===',
+    ].join('\n');
+    const changes = parseLLMOutput(raw);
+    expect(changes.say).toBe('Ich habe die Buttons vergrößert.');
+    expect(changes.files).toEqual([{ path: 'src/app.js', content: 'x();' }]);
+  });
+
+  it('fällt bei vorhandener SAY-Nachricht NICHT auf das HTML-Dokument zurück', () => {
+    const raw = [
+      '===MORPHOS:SAY===',
+      `Meinst du so etwas wie ${INDEX}?`,
+      '===MORPHOS:END===',
+    ].join('\n');
+    const changes = parseLLMOutput(raw);
+    expect(changes.files).toEqual([]);
+    expect(changes.say).toContain('Meinst du');
   });
 });
 

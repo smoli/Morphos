@@ -11,8 +11,10 @@ In einer App gibt es zunächst nur ein Eingabefeld. Der Anwender schreibt hinein
 *was die Anwendung sein soll* — ein Taschenrechner, ein Editor, eine
 Tabellenkalkulation, ein Spiel. Ein LLM entwickelt daraufhin die Oberfläche und
 die Funktionen **live** und bietet sie sofort an. Alle weiteren Eingaben
-beziehen sich auf **diese** App und entwickeln sie weiter. Über den Desktop
-geht es jederzeit zurück zur Übersicht.
+beziehen sich auf **diese** App und entwickeln sie weiter — als **Dialog**: Das
+Eingabefeld lässt sich zu einem Chat aufklappen, das LLM kann Rückfragen
+stellen, und Referenzdateien (Screenshots, Textvorlagen) lassen sich anhängen.
+Über den Desktop geht es jederzeit zurück zur Übersicht.
 
 Jede App wird als **eigener Ordner** im gewählten Verzeichnis gespeichert und ist
 zugleich ein **eigenes Git-Repository**: `app.json` (Manifest), `src/` (die
@@ -65,6 +67,23 @@ geladen, nicht neu erzeugt; Apps im alten JSON-Historienformat werden beim erste
   freigegeben hat (Hostname oder https-URL-Präfix). Die **Shell** lädt die
   Bibliothek **einmalig**, cacht sie lokal und bettet sie beim Bündeln inline ein.
   Die laufende App bleibt vollständig offline.
+- **Dialog statt Einzeiler:** Die Eingabe unten ist ein aufklappbarer **Chat**
+  (mehrzeilig; Enter sendet, Shift+Enter bricht um). Der aufgeklappte Verlauf
+  liegt als **Overlay** über der App (verkleinert sie nicht); Antworten des LLM
+  werden als **Markdown** gerendert (escape-first, kein Markup aus dem Modell).
+  Über ⧉ wandert der Chat in ein **eigenes Fenster** (gleicher Zustand, per
+  Portal — kein zweiter Renderer); Schließen des Fensters dockt ihn wieder an.
+  Ist ein Wunsch unklar, kann das LLM eine **Rückfrage** stellen
+  (`===MORPHOS:SAY===`) — dann wird nichts committet, der Chat öffnet sich
+  automatisch und die Antwort führt den Wunsch fort. Der Verlauf wird pro App
+  gespeichert (`chat.json`, bewusst **nicht** versioniert — ein Revert spult
+  das Gespräch nicht zurück) und als Kontext an jede Generierung mitgegeben.
+- **Referenzdateien:** Über 📎 lassen sich Dateien als Referenz anhängen —
+  Screenshots/Bilder (liest die Claude CLI selbst; `Read` wird nur für genau
+  diese Pfade freigegeben) und Textdateien (werden in den Prompt eingebettet,
+  max. 100 KB). Bilder lassen sich auch direkt mit **Cmd/Ctrl+V** aus der
+  Zwischenablage in die Eingabe einfügen (sie landen als temporäre Datei).
+  Es sind nur Pfade zulässig, die der Anwender selbst gewählt bzw. eingefügt hat.
 - **Name & Icon:** Das LLM setzt in `src/index.html` einen `<title>` (App-Name)
   und ein `<meta name="morphos:icon">` (Emoji); daraus entstehen Name und Icon
   der Desktop-Kachel.
@@ -99,7 +118,7 @@ src/
     workspace.ts       Pinia-Store: Verzeichnis, zuletzt genutzte Ordner, App-Liste
     app.ts             Pinia-Store: EINE geöffnete App (Historie, generate/revert)
   components/          Präsentations-Komponenten (Props rein, Events raus)
-    PromptBar · WelcomeScreen · AppCanvas · HistoryList · TopBar · PermissionDialog
+    ChatDock · WelcomeScreen · AppCanvas · HistoryList · TopBar · PermissionDialog
   views/
     StartView.vue      Startbildschirm: Ordnerauswahl + zuletzt genutzte Ordner
     DesktopView.vue    Desktop: Icon je App, „Neue App“, Löschen

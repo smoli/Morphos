@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadAppFromDisk, readManifest, readSourceFiles, writeAppState } from './appstore';
-import { listVersions } from './gitstore';
-import type { AppMeta, SourceFile } from '@/types';
+import { loadAppFromDisk, readChat, readManifest, readSourceFiles, writeAppState, writeChat } from './appstore';
+import { commitAll, ensureRepo, listVersions, restoreVersion } from './gitstore';
+import type { AppMeta, ChatMessage, SourceFile } from '@/types';
 
 let dir: string;
 
@@ -43,18 +43,56 @@ describe('writeAppState / readSourceFiles', () => {
   });
 });
 
+describe('Chat-Persistenz', () => {
+  const chat: ChatMessage[] = [
+    { role: 'user', text: 'Ein Spiel', time: 1 },
+    { role: 'assistant', text: 'Welche Art von Spiel?', time: 2 },
+  ];
+
+  it('schreibt und liest den Dialogverlauf', () => {
+    writeChat(dir, chat);
+    expect(readChat(dir)).toEqual(chat);
+  });
+
+  it('liefert leer ohne chat.json oder bei kaputtem Inhalt', () => {
+    expect(readChat(dir)).toEqual([]);
+    fs.writeFileSync(path.join(dir, 'chat.json'), 'kaputt', 'utf8');
+    expect(readChat(dir)).toEqual([]);
+  });
+
+  it('nimmt chat.json von Git aus — ein Revert spult den Dialog nicht zurück', async () => {
+    writeAppState(dir, META, [{ path: 'src/index.html', content: 'v1' }], 'v1');
+    await ensureRepo(dir);
+    await commitAll(dir, 'erste');
+    const v1 = (await listVersions(dir))[0].sha;
+
+    writeAppState(dir, META, [{ path: 'src/index.html', content: 'v2' }], 'v2');
+    await commitAll(dir, 'zweite');
+
+    // Dialog wächst NACH dem zweiten Commit weiter.
+    writeChat(dir, chat);
+
+    await restoreVersion(dir, v1, 'Zurück zu: erste');
+
+    expect(fs.readFileSync(path.join(dir, 'index.html'), 'utf8')).toBe('v1');
+    expect(readChat(dir)).toEqual(chat); // unangetastet
+  });
+});
+
 describe('loadAppFromDisk', () => {
   it('liefert null ohne Manifest', async () => {
     expect(await loadAppFromDisk(dir)).toBeNull();
   });
 
-  it('lädt eine App im neuen Format', async () => {
+  it('lädt eine App im neuen Format samt Dialogverlauf', async () => {
     writeAppState(dir, META, [{ path: 'src/index.html', content: '<html>q</html>' }], '<html>art</html>');
+    writeChat(dir, [{ role: 'user', text: 'hi', time: 1 }]);
     const app = await loadAppFromDisk(dir);
     expect(app).not.toBeNull();
     expect(app!.id).toBe('app-1');
     expect(app!.files).toEqual([{ path: 'src/index.html', content: '<html>q</html>' }]);
     expect(app!.html).toBe('<html>art</html>');
+    expect(app!.chat).toEqual([{ role: 'user', text: 'hi', time: 1 }]);
   });
 
   it('migriert das Alt-Format zu Git: ein Commit je alter Version, Original-Wunsch und -Zeit', async () => {

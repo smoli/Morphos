@@ -10,6 +10,12 @@ import { extractHtml } from './html';
  *   ===MORPHOS:DELETE src/alt.js===
  *
  * Das LLM gibt NUR geänderte/neue/gelöschte Dateien aus (inkrementell).
+ * Zusätzlich kann es dem Anwender etwas mitteilen — eine Rückfrage bei
+ * unklarem Wunsch (dann ohne Datei-Blöcke) oder eine kurze Erläuterung:
+ *
+ *   ===MORPHOS:SAY===
+ *   <Mitteilung>
+ *   ===MORPHOS:END===
  */
 export const FILE_MARKER = '===MORPHOS:';
 
@@ -56,14 +62,18 @@ export function parseLLMOutput(raw: string): FileChanges {
     if (isValidSourcePath(path)) deletions.push(path);
   }
 
+  const sayMatch = text.match(/^===MORPHOS:SAY===\r?\n([\s\S]*?)\r?\n?^===MORPHOS:END===/m);
+  const say = sayMatch ? sayMatch[1].trim() : undefined;
+
   if (files.length === 0 && deletions.length === 0) {
+    if (say) return { files: [], deletions: [], say };
     const html = extractHtml(text);
     if (html && /<html[\s>]/i.test(html)) {
       return { files: [{ path: 'src/index.html', content: html }], deletions: [] };
     }
   }
 
-  return { files, deletions };
+  return say ? { files, deletions, say } : { files, deletions };
 }
 
 /** Wendet Änderungen auf einen Dateisatz an; liefert einen NEUEN, sortierten Satz. */
