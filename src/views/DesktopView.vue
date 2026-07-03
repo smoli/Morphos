@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { FS_OP_LABELS } from '@/core/permissions';
@@ -7,6 +7,13 @@ import type { FsOp, PermMode } from '@/types';
 
 const workspace = useWorkspaceStore();
 const router = useRouter();
+
+const newLibPattern = ref('');
+
+function addLibPattern(): void {
+  workspace.addLibPattern(newLibPattern.value);
+  newLibPattern.value = '';
+}
 
 const FS_OPS: FsOp[] = ['read', 'list', 'exists', 'stat', 'write', 'mkdir', 'delete'];
 const PERM_MODES: { mode: PermMode; label: string }[] = [
@@ -77,6 +84,29 @@ async function removeApp(id: string, name: string): Promise<void> {
           </span>
         </li>
       </ul>
+    </details>
+
+    <details class="perms libs">
+      <summary>Bibliotheken der Apps (freigegebene Quellen)</summary>
+      <p class="perms-hint">
+        Apps dürfen JavaScript-Bibliotheken nur von diesen Quellen einbinden — als Hostname
+        (<code>cdn.jsdelivr.net</code>) oder https-URL-Präfix (<code>https://unpkg.com/</code>).
+        Die Shell lädt eine Bibliothek einmalig, cacht sie und bettet sie offline ein;
+        die laufende App hat weiterhin keinen Netzwerkzugriff.
+      </p>
+      <ul>
+        <li v-for="pattern in workspace.libWhitelist" :key="pattern" class="lib-row">
+          <code class="lib-pattern">{{ pattern }}</code>
+          <button type="button" class="lib-del" title="Freigabe entziehen" @click="workspace.removeLibPattern(pattern)">✕</button>
+        </li>
+      </ul>
+      <p v-if="workspace.libWhitelist.length === 0" class="perms-hint">
+        Noch keine Quelle freigegeben — Apps können keine Bibliotheken nutzen.
+      </p>
+      <form class="lib-add" @submit.prevent="addLibPattern">
+        <input v-model="newLibPattern" type="text" placeholder="cdn.jsdelivr.net oder https://…" />
+        <button type="submit" :disabled="!newLibPattern.trim()">Freigeben</button>
+      </form>
     </details>
 
     <div v-if="workspace.loading && workspace.apps.length === 0" class="loading">Apps werden geladen …</div>
@@ -206,6 +236,55 @@ async function removeApp(id: string, name: string): Promise<void> {
 .seg button.active {
   background: var(--accent);
   color: #fff;
+}
+.lib-row {
+  gap: 8px;
+}
+.lib-pattern {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lib-del {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 7px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.lib-del:hover {
+  border-color: var(--danger);
+  color: #ffb3b3;
+}
+.lib-add {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0 10px;
+}
+.lib-add input {
+  flex: 1;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.lib-add button {
+  background: var(--accent);
+  border: 0;
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.lib-add button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 .loading {
   color: var(--muted);

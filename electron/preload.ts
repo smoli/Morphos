@@ -8,12 +8,14 @@ import type {
   GenerateResult,
   SaveResult,
   Settings,
+  SourceFile,
+  VersionInfo,
 } from '../src/types';
 
 // Sichere, minimale Brücke zwischen Renderer und Hauptprozess (window.morphos).
 contextBridge.exposeInMainWorld('morphos', {
-  generate: (prompt: string, currentHtml: string): Promise<GenerateResult> =>
-    ipcRenderer.invoke('morphos:generate', { prompt, currentHtml }),
+  generate: (prompt: string, files: SourceFile[]): Promise<GenerateResult> =>
+    ipcRenderer.invoke('morphos:generate', { prompt, files }),
 
   chooseFolder: (): Promise<FolderResult> => ipcRenderer.invoke('morphos:chooseFolder'),
 
@@ -24,10 +26,15 @@ contextBridge.exposeInMainWorld('morphos', {
   listApps: (folder: string): Promise<AppSummary[]> => ipcRenderer.invoke('morphos:listApps', folder),
   loadApp: (folder: string, id: string): Promise<AppData | null> =>
     ipcRenderer.invoke('morphos:loadApp', folder, id),
-  saveApp: (folder: string, app: AppData): Promise<SaveResult> =>
-    ipcRenderer.invoke('morphos:saveApp', folder, app),
+  saveApp: (folder: string, app: AppData, message: string): Promise<SaveResult> =>
+    ipcRenderer.invoke('morphos:saveApp', folder, app, message),
   deleteApp: (folder: string, id: string): Promise<SaveResult> =>
     ipcRenderer.invoke('morphos:deleteApp', folder, id),
+
+  listVersions: (folder: string, id: string): Promise<VersionInfo[]> =>
+    ipcRenderer.invoke('morphos:listVersions', folder, id),
+  revertApp: (folder: string, id: string, sha: string): Promise<SaveResult> =>
+    ipcRenderer.invoke('morphos:revertApp', folder, id, sha),
 
   fs: (root: string, req: FsRequest): Promise<FsResponse> => ipcRenderer.invoke('morphos:fs', root, req),
 });

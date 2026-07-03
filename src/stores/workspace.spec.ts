@@ -11,7 +11,7 @@ const apps: AppSummary[] = [
 
 function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
   return {
-    generate: vi.fn(async () => ({ ok: true as const, html: '' })),
+    generate: vi.fn(async () => ({ ok: true as const, files: [], html: '' })),
     chooseFolder: vi.fn(async () => ({ ok: false })),
     loadSettings: vi.fn(async () => ({ recentFolders: [], accessRoots: {} })),
     saveSettings: vi.fn(async () => ({ ok: true })),
@@ -19,6 +19,8 @@ function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
     loadApp: vi.fn(async () => null),
     saveApp: vi.fn(async () => ({ ok: true })),
     deleteApp: vi.fn(async () => ({ ok: true })),
+    listVersions: vi.fn(async () => []),
+    revertApp: vi.fn(async () => ({ ok: true })),
     fs: vi.fn(async () => ({ ok: true as const, result: null })),
     ...overrides,
   };
@@ -46,7 +48,7 @@ describe('useWorkspaceStore', () => {
     expect(ws.folder).toBe('/neu');
     expect(ws.recentFolders[0]).toBe('/neu');
     expect(ws.apps).toHaveLength(2);
-    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {} });
+    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [] });
     expect(host.listApps).toHaveBeenCalledWith('/neu');
   });
 
@@ -191,6 +193,46 @@ describe('useWorkspaceStore', () => {
     await ws.init();
     await ws.openFolder('/neu');
     expect(ws.permissionFor('write')).toBe('allow');
+  });
+
+  it('lehnt offene Berechtigungsanfragen beim Workspace-Wechsel ab (statt sie hängen zu lassen)', async () => {
+    setHost(makeHost());
+    const ws = useWorkspaceStore();
+    await ws.openFolder('/neu');
+
+    const p1 = ws.authorizeFs('write', 'eins');
+    const p2 = ws.authorizeFs('delete', 'zwei');
+    expect(ws.pendingPermission).not.toBeNull();
+
+    await ws.openFolder('/anders');
+
+    await expect(p1).resolves.toBe(false);
+    await expect(p2).resolves.toBe(false);
+    expect(ws.pendingPermission).toBeNull();
+    // Die Ablehnung gilt nur einmalig — es wird keine Berechtigung gemerkt.
+    expect(ws.permissionFor('write')).toBe('ask');
+    expect(ws.permissionFor('delete')).toBe('ask');
+  });
+
+  it('lädt und verwaltet die Bibliotheks-Freigaben', async () => {
+    const host = makeHost({
+      loadSettings: vi.fn(async () => ({ recentFolders: [], accessRoots: {}, libWhitelist: ['cdn.jsdelivr.net'] })),
+    });
+    setHost(host);
+    const ws = useWorkspaceStore();
+    await ws.init();
+    expect(ws.libWhitelist).toEqual(['cdn.jsdelivr.net']);
+
+    ws.addLibPattern('  https://unpkg.com/ ');
+    expect(ws.libWhitelist).toEqual(['cdn.jsdelivr.net', 'https://unpkg.com/']);
+    ws.addLibPattern('cdn.jsdelivr.net'); // Duplikat wird ignoriert
+    expect(ws.libWhitelist).toHaveLength(2);
+
+    ws.removeLibPattern('cdn.jsdelivr.net');
+    expect(ws.libWhitelist).toEqual(['https://unpkg.com/']);
+    expect(host.saveSettings).toHaveBeenLastCalledWith(
+      expect.objectContaining({ libWhitelist: ['https://unpkg.com/'] }),
+    );
   });
 
   it('verlässt das Verzeichnis über closeFolder', async () => {

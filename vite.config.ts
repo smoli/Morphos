@@ -17,13 +17,13 @@ export default defineConfig({
       main: { entry: 'electron/main.ts' },
       preload: {
         input: 'electron/preload.ts',
-        // Als echtes ESM bauen: Die Datei heißt .mjs (package.json: type=module),
-        // also muss ihr Inhalt ESM sein — sonst schlägt `require` im Preload fehl
-        // und window.morphos wird nie bereitgestellt.
+        // Als CommonJS (.cjs) bauen: Der Renderer läuft mit sandbox:true, und
+        // sandboxte Preloads unterstützen kein ESM. Die Endung .cjs stellt klar,
+        // dass die Datei trotz package.json type=module CommonJS ist.
         vite: {
           build: {
             rollupOptions: {
-              output: { format: 'es' },
+              output: { format: 'cjs', entryFileNames: '[name].cjs' },
             },
           },
         },

@@ -39,9 +39,9 @@ describe('TopBar', () => {
     store.id = 'rechner-1';
     store.name = 'Rechner';
     store.icon = '🧮';
-    store.history = [
-      { id: 'v1', prompt: 'a', html: '<html>1</html>', time: 1 },
-      { id: 'v2', prompt: 'b', html: '<html>2</html>', time: 2 },
+    store.versions = [
+      { sha: 'v2', prompt: 'b', time: 2 },
+      { sha: 'v1', prompt: 'a', time: 1 },
     ];
     const router = makeRouter();
     router.push('/app/rechner-1');

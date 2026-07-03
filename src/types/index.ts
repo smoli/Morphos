@@ -1,17 +1,42 @@
-/** Ergebnis einer Generierung durch das LLM. */
+/** Eine virtuelle Quelldatei einer App. Pfad mit "/" relativ zum App-Ordner, stets unter src/. */
+export interface SourceFile {
+  path: string;
+  content: string;
+}
+
+/** Vom LLM gelieferte Änderungen: geänderte/neue Dateien plus gelöschte Pfade. */
+export interface FileChanges {
+  files: SourceFile[];
+  deletions: string[];
+}
+
+/**
+ * Ergebnis einer Generierung durch das LLM: der vollständige NEUE Quelldatei-Satz
+ * (Änderungen bereits angewendet) plus das daraus gebündelte HTML-Artefakt.
+ */
 export type GenerateResult =
-  | { ok: true; html: string }
+  | { ok: true; files: SourceFile[]; html: string }
   | { ok: false; error: string };
 
-/** Eine Stufe in der Versionshistorie einer App. */
-export interface HistoryEntry {
+/** Eine Version aus der Git-Historie einer App. */
+export interface VersionInfo {
+  /** Commit-Hash (vollständig). */
+  sha: string;
+  /** Die Commit-Botschaft = der Wunsch des Anwenders. */
+  prompt: string;
+  /** Zeitpunkt in Millisekunden. */
+  time: number;
+}
+
+/** Eine Stufe der ALTEN JSON-Versionshistorie — nur noch für die Migration zu Git. */
+export interface LegacyHistoryEntry {
   id: string;
   prompt: string;
   html: string;
   time: number;
 }
 
-/** Kopfdaten einer App (ohne Historie) — für die Desktop-Übersicht. */
+/** Kopfdaten einer App — als app.json im App-Ordner abgelegt (Manifest). */
 export interface AppMeta {
   /** Zugleich der Name des Unterordners im Arbeitsverzeichnis. */
   id: string;
@@ -21,10 +46,10 @@ export interface AppMeta {
   updatedAt: number;
 }
 
-/** Vollständige, persistierte App: Kopfdaten + Versionshistorie. */
+/** Geladene App: Manifest + Quelldateien + gebündeltes Artefakt (index.html). */
 export interface AppData extends AppMeta {
-  activeId: string | null;
-  history: HistoryEntry[];
+  files: SourceFile[];
+  html: string;
 }
 
 /** Kurzfassung einer App für die Desktop-Kacheln. */
@@ -43,6 +68,12 @@ export interface Settings {
   accessRoots: Record<string, string>;
   /** Dateisystem-Berechtigungen je Operation, pro Workspace-Pfad. */
   permissions?: Record<string, FsPermissions>;
+  /**
+   * Freigegebene Bibliotheks-Quellen (global): Hostnamen ("cdn.jsdelivr.net")
+   * oder https-URL-Präfixe ("https://cdn.jsdelivr.net/npm/"). Nur von hier darf
+   * die Shell Bibliotheken laden (einmalig, gecacht, offline eingebettet).
+   */
+  libWhitelist?: string[];
 }
 
 /** Von den erzeugten Apps aufrufbare Dateisystem-Operationen. */
@@ -104,8 +135,12 @@ export interface FolderResult {
  * `window.morphos`; in Tests durch eine Attrappe ersetzbar.
  */
 export interface MorphosHost {
-  /** Erzeugt bzw. verändert das App-HTML über die Claude CLI. */
-  generate(prompt: string, currentHtml: string): Promise<GenerateResult>;
+  /**
+   * Erzeugt bzw. verändert die App über die Claude CLI. `files` ist der aktuelle
+   * Quelldatei-Satz (leer bei einer neuen App); zurück kommt der neue Satz plus
+   * das gebündelte Artefakt.
+   */
+  generate(prompt: string, files: SourceFile[]): Promise<GenerateResult>;
 
   /** Öffnet den nativen Ordner-Auswahldialog. */
   chooseFolder(): Promise<FolderResult>;
@@ -117,12 +152,17 @@ export interface MorphosHost {
 
   /** Listet alle Apps in einem Arbeitsverzeichnis auf. */
   listApps(folder: string): Promise<AppSummary[]>;
-  /** Lädt eine einzelne App (oder null, wenn nicht vorhanden). */
+  /** Lädt eine einzelne App (oder null, wenn nicht vorhanden). Migriert Alt-Format zu Git. */
   loadApp(folder: string, id: string): Promise<AppData | null>;
-  /** Speichert eine App (legt den Unterordner bei Bedarf an). */
-  saveApp(folder: string, app: AppData): Promise<SaveResult>;
+  /** Speichert eine App und übernimmt den Stand als Git-Commit (message = Wunsch). */
+  saveApp(folder: string, app: AppData, message: string): Promise<SaveResult>;
   /** Löscht eine App samt ihres Unterordners. */
   deleteApp(folder: string, id: string): Promise<SaveResult>;
+
+  /** Liefert die Git-Versionshistorie einer App, neueste zuerst. */
+  listVersions(folder: string, id: string): Promise<VersionInfo[]>;
+  /** Stellt den Stand einer früheren Version als NEUEN Commit wieder her (linear, nichts geht verloren). */
+  revertApp(folder: string, id: string, sha: string): Promise<SaveResult>;
 
   /**
    * Führt eine Dateisystem-Operation einer App aus. `root` ist der für den

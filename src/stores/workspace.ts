@@ -15,6 +15,8 @@ interface WorkspaceState {
   accessRoots: Record<string, string>;
   /** Dateisystem-Berechtigungen je Operation, je Workspace-Pfad. */
   permissions: Record<string, FsPermissions>;
+  /** Freigegebene Bibliotheks-Quellen (global, siehe core/libs). */
+  libWhitelist: string[];
   /** Aktuell zur Genehmigung anstehende Anfrage (für den Dialog). */
   pendingPermission: PendingPermission | null;
   apps: AppSummary[];
@@ -37,6 +39,7 @@ export const useWorkspaceStore = defineStore('workspace', {
     recentFolders: [],
     accessRoots: {},
     permissions: {},
+    libWhitelist: [],
     pendingPermission: null,
     apps: [],
     loading: false,
@@ -61,10 +64,12 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.recentFolders = Array.isArray(settings?.recentFolders) ? settings.recentFolders : [];
         this.accessRoots = settings?.accessRoots && typeof settings.accessRoots === 'object' ? settings.accessRoots : {};
         this.permissions = settings?.permissions && typeof settings.permissions === 'object' ? settings.permissions : {};
+        this.libWhitelist = Array.isArray(settings?.libWhitelist) ? settings.libWhitelist : [];
       } catch {
         this.recentFolders = [];
         this.accessRoots = {};
         this.permissions = {};
+        this.libWhitelist = [];
       }
     },
 
@@ -76,7 +81,9 @@ export const useWorkspaceStore = defineStore('workspace', {
         const res = await getHost().chooseFolder();
         if (!res.ok || !res.path) return false;
         this.accessRoots = { ...this.accessRoots, [this.folder]: res.path };
-        void this.persistSettings();
+        // Erst speichern, dann freigeben: Der Hauptprozess akzeptiert nur
+        // Zugriffsordner, die in den gespeicherten Einstellungen stehen.
+        await this.persistSettings();
         return true;
       } catch (err) {
         this.error = err instanceof Error ? err.message : String(err);
@@ -100,13 +107,28 @@ export const useWorkspaceStore = defineStore('workspace', {
 
     /** Öffnet ein Verzeichnis, merkt es vor und lädt seine Apps. */
     async openFolder(path: string): Promise<void> {
-      // Etwaige offene Berechtigungsanfragen eines anderen Workspace verwerfen.
-      permissionQueue.length = 0;
+      // Etwaige offene Berechtigungsanfragen eines anderen Workspace einmalig
+      // ablehnen — die wartenden Promises dürfen nicht ewig hängen bleiben.
+      while (permissionQueue.length) permissionQueue.shift()!.resolve('deny-once');
       this.pendingPermission = null;
       this.folder = path;
       this.recentFolders = [path, ...this.recentFolders.filter((f) => f !== path)].slice(0, MAX_RECENT);
       void this.persistSettings();
       await this.refresh();
+    },
+
+    /** Gibt eine Bibliotheks-Quelle frei (Hostname oder https-URL-Präfix). */
+    addLibPattern(pattern: string): void {
+      const p = pattern.trim();
+      if (!p || this.libWhitelist.includes(p)) return;
+      this.libWhitelist = [...this.libWhitelist, p];
+      void this.persistSettings();
+    },
+
+    /** Entzieht einer Bibliotheks-Quelle die Freigabe. */
+    removeLibPattern(pattern: string): void {
+      this.libWhitelist = this.libWhitelist.filter((p) => p !== pattern);
+      void this.persistSettings();
     },
 
     /** Setzt die Berechtigung einer Operation für das aktuelle Verzeichnis. */
@@ -182,8 +204,9 @@ export const useWorkspaceStore = defineStore('workspace', {
       const recentFolders = [...this.recentFolders];
       const accessRoots = { ...this.accessRoots };
       const permissions = JSON.parse(JSON.stringify(this.permissions)) as Record<string, FsPermissions>;
+      const libWhitelist = [...this.libWhitelist];
       try {
-        await getHost().saveSettings({ recentFolders, accessRoots, permissions });
+        await getHost().saveSettings({ recentFolders, accessRoots, permissions, libWhitelist });
       } catch {
         /* nicht kritisch */
       }

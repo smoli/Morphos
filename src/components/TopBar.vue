@@ -36,7 +36,7 @@ function folderName(p: string | null): string {
           <span class="current-icon">{{ store.icon }}</span>{{ store.name }}
         </span>
         <RouterLink v-if="!store.isDraft" :to="`/app/${store.id}/versions`" class="link">
-          ⟲ Versionen ({{ store.historyCount }})
+          ⟲ Versionen ({{ store.versionCount }})
         </RouterLink>
       </template>
 

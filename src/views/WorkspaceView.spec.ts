@@ -11,19 +11,20 @@ import type { AppData, MorphosHost } from '@/types';
 import WelcomeScreen from '@/components/WelcomeScreen.vue';
 import AppCanvas from '@/components/AppCanvas.vue';
 
+const existingHtml = '<!DOCTYPE html><html><body>doc</body></html>';
 const existing: AppData = {
   id: 'editor-1',
   name: 'Editor',
   icon: '📝',
   createdAt: 1,
   updatedAt: 2,
-  activeId: 'v1',
-  history: [{ id: 'v1', prompt: 'a', html: '<!DOCTYPE html><html><body>doc</body></html>', time: 1 }],
+  files: [{ path: 'src/index.html', content: existingHtml }],
+  html: existingHtml,
 };
 
 function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
   return {
-    generate: vi.fn(async () => ({ ok: true as const, html: '<html></html>' })),
+    generate: vi.fn(async () => ({ ok: true as const, files: [], html: '<html></html>' })),
     chooseFolder: vi.fn(async () => ({ ok: false })),
     loadSettings: vi.fn(async () => ({ recentFolders: [], accessRoots: {} })),
     saveSettings: vi.fn(async () => ({ ok: true })),
@@ -31,6 +32,8 @@ function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
     loadApp: vi.fn(async () => existing),
     saveApp: vi.fn(async () => ({ ok: true })),
     deleteApp: vi.fn(async () => ({ ok: true })),
+    listVersions: vi.fn(async () => [{ sha: 'v1', prompt: 'a', time: 1 }]),
+    revertApp: vi.fn(async () => ({ ok: true })),
     fs: vi.fn(async () => ({ ok: true as const, result: null })),
     ...overrides,
   };

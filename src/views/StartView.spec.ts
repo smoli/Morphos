@@ -8,7 +8,7 @@ import type { MorphosHost } from '@/types';
 
 function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
   return {
-    generate: vi.fn(async () => ({ ok: true as const, html: '' })),
+    generate: vi.fn(async () => ({ ok: true as const, files: [], html: '' })),
     chooseFolder: vi.fn(async () => ({ ok: false })),
     loadSettings: vi.fn(async () => ({ recentFolders: ['C:/Apps/Alpha', 'C:/Apps/Beta'], accessRoots: {} })),
     saveSettings: vi.fn(async () => ({ ok: true })),
@@ -16,6 +16,8 @@ function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
     loadApp: vi.fn(async () => null),
     saveApp: vi.fn(async () => ({ ok: true })),
     deleteApp: vi.fn(async () => ({ ok: true })),
+    listVersions: vi.fn(async () => []),
+    revertApp: vi.fn(async () => ({ ok: true })),
     fs: vi.fn(async () => ({ ok: true as const, result: null })),
     ...overrides,
   };

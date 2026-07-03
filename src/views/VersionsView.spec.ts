@@ -4,11 +4,11 @@ import { createPinia, setActivePinia, type Pinia } from 'pinia';
 import { createRouter, createMemoryHistory, type Router } from 'vue-router';
 import VersionsView from './VersionsView.vue';
 import { useAppStore } from '@/stores/app';
-import type { HistoryEntry } from '@/types';
+import type { VersionInfo } from '@/types';
 
-const entries: HistoryEntry[] = [
-  { id: 'a', prompt: 'erste Idee', html: '<html>1</html>', time: 1 },
-  { id: 'b', prompt: 'zweite Idee', html: '<html>2</html>', time: 2 },
+const versions: VersionInfo[] = [
+  { sha: 'b', prompt: 'zweite Idee', time: 2 },
+  { sha: 'a', prompt: 'erste Idee', time: 1 },
 ];
 
 function makeRouter(): Router {
@@ -32,8 +32,7 @@ describe('VersionsView', () => {
   it('listet die Versionen aus dem Store', async () => {
     const store = useAppStore();
     store.id = 'app1';
-    store.history = entries;
-    store.activeId = 'b';
+    store.versions = versions;
     const router = makeRouter();
     router.push('/app/app1/versions');
     await router.isReady();
@@ -42,12 +41,11 @@ describe('VersionsView', () => {
     expect(wrapper.findAll('li')).toHaveLength(2);
   });
 
-  it('springt bei Auswahl zurück und navigiert zur App', async () => {
+  it('stellt die gewählte Version wieder her und navigiert zur App', async () => {
     const store = useAppStore();
     store.id = 'app1';
-    store.history = entries;
-    store.activeId = 'b';
-    const revert = vi.spyOn(store, 'revertTo');
+    store.versions = versions;
+    const revert = vi.spyOn(store, 'revertTo').mockResolvedValue();
     const router = makeRouter();
     router.push('/app/app1/versions');
     await router.isReady();

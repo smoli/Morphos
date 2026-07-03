@@ -14,10 +14,13 @@ die Funktionen **live** und bietet sie sofort an. Alle weiteren Eingaben
 beziehen sich auf **diese** App und entwickeln sie weiter. Über den Desktop
 geht es jederzeit zurück zur Übersicht.
 
-Jede App wird als **eigener Ordner** im gewählten Verzeichnis gespeichert
-(`<app>/app.json` mit voller Versionshistorie plus `index.html` als eigenständiges
-Artefakt) und bleibt dauerhaft erhalten — sie wird beim Öffnen geladen, nicht neu
-erzeugt.
+Jede App wird als **eigener Ordner** im gewählten Verzeichnis gespeichert und ist
+zugleich ein **eigenes Git-Repository**: `app.json` (Manifest), `src/` (die
+Quelldateien, die das LLM bearbeitet) und `index.html` als eigenständig öffenbares,
+gebündeltes Artefakt. Jede Generierung wird ein Commit — die Botschaft ist der
+Wunsch des Anwenders. Apps bleiben dauerhaft erhalten und werden beim Öffnen
+geladen, nicht neu erzeugt; Apps im alten JSON-Historienformat werden beim ersten
+Öffnen automatisch nach Git migriert.
 
 ## Technologie
 
@@ -44,18 +47,31 @@ erzeugt.
 - **LLM-Anbindung:** Der Electron-Hauptprozess ruft die **Claude CLI** als
   Subprozess auf (`claude -p --output-format json`). Es wird **kein API-Key** in
   der App verwaltet — es zählt deine bestehende Claude-Anmeldung.
-- **Rendering:** Das LLM liefert ein **komplettes, in sich geschlossenes
-  HTML-Dokument** (HTML + CSS + JS inline). Es läuft isoliert in einem
-  **Sandbox-iframe** (`allow-scripts`, ohne `same-origin`) — der generierte Code
-  kann die Host-App nicht erreichen.
-- **Weiterentwicklung:** Bei jeder neuen Eingabe wird das aktuelle Dokument
-  mitgeschickt; das LLM entwickelt es weiter, statt bei Null zu beginnen.
-- **Name & Icon:** Das LLM setzt im HTML einen `<title>` (App-Name) und ein
-  `<meta name="morphos:icon">` (Emoji); daraus entstehen Name und Icon der
-  Desktop-Kachel.
-- **Versionen:** Jede Stufe wird pro App gespeichert. Über **⟲ Versionen** lässt
-  sich zu einem früheren Stand zurückspringen und von dort weiterbauen. Der Stand
-  bleibt über Neustarts erhalten.
+- **Quelldatei-Modell:** Eine App besteht aus Quelldateien unter `src/`
+  (Einstieg: `src/index.html`, daneben z. B. `style.css`, `app.js`, …). Das LLM
+  liefert Änderungen **inkrementell** als markierte Datei-Blöcke
+  (`===MORPHOS:FILE …===` / `===MORPHOS:DELETE …===`) — nur geänderte Dateien,
+  jede aber vollständig. Das hält auch große Apps schnell und schützt
+  unveränderte Features vor versehentlichem Umschreiben.
+- **Bündeln & Rendering:** Die Shell bündelt die Quellen zu **einem** in sich
+  geschlossenen HTML-Dokument (`core/bundle`): verlinkte Stylesheets und Skripte
+  werden inline eingebettet. Es läuft isoliert in einem **Sandbox-iframe**
+  (`allow-scripts`, ohne `same-origin`) — der generierte Code kann die Host-App
+  nicht erreichen. Eine injizierte **Content-Security-Policy**
+  (`default-src 'none'`) blockiert zusätzlich jeden Netzwerkzugriff.
+- **Bibliotheken (freigegebene Quellen):** Eine App darf JS-Bibliotheken per
+  `<meta name="morphos:lib" content="https://…">` deklarieren — aber nur von
+  Quellen, die der Anwender auf dem Desktop unter „Bibliotheken der Apps“
+  freigegeben hat (Hostname oder https-URL-Präfix). Die **Shell** lädt die
+  Bibliothek **einmalig**, cacht sie lokal und bettet sie beim Bündeln inline ein.
+  Die laufende App bleibt vollständig offline.
+- **Name & Icon:** Das LLM setzt in `src/index.html` einen `<title>` (App-Name)
+  und ein `<meta name="morphos:icon">` (Emoji); daraus entstehen Name und Icon
+  der Desktop-Kachel.
+- **Versionen = Git-Historie:** Jede Generierung ist ein Commit (Botschaft =
+  Wunsch). Über **⟲ Versionen** lässt sich ein früherer Stand wiederherstellen —
+  als **neuer Commit** mit dem alten Baum: Die Historie bleibt linear, nichts
+  geht je verloren. Der Stand bleibt über Neustarts erhalten.
 
 ## Architektur
 
@@ -63,9 +79,15 @@ erzeugt.
 electron/
   main.ts              Hauptprozess: Fenster, IPC, Claude CLI, Ordner-/App-Dateien
   preload.ts           Sichere Brücke (contextBridge) → window.morphos
+  libcache.ts          Tier-1-Bibliotheken: einmalig laden (Whitelist), cachen
 src/
   core/                Framework-unabhängige, reine Logik (voll getestet)
     prompt.ts          Systemprompt + Zusammenbau des LLM-Prompts
+    files.ts           Datei-Blockformat: serialisieren/parsen, Pfad-Validierung
+    bundle.ts          Bündelt Quelldateien + Bibliotheken zu EINEM Dokument
+    libs.ts            morphos:lib-Extraktion + Whitelist-Abgleich
+    gitstore.ts        Git je App: init, commit, log, Wiederherstellen (System-Git)
+    appstore.ts        App-Ablage: Manifest, src/, Artefakt, Migration Alt→Git
     html.ts            Extraktion von HTML-Dokument, Titel und Icon
     app.ts             App-Identität: Slug/Id, Vorgaben für Name & Icon
     appfs.ts           Bridge-SDK (window.morphosFS) + Injektion + Dispatch
@@ -108,6 +130,8 @@ npm run typecheck # vue-tsc über das gesamte Projekt
 - [Node.js](https://nodejs.org/) 18+
 - Die **Claude CLI** muss installiert und angemeldet sein
   (`claude` muss im `PATH` erreichbar sein).
+- **Git** muss installiert sein (`git` im `PATH`) — jede App ist ihr eigenes
+  Repository.
 
 ## Installation & Start
 
@@ -160,14 +184,21 @@ je Funktion einstellen.
 
 ## Sicherheit
 
-- Der Electron-Renderer läuft mit `contextIsolation` und ohne `nodeIntegration`.
-  Zugriff auf den Hauptprozess nur über eine minimale, explizit freigegebene
-  Brücke (`contextBridge` → `window.morphos`).
+- Der Electron-Renderer läuft mit `contextIsolation`, ohne `nodeIntegration`
+  und in der **Chromium-Sandbox** (`sandbox: true`; das Preload wird dafür als
+  CommonJS gebaut). Zugriff auf den Hauptprozess nur über eine minimale,
+  explizit freigegebene Brücke (`contextBridge` → `window.morphos`).
 - Die **generierte** App läuft in einem separaten Sandbox-iframe ohne
-  `same-origin`-Rechte und ohne Netzwerkzugriff (alles inline, offline).
+  `same-origin`-Rechte und ohne Popups. Der Offline-Betrieb wird durch eine
+  injizierte **Content-Security-Policy** erzwungen (`default-src 'none'`;
+  Skripte/Styles nur inline, Bilder/Medien nur als `data:`/`blob:`) — die
+  iframe-Sandbox allein würde Netzwerk-Requests nicht verhindern.
 - Der **Dateizugriff** der App läuft ausschließlich über eine kontrollierte
   `postMessage`-Brücke und ist im Hauptprozess strikt auf den vom Anwender
-  gewählten Datenordner begrenzt (Schutz vor Pfad-Traversal).
+  gewählten Datenordner begrenzt: Pfade werden lexikalisch eingegrenzt
+  (`confineWithin`), **Symlinks** real aufgelöst und bei Ausbruch abgelehnt,
+  und als Wurzel akzeptiert der Hauptprozess nur Ordner, die der Anwender
+  zuvor per Dialog freigegeben hat (gespeicherte `accessRoots`).
 
 ## Lizenz
 

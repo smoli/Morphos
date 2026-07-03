@@ -16,11 +16,13 @@ onMounted(async () => {
   // Bei Direktaufruf/Reload sicherstellen, dass die App geladen ist.
   if (workspace.folder && store.id !== id) {
     await store.open(workspace.folder, id);
+  } else if (store.versions.length === 0) {
+    await store.loadVersions();
   }
 });
 
-function onSelect(entryId: string): void {
-  store.revertTo(entryId);
+async function onSelect(sha: string): Promise<void> {
+  await store.revertTo(sha);
   void router.push(`/app/${id}`);
 }
 </script>
@@ -34,7 +36,7 @@ function onSelect(entryId: string): void {
       </h2>
       <RouterLink :to="`/app/${id}`" class="back">← Zurück</RouterLink>
     </div>
-    <HistoryList :entries="store.history" :active-id="store.activeId" @select="onSelect" />
+    <HistoryList :versions="store.versions" :active-sha="store.activeSha" @select="onSelect" />
   </div>
 </template>
 

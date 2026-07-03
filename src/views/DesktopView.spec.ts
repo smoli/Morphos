@@ -14,7 +14,7 @@ const apps: AppSummary[] = [
 
 function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
   return {
-    generate: vi.fn(async () => ({ ok: true as const, html: '' })),
+    generate: vi.fn(async () => ({ ok: true as const, files: [], html: '' })),
     chooseFolder: vi.fn(async () => ({ ok: false })),
     loadSettings: vi.fn(async () => ({ recentFolders: [], accessRoots: {} })),
     saveSettings: vi.fn(async () => ({ ok: true })),
@@ -22,6 +22,8 @@ function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
     loadApp: vi.fn(async () => null),
     saveApp: vi.fn(async () => ({ ok: true })),
     deleteApp: vi.fn(async () => ({ ok: true })),
+    listVersions: vi.fn(async () => []),
+    revertApp: vi.fn(async () => ({ ok: true })),
     fs: vi.fn(async () => ({ ok: true as const, result: null })),
     ...overrides,
   };
@@ -91,6 +93,21 @@ describe('DesktopView', () => {
     await allowBtn.trigger('click');
 
     expect(ws.permissionFor('write')).toBe('allow');
+  });
+
+  it('verwaltet die Bibliotheks-Freigaben über das Bibliotheken-Panel', async () => {
+    const { wrapper } = await mountView();
+    const ws = useWorkspaceStore();
+
+    const input = wrapper.get('.lib-add input');
+    await input.setValue('cdn.jsdelivr.net');
+    await wrapper.get('.lib-add').trigger('submit');
+    expect(ws.libWhitelist).toEqual(['cdn.jsdelivr.net']);
+    await flushPromises();
+    expect(wrapper.text()).toContain('cdn.jsdelivr.net');
+
+    await wrapper.get('.lib-del').trigger('click');
+    expect(ws.libWhitelist).toEqual([]);
   });
 
   it('legt den Datenordner über die Zugriffsleiste fest', async () => {

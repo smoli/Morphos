@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import type { HistoryEntry } from '@/types';
+import type { VersionInfo } from '@/types';
 
-defineProps<{ entries: HistoryEntry[]; activeId: string | null }>();
-const emit = defineEmits<{ select: [id: string] }>();
+// Versionen kommen aus der Git-Historie: neueste zuerst (HEAD = aktiver Stand).
+defineProps<{ versions: VersionInfo[]; activeSha: string | null }>();
+const emit = defineEmits<{ select: [sha: string] }>();
 
 function fmt(ts: number): string {
   return new Date(ts).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
@@ -11,16 +12,16 @@ function fmt(ts: number): string {
 
 <template>
   <div class="history">
-    <p v-if="entries.length === 0" class="empty">Noch keine Versionen vorhanden.</p>
+    <p v-if="versions.length === 0" class="empty">Noch keine Versionen vorhanden.</p>
     <ul v-else>
       <li
-        v-for="entry in [...entries].reverse()"
-        :key="entry.id"
-        :class="{ active: entry.id === activeId }"
-        @click="emit('select', entry.id)"
+        v-for="version in versions"
+        :key="version.sha"
+        :class="{ active: version.sha === activeSha }"
+        @click="emit('select', version.sha)"
       >
-        <div class="prompt">{{ entry.prompt }}</div>
-        <div class="time">{{ fmt(entry.time) }}</div>
+        <div class="prompt">{{ version.prompt }}</div>
+        <div class="time">{{ fmt(version.time) }}</div>
       </li>
     </ul>
   </div>

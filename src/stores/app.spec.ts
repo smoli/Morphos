@@ -2,14 +2,19 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useAppStore } from './app';
 import { setHost } from '@/services/host';
-import type { MorphosHost, GenerateResult, AppData } from '@/types';
+import type { AppData, GenerateResult, MorphosHost, SourceFile, VersionInfo } from '@/types';
 
 const DOC = (body: string, title = 'Test', icon = '🧪'): string =>
   `<!DOCTYPE html><html><head><title>${title}</title><meta name="morphos:icon" content="${icon}"></head><body>${body}</body></html>`;
 
+const FILES = (html: string, extra: SourceFile[] = []): SourceFile[] => [
+  { path: 'src/index.html', content: html },
+  ...extra,
+];
+
 function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
   return {
-    generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, html: DOC('x') })),
+    generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(DOC('x')), html: DOC('x') })),
     chooseFolder: vi.fn(async () => ({ ok: false })),
     loadSettings: vi.fn(async () => ({ recentFolders: [], accessRoots: {} })),
     saveSettings: vi.fn(async () => ({ ok: true })),
@@ -17,6 +22,8 @@ function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
     loadApp: vi.fn(async () => null),
     saveApp: vi.fn(async () => ({ ok: true })),
     deleteApp: vi.fn(async () => ({ ok: true })),
+    listVersions: vi.fn(async (): Promise<VersionInfo[]> => []),
+    revertApp: vi.fn(async () => ({ ok: true })),
     fs: vi.fn(async () => ({ ok: true as const, result: null })),
     ...overrides,
   };
@@ -29,17 +36,20 @@ describe('useAppStore', () => {
 
   it('hat einen leeren Ausgangszustand', () => {
     const store = useAppStore();
-    expect(store.history).toEqual([]);
+    expect(store.files).toEqual([]);
+    expect(store.versions).toEqual([]);
     expect(store.currentHtml).toBe('');
     expect(store.id).toBeNull();
     expect(store.isDraft).toBe(true);
     expect(store.hasApp).toBe(false);
-    expect(store.historyCount).toBe(0);
+    expect(store.versionCount).toBe(0);
+    expect(store.activeSha).toBeNull();
   });
 
-  it('leitet Name, Icon und Id aus der ersten Version ab und speichert sie', async () => {
+  it('leitet Name, Icon und Id aus der ersten Version ab und committet mit dem Wunsch', async () => {
+    const doc = DOC('calc', 'Taschenrechner', '🧮');
     const host = makeHost({
-      generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, html: DOC('calc', 'Taschenrechner', '🧮') })),
+      generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(doc), html: doc })),
     });
     setHost(host);
     const store = useAppStore();
@@ -47,18 +57,20 @@ describe('useAppStore', () => {
 
     await store.generate('Ein Taschenrechner');
 
-    expect(host.generate).toHaveBeenCalledWith('Ein Taschenrechner', '');
+    expect(host.generate).toHaveBeenCalledWith('Ein Taschenrechner', []);
     expect(store.name).toBe('Taschenrechner');
     expect(store.icon).toBe('🧮');
     expect(store.id).toMatch(/^taschenrechner-/);
     expect(store.isDraft).toBe(false);
-    expect(store.history).toHaveLength(1);
+    expect(store.files).toHaveLength(1);
     expect(store.currentHtml).toContain('calc');
     expect(host.saveApp).toHaveBeenCalledOnce();
-    const [folderArg, dataArg] = (host.saveApp as unknown as { mock: { calls: [string, AppData][] } }).mock.calls[0];
+    const [folderArg, dataArg, messageArg] = (host.saveApp as unknown as { mock: { calls: [string, AppData, string][] } }).mock.calls[0];
     expect(folderArg).toBe('/apps');
     expect(dataArg.id).toBe(store.id);
-    expect(dataArg.history).toHaveLength(1);
+    expect(dataArg.files).toHaveLength(1);
+    expect(dataArg.html).toContain('calc');
+    expect(messageArg).toBe('Ein Taschenrechner');
   });
 
   it('übergibt saveApp ein serialisierbares (nicht-reaktives) Objekt', async () => {
@@ -69,9 +81,23 @@ describe('useAppStore', () => {
 
     await store.generate('Ein Taschenrechner');
 
-    const [, dataArg] = (host.saveApp as unknown as { mock: { calls: [string, AppData][] } }).mock.calls[0];
+    const [, dataArg] = (host.saveApp as unknown as { mock: { calls: [string, AppData, string][] } }).mock.calls[0];
     // Würde bei einem Vue-Proxy über die Electron-IPC scheitern ("could not be cloned").
     expect(() => structuredClone(dataArg)).not.toThrow();
+  });
+
+  it('lädt nach dem Speichern die Versionshistorie', async () => {
+    const versions: VersionInfo[] = [{ sha: 'abc', prompt: 'Ein Taschenrechner', time: 5 }];
+    const host = makeHost({ listVersions: vi.fn(async () => versions) });
+    setHost(host);
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    await store.generate('Ein Taschenrechner');
+
+    expect(host.listVersions).toHaveBeenCalledWith('/apps', store.id);
+    expect(store.versions).toEqual(versions);
+    expect(store.activeSha).toBe('abc');
   });
 
   it('meldet einen Fehler, wenn das Speichern fehlschlägt', async () => {
@@ -85,10 +111,14 @@ describe('useAppStore', () => {
     expect(store.error).toBe('Platte voll');
   });
 
-  it('behält Id und Name bei Folgeänderungen und sendet den aktuellen Stand mit', async () => {
+  it('behält Id und Name bei Folgeänderungen und sendet die aktuellen Quelldateien mit', async () => {
     let n = 0;
     const host = makeHost({
-      generate: vi.fn(async (): Promise<GenerateResult> => { n += 1; return { ok: true, html: DOC(`v${n}`, 'App', '🧩') }; }),
+      generate: vi.fn(async (): Promise<GenerateResult> => {
+        n += 1;
+        const doc = DOC(`v${n}`, 'App', '🧩');
+        return { ok: true, files: FILES(doc, [{ path: 'src/app.js', content: `// v${n}` }]), html: doc };
+      }),
     });
     setHost(host);
     const store = useAppStore();
@@ -98,9 +128,11 @@ describe('useAppStore', () => {
     const id = store.id;
     await store.generate('zweite Version');
 
-    expect(host.generate).toHaveBeenNthCalledWith(2, 'zweite Version', expect.stringContaining('v1'));
+    const secondCall = (host.generate as unknown as { mock: { calls: [string, SourceFile[]][] } }).mock.calls[1];
+    expect(secondCall[0]).toBe('zweite Version');
+    expect(secondCall[1].map((f) => f.path)).toEqual(['src/index.html', 'src/app.js']);
+    expect(secondCall[1][0].content).toContain('v1');
     expect(store.id).toBe(id);
-    expect(store.history).toHaveLength(2);
     expect(store.currentHtml).toContain('v2');
   });
 
@@ -114,7 +146,7 @@ describe('useAppStore', () => {
 
     expect(host.generate).not.toHaveBeenCalled();
     expect(store.error).toBeTruthy();
-    expect(store.history).toHaveLength(0);
+    expect(store.files).toHaveLength(0);
   });
 
   it('setzt einen Fehler, wenn der Host einen Fehler meldet', async () => {
@@ -128,7 +160,7 @@ describe('useAppStore', () => {
     await store.generate('irgendwas');
 
     expect(store.error).toBe('CLI nicht gefunden');
-    expect(store.history).toHaveLength(0);
+    expect(store.files).toHaveLength(0);
     expect(store.busy).toBe(false);
     expect(host.saveApp).not.toHaveBeenCalled();
   });
@@ -147,50 +179,63 @@ describe('useAppStore', () => {
     expect(store.busy).toBe(false);
   });
 
-  it('springt über revertTo zu einer früheren Version zurück', async () => {
-    let n = 0;
+  it('stellt über revertTo eine frühere Version wieder her und lädt neu', async () => {
+    const restored: AppData = {
+      id: 'app-1',
+      name: 'App',
+      icon: '🧩',
+      createdAt: 1,
+      updatedAt: 9,
+      files: FILES('<html>alt</html>'),
+      html: '<html>alt</html>',
+    };
     const host = makeHost({
-      generate: vi.fn(async (): Promise<GenerateResult> => { n += 1; return { ok: true, html: DOC(`v${n}`) }; }),
+      loadApp: vi.fn(async () => restored),
+      listVersions: vi.fn(async () => [
+        { sha: 'neu', prompt: 'Zurück zu: erste', time: 9 },
+        { sha: 'alt', prompt: 'erste', time: 1 },
+      ]),
     });
     setHost(host);
     const store = useAppStore();
-    store.newDraft('/apps');
+    store.folder = '/apps';
+    store.id = 'app-1';
 
-    await store.generate('a');
-    const firstId = store.history[0].id;
-    await store.generate('b');
-    expect(store.currentHtml).toContain('v2');
+    await store.revertTo('alt');
 
-    store.revertTo(firstId);
-    expect(store.currentHtml).toContain('v1');
-    expect(store.activeId).toBe(firstId);
+    expect(host.revertApp).toHaveBeenCalledWith('/apps', 'app-1', 'alt');
+    expect(host.loadApp).toHaveBeenCalledWith('/apps', 'app-1');
+    expect(store.currentHtml).toBe('<html>alt</html>');
+    expect(store.activeSha).toBe('neu');
   });
 
-  it('ignoriert revertTo mit unbekannter id', async () => {
-    setHost(makeHost());
+  it('meldet einen Fehler, wenn die Wiederherstellung scheitert', async () => {
+    const host = makeHost({ revertApp: vi.fn(async () => ({ ok: false, error: 'weg' })) });
+    setHost(host);
     const store = useAppStore();
-    store.newDraft('/apps');
-    await store.generate('a');
-    const before = store.currentHtml;
+    store.folder = '/apps';
+    store.id = 'app-1';
 
-    store.revertTo('gibt-es-nicht');
-    expect(store.currentHtml).toBe(before);
+    await store.revertTo('xyz');
+
+    expect(store.error).toBe('weg');
   });
 
-  it('öffnet eine bestehende App aus dem Verzeichnis', async () => {
+  it('öffnet eine bestehende App samt Quelldateien und Versionen', async () => {
     const data: AppData = {
       id: 'editor-abc12',
       name: 'Editor',
       icon: '📝',
       createdAt: 1,
       updatedAt: 2,
-      activeId: 'v2',
-      history: [
-        { id: 'v1', prompt: 'a', html: '<html>1</html>', time: 1 },
-        { id: 'v2', prompt: 'b', html: '<html>2</html>', time: 2 },
-      ],
+      files: FILES('<html>2</html>', [{ path: 'src/app.js', content: 'x' }]),
+      html: '<html>2</html>',
     };
-    const host = makeHost({ loadApp: vi.fn(async () => data) });
+    const versions: VersionInfo[] = [
+      { sha: 'b', prompt: 'b', time: 2 },
+      { sha: 'a', prompt: 'a', time: 1 },
+    ];
+    const host = makeHost({ loadApp: vi.fn(async () => data), listVersions: vi.fn(async () => versions) });
     setHost(host);
     const store = useAppStore();
 
@@ -200,10 +245,9 @@ describe('useAppStore', () => {
     expect(host.loadApp).toHaveBeenCalledWith('/apps', 'editor-abc12');
     expect(store.id).toBe('editor-abc12');
     expect(store.name).toBe('Editor');
-    expect(store.icon).toBe('📝');
-    expect(store.history).toHaveLength(2);
+    expect(store.files).toHaveLength(2);
     expect(store.currentHtml).toBe('<html>2</html>');
-    expect(store.activeId).toBe('v2');
+    expect(store.versions).toEqual(versions);
   });
 
   it('lädt nach mehreren Änderungen beim erneuten Öffnen die zuletzt gespeicherte Version', async () => {
@@ -211,13 +255,16 @@ describe('useAppStore', () => {
     const disk = new Map<string, AppData>();
     let n = 0;
     const host = makeHost({
-      generate: vi.fn(async (): Promise<GenerateResult> => { n += 1; return { ok: true, html: DOC(`v${n}`, 'Flow', '🧩') }; }),
+      generate: vi.fn(async (): Promise<GenerateResult> => {
+        n += 1;
+        const doc = DOC(`v${n}`, 'Flow', '🧩');
+        return { ok: true, files: FILES(doc), html: doc };
+      }),
       saveApp: vi.fn(async (_folder, appData: AppData) => { disk.set(appData.id, appData); return { ok: true }; }),
       loadApp: vi.fn(async (_folder, id: string) => disk.get(id) ?? null),
     });
     setHost(host);
 
-    // App erzeugen und dreimal weiterentwickeln.
     const editor = useAppStore();
     editor.newDraft('/apps');
     await editor.generate('erste Version');
@@ -231,9 +278,8 @@ describe('useAppStore', () => {
     const reopened = useAppStore();
     await reopened.open('/apps', id);
 
-    expect(reopened.history).toHaveLength(3);
     expect(reopened.currentHtml).toContain('v3');
-    expect(reopened.activeId).toBe(editor.history[2].id);
+    expect(reopened.files).toHaveLength(1);
   });
 
   it('meldet einen Fehler, wenn die App nicht geladen werden kann', async () => {

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import type { AppData, HistoryEntry } from '@/types';
+import type { AppData, SourceFile, VersionInfo } from '@/types';
 import { getHost } from '@/services/host';
 import { extractIcon, extractTitle } from '@/core/html';
 import { DEFAULT_ICON, DEFAULT_NAME, makeAppId } from '@/core/app';
@@ -10,20 +10,19 @@ interface AppState {
   name: string;
   icon: string;
   createdAt: number;
-  history: HistoryEntry[];
+  /** Der aktuelle Quelldatei-Satz der App (src/…). */
+  files: SourceFile[];
+  /** Das gebündelte Artefakt für die Anzeige im Canvas. */
   currentHtml: string;
-  activeId: string | null;
+  /** Git-Historie, neueste zuerst (HEAD = aktiver Stand). */
+  versions: VersionInfo[];
   busy: boolean;
   error: string | null;
 }
 
-function makeVersionId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
 /**
  * Zustand genau EINER geöffneten App. Prompts beziehen sich stets auf diese App;
- * Änderungen werden in ihren Ordner im Arbeitsverzeichnis persistiert.
+ * jeder Stand wird als Git-Commit in ihrem Ordner persistiert (Botschaft = Wunsch).
  */
 export const useAppStore = defineStore('app', {
   state: (): AppState => ({
@@ -32,17 +31,19 @@ export const useAppStore = defineStore('app', {
     name: '',
     icon: '',
     createdAt: 0,
-    history: [],
+    files: [],
     currentHtml: '',
-    activeId: null,
+    versions: [],
     busy: false,
     error: null,
   }),
 
   getters: {
     hasApp: (s): boolean => s.currentHtml.length > 0,
-    historyCount: (s): number => s.history.length,
+    versionCount: (s): number => s.versions.length,
     isDraft: (s): boolean => s.id === null,
+    /** Der aktive Stand ist immer der neueste Commit (HEAD). */
+    activeSha: (s): string | null => s.versions[0]?.sha ?? null,
   },
 
   actions: {
@@ -59,7 +60,7 @@ export const useAppStore = defineStore('app', {
     /**
      * Öffnet eine bestehende App aus dem Verzeichnis. Der Zustand wird erst nach
      * dem Laden gesetzt (kein Flackern) — die Platte ist die maßgebliche Quelle,
-     * es wird also stets der zuletzt gespeicherte Stand geladen.
+     * es wird also stets der zuletzt committete Stand geladen.
      */
     async open(folder: string, id: string): Promise<boolean> {
       try {
@@ -70,18 +71,16 @@ export const useAppStore = defineStore('app', {
           this.error = 'Die App konnte nicht geladen werden.';
           return false;
         }
-        const activeId = data.activeId ?? data.history[data.history.length - 1]?.id ?? null;
-        const active = data.history.find((e) => e.id === activeId) ?? data.history[data.history.length - 1];
         this.folder = folder;
         this.id = data.id;
         this.name = data.name;
         this.icon = data.icon;
         this.createdAt = data.createdAt;
-        this.history = data.history;
-        this.activeId = activeId;
-        this.currentHtml = active?.html ?? '';
+        this.files = data.files;
+        this.currentHtml = data.html;
         this.busy = false;
         this.error = null;
+        await this.loadVersions();
         return true;
       } catch (err) {
         this.error = err instanceof Error ? err.message : String(err);
@@ -101,22 +100,17 @@ export const useAppStore = defineStore('app', {
       this.error = null;
       this.busy = true;
       try {
-        const res = await getHost().generate(text, this.currentHtml);
+        // Reine Werte übergeben (kein reaktiver Proxy) — Electron-IPC nutzt structured clone.
+        const plainFiles = this.files.map((f) => ({ path: f.path, content: f.content }));
+        const res = await getHost().generate(text, plainFiles);
         if (!res.ok) {
           this.error = res.error;
           return;
         }
-        const entry: HistoryEntry = {
-          id: makeVersionId(),
-          prompt: text,
-          html: res.html,
-          time: Date.now(),
-        };
-        this.history.push(entry);
+        this.files = res.files;
         this.currentHtml = res.html;
-        this.activeId = entry.id;
 
-        // Erste Version: Name und Icon aus der LLM-Ausgabe ableiten und Id/Ordner festlegen.
+        // Erste Version: Name und Icon aus dem Artefakt ableiten und Id/Ordner festlegen.
         if (this.id === null) {
           this.name = extractTitle(res.html) || DEFAULT_NAME;
           this.icon = extractIcon(res.html) || DEFAULT_ICON;
@@ -124,7 +118,8 @@ export const useAppStore = defineStore('app', {
           this.createdAt = Date.now();
         }
 
-        await this.persist();
+        await this.persist(text);
+        await this.loadVersions();
       } catch (err) {
         this.error = err instanceof Error ? err.message : String(err);
       } finally {
@@ -132,16 +127,33 @@ export const useAppStore = defineStore('app', {
       }
     },
 
-    /** Springt zu einer früheren Version zurück. */
-    revertTo(id: string): void {
-      const entry = this.history.find((e) => e.id === id);
-      if (!entry) return;
-      this.currentHtml = entry.html;
-      this.activeId = id;
-      void this.persist();
+    /** Springt zu einer früheren Version zurück (neuer Commit mit dem alten Stand). */
+    async revertTo(sha: string): Promise<void> {
+      if (!this.folder || this.id === null) return;
+      try {
+        const res = await getHost().revertApp(this.folder, this.id, sha);
+        if (!res.ok) {
+          this.error = res.error ?? 'Die Version konnte nicht wiederhergestellt werden.';
+          return;
+        }
+        // Wiederhergestellten Stand von der Platte übernehmen.
+        await this.open(this.folder, this.id);
+      } catch (err) {
+        this.error = err instanceof Error ? err.message : String(err);
+      }
     },
 
-    async persist(): Promise<void> {
+    /** Lädt die Git-Historie der geöffneten App. */
+    async loadVersions(): Promise<void> {
+      if (!this.folder || this.id === null) return;
+      try {
+        this.versions = await getHost().listVersions(this.folder, this.id);
+      } catch {
+        this.versions = [];
+      }
+    },
+
+    async persist(message: string): Promise<void> {
       if (!this.folder || this.id === null) return;
       // Als reines Objekt serialisieren: Pinia-State ist ein reaktiver Proxy, der
       // sich nicht über die Electron-IPC (structured clone) übertragen lässt.
@@ -152,12 +164,12 @@ export const useAppStore = defineStore('app', {
           icon: this.icon,
           createdAt: this.createdAt,
           updatedAt: Date.now(),
-          activeId: this.activeId,
-          history: this.history,
+          files: this.files,
+          html: this.currentHtml,
         }),
       );
       try {
-        const res = await getHost().saveApp(this.folder, data);
+        const res = await getHost().saveApp(this.folder, data, message);
         if (!res.ok) this.error = res.error ?? 'Die App konnte nicht gespeichert werden.';
       } catch (err) {
         this.error = err instanceof Error ? err.message : String(err);
