@@ -1,16 +1,15 @@
 <script setup lang="ts">
-import { useAppStore } from '@/stores/app';
 import TopBar from '@/components/TopBar.vue';
-
-const store = useAppStore();
+import PermissionDialog from '@/components/PermissionDialog.vue';
 </script>
 
 <template>
   <div class="app">
-    <TopBar :history-count="store.historyCount" />
+    <TopBar />
     <main class="main">
       <RouterView />
     </main>
+    <PermissionDialog />
   </div>
 </template>
 

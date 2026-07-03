@@ -3,11 +3,13 @@ import { mount } from '@vue/test-utils';
 import AppCanvas from './AppCanvas.vue';
 
 describe('AppCanvas', () => {
-  it('rendert das HTML in einem iframe via srcdoc', () => {
-    const html = '<!DOCTYPE html><html><body>Hallo</body></html>';
+  it('rendert das HTML in einem iframe via srcdoc und injiziert die Brücke', () => {
+    const html = '<!DOCTYPE html><html><head></head><body>Hallo</body></html>';
     const wrapper = mount(AppCanvas, { props: { html } });
-    const iframe = wrapper.get('iframe');
-    expect(iframe.attributes('srcdoc')).toBe(html);
+    const srcdoc = wrapper.get('iframe').attributes('srcdoc') ?? '';
+    expect(srcdoc).toContain('Hallo');
+    expect(srcdoc).toContain('data-morphos-bridge');
+    expect(srcdoc).toContain('window.morphosFS');
   });
 
   it('läuft in einer Sandbox ohne same-origin-Rechte', () => {

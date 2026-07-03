@@ -15,7 +15,19 @@ export default defineConfig({
     vue(),
     electron({
       main: { entry: 'electron/main.ts' },
-      preload: { input: 'electron/preload.ts' },
+      preload: {
+        input: 'electron/preload.ts',
+        // Als echtes ESM bauen: Die Datei heißt .mjs (package.json: type=module),
+        // also muss ihr Inhalt ESM sein — sonst schlägt `require` im Preload fehl
+        // und window.morphos wird nie bereitgestellt.
+        vite: {
+          build: {
+            rollupOptions: {
+              output: { format: 'es' },
+            },
+          },
+        },
+      },
     }),
     renderer(),
   ],

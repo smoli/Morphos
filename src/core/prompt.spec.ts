@@ -7,6 +7,17 @@ describe('SYSTEM_PROMPT', () => {
     expect(SYSTEM_PROMPT).toMatch(/<!DOCTYPE html>/);
     expect(SYSTEM_PROMPT).toMatch(/localStorage/i);
   });
+
+  it('verlangt Titel und Icon für die Desktop-Kachel', () => {
+    expect(SYSTEM_PROMPT).toMatch(/<title>/i);
+    expect(SYSTEM_PROMPT).toContain('morphos:icon');
+  });
+
+  it('dokumentiert das Dateisystem-API window.morphosFS', () => {
+    expect(SYSTEM_PROMPT).toContain('window.morphosFS');
+    expect(SYSTEM_PROMPT).toMatch(/writeFile/);
+    expect(SYSTEM_PROMPT).toMatch(/readFile/);
+  });
 });
 
 describe('buildPrompt', () => {

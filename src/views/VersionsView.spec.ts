@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { createPinia, setActivePinia } from 'pinia';
+import { createPinia, setActivePinia, type Pinia } from 'pinia';
 import { createRouter, createMemoryHistory, type Router } from 'vue-router';
 import VersionsView from './VersionsView.vue';
 import { useAppStore } from '@/stores/app';
@@ -15,14 +15,14 @@ function makeRouter(): Router {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/', name: 'home', component: { template: '<div>home</div>' } },
-      { path: '/versions', name: 'versions', component: VersionsView },
+      { path: '/app/:id', name: 'app', component: { template: '<div>app</div>' } },
+      { path: '/app/:id/versions', name: 'versions', component: VersionsView },
     ],
   });
 }
 
 describe('VersionsView', () => {
-  let pinia: ReturnType<typeof createPinia>;
+  let pinia: Pinia;
 
   beforeEach(() => {
     pinia = createPinia();
@@ -31,23 +31,25 @@ describe('VersionsView', () => {
 
   it('listet die Versionen aus dem Store', async () => {
     const store = useAppStore();
+    store.id = 'app1';
     store.history = entries;
     store.activeId = 'b';
     const router = makeRouter();
-    router.push('/versions');
+    router.push('/app/app1/versions');
     await router.isReady();
 
     const wrapper = mount(VersionsView, { global: { plugins: [pinia, router] } });
     expect(wrapper.findAll('li')).toHaveLength(2);
   });
 
-  it('springt bei Auswahl zurück und navigiert zur Arbeitsansicht', async () => {
+  it('springt bei Auswahl zurück und navigiert zur App', async () => {
     const store = useAppStore();
+    store.id = 'app1';
     store.history = entries;
     store.activeId = 'b';
     const revert = vi.spyOn(store, 'revertTo');
     const router = makeRouter();
-    router.push('/versions');
+    router.push('/app/app1/versions');
     await router.isReady();
 
     const wrapper = mount(VersionsView, { global: { plugins: [pinia, router] } });
@@ -56,6 +58,6 @@ describe('VersionsView', () => {
     await flushPromises();
 
     expect(revert).toHaveBeenCalledWith('a');
-    expect(router.currentRoute.value.path).toBe('/');
+    expect(router.currentRoute.value.path).toBe('/app/app1');
   });
 });

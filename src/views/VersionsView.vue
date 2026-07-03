@@ -1,22 +1,38 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router';
+import { onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useAppStore } from '@/stores/app';
+import { useWorkspaceStore } from '@/stores/workspace';
 import HistoryList from '@/components/HistoryList.vue';
 
 const store = useAppStore();
+const workspace = useWorkspaceStore();
+const route = useRoute();
 const router = useRouter();
 
-function onSelect(id: string): void {
-  store.revertTo(id);
-  void router.push('/');
+const id = route.params.id as string;
+
+onMounted(async () => {
+  // Bei Direktaufruf/Reload sicherstellen, dass die App geladen ist.
+  if (workspace.folder && store.id !== id) {
+    await store.open(workspace.folder, id);
+  }
+});
+
+function onSelect(entryId: string): void {
+  store.revertTo(entryId);
+  void router.push(`/app/${id}`);
 }
 </script>
 
 <template>
   <div class="versions">
     <div class="head">
-      <h2>Versionen</h2>
-      <RouterLink to="/" class="back">← Zurück</RouterLink>
+      <h2>
+        <span class="app-icon">{{ store.icon }}</span>
+        {{ store.name }} — Versionen
+      </h2>
+      <RouterLink :to="`/app/${id}`" class="back">← Zurück</RouterLink>
     </div>
     <HistoryList :entries="store.history" :active-id="store.activeId" @select="onSelect" />
   </div>
@@ -38,6 +54,12 @@ function onSelect(id: string): void {
 h2 {
   margin: 0;
   font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.app-icon {
+  font-size: 20px;
 }
 .back {
   color: var(--text);

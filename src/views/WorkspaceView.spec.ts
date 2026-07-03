@@ -1,37 +1,90 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
-import { createPinia, setActivePinia } from 'pinia';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { mount, flushPromises } from '@vue/test-utils';
+import { createPinia, setActivePinia, type Pinia } from 'pinia';
+import { createRouter, createMemoryHistory, type Router } from 'vue-router';
+import { nextTick } from 'vue';
 import WorkspaceView from './WorkspaceView.vue';
 import { useAppStore } from '@/stores/app';
+import { useWorkspaceStore } from '@/stores/workspace';
+import { setHost } from '@/services/host';
+import type { AppData, MorphosHost } from '@/types';
 import WelcomeScreen from '@/components/WelcomeScreen.vue';
 import AppCanvas from '@/components/AppCanvas.vue';
 
+const existing: AppData = {
+  id: 'editor-1',
+  name: 'Editor',
+  icon: '📝',
+  createdAt: 1,
+  updatedAt: 2,
+  activeId: 'v1',
+  history: [{ id: 'v1', prompt: 'a', html: '<!DOCTYPE html><html><body>doc</body></html>', time: 1 }],
+};
+
+function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
+  return {
+    generate: vi.fn(async () => ({ ok: true as const, html: '<html></html>' })),
+    chooseFolder: vi.fn(async () => ({ ok: false })),
+    loadSettings: vi.fn(async () => ({ recentFolders: [], accessRoots: {} })),
+    saveSettings: vi.fn(async () => ({ ok: true })),
+    listApps: vi.fn(async () => []),
+    loadApp: vi.fn(async () => existing),
+    saveApp: vi.fn(async () => ({ ok: true })),
+    deleteApp: vi.fn(async () => ({ ok: true })),
+    fs: vi.fn(async () => ({ ok: true as const, result: null })),
+    ...overrides,
+  };
+}
+
+function makeRouter(): Router {
+  return createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/', name: 'start', component: { template: '<div />' } },
+      { path: '/desktop', name: 'desktop', component: { template: '<div />' } },
+      { path: '/app/new', name: 'app-new', component: WorkspaceView },
+      { path: '/app/:id', name: 'app', component: WorkspaceView },
+    ],
+  });
+}
+
 describe('WorkspaceView', () => {
-  let pinia: ReturnType<typeof createPinia>;
+  let pinia: Pinia;
 
   beforeEach(() => {
     pinia = createPinia();
     setActivePinia(pinia);
+    setHost(makeHost());
+    useWorkspaceStore().folder = '/apps';
   });
 
-  it('zeigt den Startbildschirm, solange keine App existiert', () => {
-    const wrapper = mount(WorkspaceView, { global: { plugins: [pinia] } });
+  afterEach(() => vi.restoreAllMocks());
+
+  async function mountAt(path: string) {
+    const router = makeRouter();
+    router.push(path);
+    await router.isReady();
+    const wrapper = mount(WorkspaceView, { global: { plugins: [pinia, router] } });
+    await flushPromises();
+    return { wrapper, router };
+  }
+
+  it('zeigt bei einem Entwurf den Startbildschirm', async () => {
+    const { wrapper } = await mountAt('/app/new');
     expect(wrapper.findComponent(WelcomeScreen).exists()).toBe(true);
     expect(wrapper.findComponent(AppCanvas).exists()).toBe(false);
   });
 
-  it('zeigt die erzeugte App, sobald HTML vorhanden ist', () => {
-    const store = useAppStore();
-    store.currentHtml = '<!DOCTYPE html><html><body>x</body></html>';
-    const wrapper = mount(WorkspaceView, { global: { plugins: [pinia] } });
+  it('lädt eine bestehende App und zeigt sie an', async () => {
+    const { wrapper } = await mountAt('/app/editor-1');
     expect(wrapper.findComponent(AppCanvas).exists()).toBe(true);
-    expect(wrapper.findComponent(WelcomeScreen).exists()).toBe(false);
+    expect(useAppStore().currentHtml).toContain('doc');
   });
 
   it('löst generate aus, wenn die Promptleiste absendet', async () => {
+    const { wrapper } = await mountAt('/app/new');
     const store = useAppStore();
     const spy = vi.spyOn(store, 'generate').mockResolvedValue();
-    const wrapper = mount(WorkspaceView, { global: { plugins: [pinia] } });
 
     await wrapper.get('input').setValue('Ein Spiel');
     await wrapper.get('form').trigger('submit.prevent');
@@ -40,25 +93,25 @@ describe('WorkspaceView', () => {
   });
 
   it('löst generate aus, wenn ein Beispiel gewählt wird', async () => {
+    const { wrapper } = await mountAt('/app/new');
     const store = useAppStore();
     const spy = vi.spyOn(store, 'generate').mockResolvedValue();
-    const wrapper = mount(WorkspaceView, { global: { plugins: [pinia] } });
 
     await wrapper.get('.chip').trigger('click');
     expect(spy).toHaveBeenCalledOnce();
   });
 
-  it('zeigt eine Fehlermeldung aus dem Store', () => {
-    const store = useAppStore();
-    store.error = 'Etwas ging schief';
-    const wrapper = mount(WorkspaceView, { global: { plugins: [pinia] } });
+  it('zeigt eine Fehlermeldung aus dem Store', async () => {
+    const { wrapper } = await mountAt('/app/new');
+    useAppStore().error = 'Etwas ging schief';
+    await nextTick();
     expect(wrapper.text()).toContain('Etwas ging schief');
   });
 
-  it('zeigt einen Ladezustand, während generiert wird', () => {
-    const store = useAppStore();
-    store.busy = true;
-    const wrapper = mount(WorkspaceView, { global: { plugins: [pinia] } });
+  it('zeigt einen Ladezustand, während generiert wird', async () => {
+    const { wrapper } = await mountAt('/app/new');
+    useAppStore().busy = true;
+    await nextTick();
     expect(wrapper.find('.loading').exists()).toBe(true);
   });
 });
