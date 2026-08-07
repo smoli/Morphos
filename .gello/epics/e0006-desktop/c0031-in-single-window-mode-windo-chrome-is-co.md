@@ -34,15 +34,22 @@ Lösung:
 
 ## Acceptance
 
-- [ ] Im Einzel-Modus zeigt das Fenster weder Minimieren-, Maximieren- noch
+- [x] Im Einzel-Modus zeigt das Fenster weder Minimieren-, Maximieren- noch
       Schließen-Knopf und keinen Größengriff.
-- [ ] Ein `← Desktop`-Knopf blendet die App aus und zeigt den Launcher.
-- [ ] Vom Desktop aus ist die laufende App über Kachel oder Dock wieder
+- [x] Ein `← Desktop`-Knopf blendet die App aus und zeigt den Launcher.
+- [x] Vom Desktop aus ist die laufende App über Kachel oder Dock wieder
       erreichbar.
-- [ ] Eine Eingabe in der Promptleiste geht auf dem Desktop an eine neue App.
-- [ ] Fenster-Modus unverändert.
+- [x] Eine Eingabe in der Promptleiste geht auf dem Desktop an eine neue App.
+- [x] Fenster-Modus unverändert.
+
+Belegt durch neue Tests in `desktop.spec.ts` (showDesktop/activeId/Promptleiste),
+`WindowFrame.spec.ts` (keine Fensterknöpfe, kein Ziehen, Desktop-Knopf) und
+`DesktopView.spec.ts` (Launcher, Dock, Kontext-Label). Ganze Suite: 293 Tests
+grün, `vue-tsc --noEmit` fehlerfrei.
 
 ## Log
 
 - 2026-08-07 status → ready (app)
 - 2026-08-07 status → in-progress (agent)
+- 2026-08-07 Einzel-Modus ohne Fenster-Chrome, `← Desktop`-Knopf, Dock als
+  App-Umschalter; Promptleiste am neuen `activeId` (agent)
