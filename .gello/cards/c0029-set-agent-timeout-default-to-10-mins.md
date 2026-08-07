@@ -1,10 +1,10 @@
 ---
 id: c0029
 title: set agent timeout default to 10 mins
-status: review
+status: done
 created: 2026-08-06
 updated: 2026-08-07
-status-changed: 2026-08-07T22:38:59
+status-changed: 2026-08-07T22:46:31
 commit: 0d0ff43
 usage-tokens: 7218
 usage-cost: 0.920901
@@ -31,3 +31,4 @@ Generierungen liefen in die Zeitüberschreitung. Standard ist nun 10 Minuten.
 - 2026-08-07 status → ready (app)
 - 2026-08-07 status → in-progress (agent)
 - 2026-08-07 status → review (agent)
+- 2026-08-07 status → done (app)
