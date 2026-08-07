@@ -1,10 +1,10 @@
 ---
 id: c0031
 title: In single window mode windo chrome is confusing
-status: review
+status: done
 created: 2026-08-07
 updated: 2026-08-07
-status-changed: 2026-08-07T23:08:34
+status-changed: 2026-08-07T23:38:50
 epic: e0006
 usage-tokens: 22522
 usage-cost: 2.644736
@@ -56,3 +56,4 @@ grün, `vue-tsc --noEmit` fehlerfrei.
 - 2026-08-07 Einzel-Modus ohne Fenster-Chrome, `← Desktop`-Knopf, Dock als
   App-Umschalter; Promptleiste am neuen `activeId` (agent)
 - 2026-08-07 status → review (agent)
+- 2026-08-07 status → done (app)
