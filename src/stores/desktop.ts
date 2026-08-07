@@ -24,6 +24,8 @@ interface DesktopState {
   windows: DesktopWindow[];
   seq: number;
   nextZ: number;
+  /** Einzel-Modus: Der Desktop (Launcher) liegt vor der laufenden App. */
+  showingDesktop: boolean;
 }
 
 const MIN_W = 240;
@@ -42,6 +44,7 @@ export const useDesktopStore = defineStore('desktop', {
     windows: [],
     seq: 0,
     nextZ: 1,
+    showingDesktop: false,
   }),
 
   getters: {
@@ -50,6 +53,14 @@ export const useDesktopStore = defineStore('desktop', {
       const visible = s.windows.filter((w) => !w.minimized);
       if (visible.length === 0) return null;
       return visible.reduce((top, w) => (w.z > top.z ? w : top)).instanceId;
+    },
+    /**
+     * Das Fenster, das den Anwender gerade bedient — also `focusedId`, außer im
+     * Einzel-Modus, solange der Desktop davor liegt. Ziel der Promptleiste.
+     */
+    activeId(): string | null {
+      if (this.showingDesktop && useWorkspaceStore().uiMode === 'single') return null;
+      return this.focusedId;
     },
     /** Fenster von hinten nach vorn (aufsteigendes z) — stabile Renderreihenfolge. */
     stacked: (s): DesktopWindow[] => [...s.windows].sort((a, b) => a.z - b.z),
@@ -77,7 +88,13 @@ export const useDesktopStore = defineStore('desktop', {
       return this.spawn(null, 'Neue App', '🧩');
     },
 
+    /** Einzel-Modus: die laufende App verlassen und den Launcher zeigen. */
+    showDesktop(): void {
+      this.showingDesktop = true;
+    },
+
     spawn(appId: string | null, title: string, icon: string): string {
+      this.showingDesktop = false;
       this.seq += 1;
       const instanceId = `win-${this.seq}`;
       const step = (this.windows.length % 8) * CASCADE;
@@ -100,6 +117,8 @@ export const useDesktopStore = defineStore('desktop', {
     focusWindow(instanceId: string): void {
       const w = this.find(instanceId);
       if (!w) return;
+      // Ein Fenster in den Vordergrund holen beendet die Desktop-Ansicht.
+      this.showingDesktop = false;
       w.minimized = false;
       w.z = this.nextZ += 1;
     },
@@ -170,7 +189,7 @@ export const useDesktopStore = defineStore('desktop', {
     async submitToActive(text: string, attachments: Attachment[] = []): Promise<void> {
       const ws = useWorkspaceStore();
       if (!ws.folder) return;
-      let id = this.focusedId;
+      let id = this.activeId;
       if (!id) {
         id = this.openDraft();
         useAppWindow(id).newDraft(ws.folder);

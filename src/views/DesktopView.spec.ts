@@ -150,4 +150,51 @@ describe('DesktopView', () => {
     expect(frames[0].props('single')).toBe(true);
     expect(frames[0].props('win').appId).toBe('editor-2'); // das zuletzt fokussierte
   });
+
+  it('kehrt im Einzel-Modus über den Desktop-Knopf zum Launcher zurück', async () => {
+    useWorkspaceStore().uiMode = 'single';
+    const { wrapper } = await mountView();
+    const desktop = useDesktopStore();
+    desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+    await flushPromises();
+    expect(wrapper.findAllComponents(WindowFrame)).toHaveLength(1);
+
+    await wrapper.get('.w-desktop').trigger('click');
+    await flushPromises();
+
+    // Keine App mehr im Vordergrund, der Launcher ist wieder frei.
+    expect(wrapper.findAllComponents(WindowFrame)).toHaveLength(0);
+    expect(wrapper.findAll('.tile')).toHaveLength(3);
+  });
+
+  it('listet im Einzel-Modus die offenen Apps auf dem Desktop im Dock', async () => {
+    useWorkspaceStore().uiMode = 'single';
+    const { wrapper } = await mountView();
+    const desktop = useDesktopStore();
+    desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+    await flushPromises();
+    // Solange die App läuft, verdeckt kein Dock die Fläche.
+    expect(wrapper.find('.dock').exists()).toBe(false);
+
+    await wrapper.get('.w-desktop').trigger('click');
+    await flushPromises();
+    expect(wrapper.get('.dock').text()).toContain('Rechner');
+
+    await wrapper.get('.dock-item').trigger('click');
+    await flushPromises();
+    expect(wrapper.findAllComponents(WindowFrame)).toHaveLength(1);
+  });
+
+  it('meldet an der Promptleiste, dass auf dem Desktop eine neue App entsteht', async () => {
+    useWorkspaceStore().uiMode = 'single';
+    const { wrapper } = await mountView();
+    const desktop = useDesktopStore();
+    desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+    await flushPromises();
+    expect(wrapper.find('.chat-context').exists()).toBe(false);
+
+    await wrapper.get('.w-desktop').trigger('click');
+    await flushPromises();
+    expect(wrapper.get('.chat-context').text()).toContain('Neue App');
+  });
 });

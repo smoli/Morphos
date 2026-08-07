@@ -11,25 +11,35 @@ const workspace = useWorkspaceStore();
 const desktop = useDesktopStore();
 
 const singleMode = computed(() => workspace.uiMode === 'single');
-const minimized = computed(() => desktop.windows.filter((w) => w.minimized));
 
-// Im Einzel-Modus wird nur das aktive Fenster (Vollbild) gezeigt.
+// Im Einzel-Modus wird nur das aktive Fenster (Vollbild) gezeigt — oder gar
+// keines, solange der Anwender über „← Desktop“ beim Launcher ist.
 const activeWindow = computed(() =>
-  desktop.windows.find((w) => w.instanceId === desktop.focusedId) ?? null,
+  desktop.windows.find((w) => w.instanceId === desktop.activeId) ?? null,
 );
 
+// Dock: im Fenster-Modus die minimierten Fenster; im Einzel-Modus auf dem
+// Desktop alle laufenden Apps (auch Entwürfe ohne Kachel) zum Zurückwechseln.
+// Läuft dort eine App im Vollbild, verdeckt kein Dock ihre Fläche.
+const dockWindows = computed(() => {
+  if (!singleMode.value) return desktop.windows.filter((w) => w.minimized);
+  return activeWindow.value ? [] : desktop.windows;
+});
+
 // Die globale Promptleiste ist an das aktive Fenster gebunden.
-const activeStore = computed(() => (desktop.focusedId ? useAppWindow(desktop.focusedId) : null));
+const activeStore = computed(() => (desktop.activeId ? useAppWindow(desktop.activeId) : null));
 const chatMessages = computed(() => activeStore.value?.chat ?? []);
 const chatBusy = computed(() => activeStore.value?.busy ?? false);
 const chatPending = computed(() => activeStore.value?.pendingQuestion ?? null);
 const chatActivity = computed(() => activeStore.value?.activity ?? []);
 
-// Im Fenster-Modus anzeigen, an welche App die Eingabe geht (Gewissheit für den
-// Anwender). Ohne offenes Fenster entsteht eine neue App.
+// Anzeigen, an welche App die Eingabe geht (Gewissheit für den Anwender). Ohne
+// aktives Fenster entsteht eine neue App. Im Einzel-Modus zeigt die laufende
+// App ihren Namen bereits in der Kopfzeile — dort genügt der Hinweis auf dem
+// Desktop.
 const chatContext = computed<string | null>(() => {
-  if (workspace.uiMode !== 'windows') return null;
   const w = activeWindow.value;
+  if (singleMode.value) return w ? null : 'Neue App';
   return w ? `${w.icon} ${w.title}` : 'Neue App';
 });
 
@@ -90,10 +100,10 @@ function onPrompt(text: string, attachments: Attachment[] = []): void {
         </template>
       </div>
 
-      <!-- Dock für minimierte Fenster. -->
-      <div v-if="minimized.length" class="dock">
+      <!-- Dock für minimierte bzw. (Einzel-Modus) laufende Fenster. -->
+      <div v-if="dockWindows.length" class="dock">
         <button
-          v-for="w in minimized"
+          v-for="w in dockWindows"
           :key="w.instanceId"
           type="button"
           class="dock-item"

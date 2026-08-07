@@ -52,6 +52,20 @@ async function mountFrameForApp(over: Partial<MorphosHost> = {}) {
   return { wrapper, desktop, workspace, win };
 }
 
+async function mountSingleFrame(over: Partial<MorphosHost> = {}) {
+  setActivePinia(createPinia());
+  setHost(makeHost(over));
+  const workspace = useWorkspaceStore();
+  workspace.folder = '/apps';
+  workspace.uiMode = 'single';
+  const desktop = useDesktopStore();
+  const id = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+  const win = desktop.windows.find((w) => w.instanceId === id)!;
+  const wrapper = mount(WindowFrame, { props: { win, single: true } });
+  await flushPromises();
+  return { wrapper, desktop, workspace, win };
+}
+
 describe('WindowFrame', () => {
   beforeEach(() => setActivePinia(createPinia()));
 
@@ -142,19 +156,39 @@ describe('WindowFrame', () => {
     expect(desktop.find(win.instanceId)!.maximized).toBe(false);
   });
 
-  it('zeigt im Einzel-Modus kein Maximieren und keinen Ziehgriff', async () => {
-    setActivePinia(createPinia());
-    setHost(makeHost());
-    const workspace = useWorkspaceStore();
-    workspace.folder = '/apps';
-    const desktop = useDesktopStore();
-    const id = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
-    const win = desktop.windows.find((w) => w.instanceId === id)!;
-    const wrapper = mount(WindowFrame, { props: { win, single: true } });
-    await flushPromises();
+  it('zeigt im Einzel-Modus keine Fensterknöpfe und keinen Ziehgriff', async () => {
+    const { wrapper } = await mountSingleFrame();
 
     expect(wrapper.find('.w-max').exists()).toBe(false);
+    expect(wrapper.find('.w-min').exists()).toBe(false);
+    expect(wrapper.find('.w-close').exists()).toBe(false);
     expect(wrapper.find('.resize-handle').exists()).toBe(false);
     expect(wrapper.get('.window-frame').classes()).toContain('full');
+  });
+
+  it('kehrt im Einzel-Modus über den Desktop-Knopf zum Desktop zurück', async () => {
+    const { wrapper, desktop } = await mountSingleFrame();
+
+    const back = wrapper.get('.w-desktop');
+    expect(back.text()).toContain('Desktop');
+    await back.trigger('click');
+
+    expect(desktop.showingDesktop).toBe(true);
+    // Das Fenster bleibt offen — es liegt nur hinter dem Desktop.
+    expect(desktop.windows).toHaveLength(1);
+  });
+
+  it('zeigt den Desktop-Knopf im Fenster-Modus nicht', async () => {
+    const { wrapper } = await mountFrameForApp();
+    expect(wrapper.find('.w-desktop').exists()).toBe(false);
+  });
+
+  it('bewegt das Fenster im Einzel-Modus nicht per Ziehen der Titelleiste', async () => {
+    const { wrapper, desktop, win } = await mountSingleFrame();
+    const startX = win.x;
+    await wrapper.get('.titlebar').trigger('mousedown', { clientX: 200, clientY: 100 });
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 260, clientY: 140 }));
+    await wrapper.vm.$nextTick();
+    expect(desktop.find(win.instanceId)!.x).toBe(startX);
   });
 });

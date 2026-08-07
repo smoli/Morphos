@@ -163,6 +163,56 @@ describe('useDesktopStore', () => {
     expect(d.find(a)!.maximized).toBe(false);
   });
 
+  describe('Einzel-Modus: zurück zum Desktop', () => {
+    it('hat ohne Zutun kein „Desktop zeigen“ aktiv', () => {
+      const d = useDesktopStore();
+      const a = d.openApp('a', { title: 'A', icon: '🅰' });
+      expect(d.showingDesktop).toBe(false);
+      expect(d.activeId).toBe(a);
+    });
+
+    it('blendet im Einzel-Modus über showDesktop() das aktive Fenster aus', () => {
+      useWorkspaceStore().uiMode = 'single';
+      const d = useDesktopStore();
+      const a = d.openApp('a', { title: 'A', icon: '🅰' });
+
+      d.showDesktop();
+      expect(d.activeId).toBeNull();
+      // Das Fenster bleibt offen — es wird nur nicht gezeigt.
+      expect(d.windows).toHaveLength(1);
+      expect(d.focusedId).toBe(a);
+    });
+
+    it('holt ein Fenster über focusWindow/restoreWindow zurück in den Vordergrund', () => {
+      useWorkspaceStore().uiMode = 'single';
+      const d = useDesktopStore();
+      const a = d.openApp('a', { title: 'A', icon: '🅰' });
+      d.showDesktop();
+
+      d.restoreWindow(a);
+      expect(d.showingDesktop).toBe(false);
+      expect(d.activeId).toBe(a);
+    });
+
+    it('zeigt ein neu geöffnetes Fenster sofort (Desktop-Ansicht endet)', () => {
+      useWorkspaceStore().uiMode = 'single';
+      const d = useDesktopStore();
+      d.openApp('a', { title: 'A', icon: '🅰' });
+      d.showDesktop();
+
+      const b = d.openDraft();
+      expect(d.showingDesktop).toBe(false);
+      expect(d.activeId).toBe(b);
+    });
+
+    it('wirkt sich im Fenster-Modus nicht aus', () => {
+      const d = useDesktopStore();
+      const a = d.openApp('a', { title: 'A', icon: '🅰' });
+      d.showDesktop();
+      expect(d.activeId).toBe(a);
+    });
+  });
+
   describe('Generieren aus der globalen Promptleiste', () => {
     it('legt ohne offenes Fenster einen Entwurf an und richtet den Titel ein', async () => {
       setHost(makeHost());
@@ -195,6 +245,24 @@ describe('useDesktopStore', () => {
       // Kein neues Fenster — die aktive Instanz b hat generiert.
       expect(d.windows).toHaveLength(2);
       expect(d.focusedId).toBe(b);
+    });
+
+    it('legt auf dem Desktop (Einzel-Modus) einen neuen Entwurf an, statt das verborgene Fenster zu ändern', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      ws.folder = '/apps';
+      ws.uiMode = 'single';
+      const d = useDesktopStore();
+      const a = d.openApp('a-1', { title: 'A', icon: '🅰' });
+      const { useAppWindow } = await import('./app');
+      useAppWindow(a).newDraft('/apps');
+      d.showDesktop();
+
+      await d.submitToActive('Ein Rechner');
+
+      expect(d.windows).toHaveLength(2);
+      expect(d.showingDesktop).toBe(false);
+      expect(d.activeId).not.toBe(a);
     });
   });
 });

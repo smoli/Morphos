@@ -52,6 +52,10 @@ function minimize(): void {
 function toggleMaximize(): void {
   desktop.toggleMaximize(props.win.instanceId);
 }
+/** Einzel-Modus: zurück zum Desktop — das Fenster läuft im Hintergrund weiter. */
+function backToDesktop(): void {
+  desktop.showDesktop();
+}
 
 // Der WelcomeScreen eines leeren Entwurfsfensters generiert über die zentrale
 // Orchestrierung (wie die globale Promptleiste).
@@ -117,7 +121,12 @@ function stopInteraction(): void {
          Größenändern die Maus schlucken. -->
     <div v-if="interacting" class="drag-shield"></div>
 
+    <!-- Im Einzel-Modus trägt die Kopfzeile KEINE Fensterknöpfe (es gibt dort
+         keinen Fenstermanager), sondern nur den Weg zurück zum Desktop. -->
     <header class="titlebar" @mousedown.self="!full && startDrag($event)" @dblclick="!single && toggleMaximize()">
+      <button v-if="single" type="button" class="w-desktop" title="Zurück zum Desktop" @mousedown.stop @click="backToDesktop">
+        ← Desktop
+      </button>
       <span class="w-icon" @mousedown.stop>{{ store.icon || win.icon }}</span>
       <span class="w-title" @mousedown.self="!full && startDrag($event)">{{ store.name || win.title }}</span>
       <span class="w-actions">
@@ -131,18 +140,19 @@ function stopInteraction(): void {
         >
           ⟲ {{ store.versionCount }}
         </button>
-        <button type="button" class="w-min" title="Minimieren" @mousedown.stop @click="minimize">—</button>
-        <button
-          v-if="!single"
-          type="button"
-          class="w-max"
-          :title="win.maximized ? 'Wiederherstellen' : 'Maximieren'"
-          @mousedown.stop
-          @click="toggleMaximize"
-        >
-          {{ win.maximized ? '❐' : '▢' }}
-        </button>
-        <button type="button" class="w-close" title="Schließen" @mousedown.stop @click="close">✕</button>
+        <template v-if="!single">
+          <button type="button" class="w-min" title="Minimieren" @mousedown.stop @click="minimize">—</button>
+          <button
+            type="button"
+            class="w-max"
+            :title="win.maximized ? 'Wiederherstellen' : 'Maximieren'"
+            @mousedown.stop
+            @click="toggleMaximize"
+          >
+            {{ win.maximized ? '❐' : '▢' }}
+          </button>
+          <button type="button" class="w-close" title="Schließen" @mousedown.stop @click="close">✕</button>
+        </template>
       </span>
     </header>
 
@@ -216,6 +226,18 @@ function stopInteraction(): void {
   border-bottom: 1px solid var(--border);
   cursor: grab;
   user-select: none;
+}
+.w-desktop {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.w-desktop:hover {
+  border-color: var(--accent);
 }
 .w-icon {
   font-size: 16px;
