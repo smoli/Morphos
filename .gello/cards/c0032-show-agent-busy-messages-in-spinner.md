@@ -12,4 +12,6 @@ When the chat is collapsed show the „agent thinks“, „agent works“, etc. 
 
 Also right now I see „agents works“ for a loooong time. Any more details we can display here?
 
+Also show elapsed time
+
 Make the chat not auto open after submit
