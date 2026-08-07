@@ -1,0 +1,18 @@
+{
+  "status": "running",
+  "ready": [
+    "c0029"
+  ],
+  "waiting": [],
+  "runs": [
+    {
+      "cardId": "c0029",
+      "phase": "running"
+    }
+  ],
+  "updated": "2026-08-07T22:36:59",
+  "pickupDelay": 10,
+  "owned": [
+    "c0029"
+  ]
+}
