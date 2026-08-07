@@ -12,12 +12,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "npx vitest run src/core/agent.spec.ts 2>&1 | tail -15"
+        "arg": "git add electron/main.ts src/core/agent.ts src/core/agent.spec.ts .gello/cards/c0029-set-agent-timeout-default-to-10-mins.md && git status --short && git commit -q -F - <<'EOF' && git log --oneline -1\nc0029: Agenten-Timeout auf 10 Minuten anheben\n\nEin Lauf der Claude CLI brach nach 5 Minuten ab, was für längere\nGenerierungen zu knapp war. Zeitbudget und Abbruchmeldung liegen nun in\nsrc/core/agent.ts; die Minutenangabe der Meldung folgt dem Wert.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nEOF"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-07T22:38:13",
+  "updated": "2026-08-07T22:39:05",
   "pickupDelay": 10,
   "owned": [
     "c0029"
