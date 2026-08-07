@@ -41,6 +41,22 @@ export type GenerateResult =
   | { ok: true; files?: SourceFile[]; html?: string; say?: string }
   | { ok: false; error: string };
 
+/**
+ * Ein Fortschrittsereignis eines laufenden Agentenlaufs — aus dem Strom der
+ * Claude CLI abgeleitet, damit der Chat live zeigt, was der Agent gerade tut.
+ */
+export type AgentEvent =
+  | { kind: 'start' }
+  | { kind: 'think' }
+  | { kind: 'tool'; name: string; detail?: string }
+  | { kind: 'write'; path: string }
+  | { kind: 'delete'; path: string }
+  | { kind: 'say' }
+  | { kind: 'done' };
+
+/** Endergebnis eines Agentenlaufs: Roh-Antworttext oder Fehlermeldung. */
+export type AgentResult = { ok: true; text: string } | { ok: false; error: string };
+
 /** Eine Version aus der Git-Historie einer App. */
 export interface VersionInfo {
   /** Commit-Hash (vollständig). */
@@ -172,14 +188,24 @@ export interface MorphosHost {
    * Erzeugt bzw. verändert die App über die Claude CLI. `files` ist der aktuelle
    * Quelldatei-Satz (leer bei einer neuen App), `chat` der bisherige Dialog
    * (für den Kontext), `attachments` mitgeschickte Referenzdateien. Zurück
-   * kommen Dateiänderungen und/oder eine Rückfrage (`say`).
+   * kommen Dateiänderungen und/oder eine Rückfrage (`say`). `runId` markiert
+   * den Lauf, unter dem seine Fortschrittsereignisse gemeldet werden.
    */
   generate(
     prompt: string,
     files: SourceFile[],
     chat: ChatMessage[],
     attachments: Attachment[],
+    runId?: string,
   ): Promise<GenerateResult>;
+
+  /**
+   * Abonniert die Fortschrittsereignisse laufender Agentenläufe; liefert eine
+   * Abmeldefunktion. `runId` ordnet jedes Ereignis dem Lauf zu, der es
+   * ausgelöst hat — mehrere Fenster können gleichzeitig generieren.
+   * Optional: im Renderer-Test fehlt die Anbindung.
+   */
+  onAgentEvent?(cb: (runId: string, event: AgentEvent) => void): () => void;
 
   /** Öffnet den nativen Ordner-Auswahldialog. */
   chooseFolder(): Promise<FolderResult>;

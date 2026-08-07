@@ -4,7 +4,7 @@ import { useAppWindow } from './app';
 import { setHost } from '@/services/host';
 // Jeder Test bekommt eine frische Pinia — dieselbe Instanz-Id ist damit isoliert.
 const useAppStore = () => useAppWindow('test');
-import type { AppData, GenerateResult, MorphosHost, SourceFile, VersionInfo } from '@/types';
+import type { AgentEvent, AppData, GenerateResult, MorphosHost, SourceFile, VersionInfo } from '@/types';
 
 const DOC = (body: string, title = 'Test', icon = '🧪'): string =>
   `<!DOCTYPE html><html><head><title>${title}</title><meta name="morphos:icon" content="${icon}"></head><body>${body}</body></html>`;
@@ -32,6 +32,28 @@ function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
     fs: vi.fn(async () => ({ ok: true as const, result: null })),
     ...overrides,
   };
+}
+
+/**
+ * Host, der während der Generierung Fortschrittsereignisse meldet — wie die
+ * Claude CLI im Strom-Modus. `foreignRunId` schickt sie unter einer fremden
+ * Lauf-Id (darf den Store nicht erreichen), `fail` lässt den Lauf scheitern.
+ */
+function makeStreamingHost(events: AgentEvent[], opts: { foreignRunId?: boolean; fail?: boolean } = {}) {
+  const listeners = new Set<(runId: string, event: AgentEvent) => void>();
+  const host = makeHost({
+    onAgentEvent: (cb) => {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    generate: vi.fn(async (_p, _f, _c, _a, runId?: string): Promise<GenerateResult> => {
+      const id = opts.foreignRunId ? 'anderer-lauf' : (runId ?? '');
+      for (const event of events) for (const cb of listeners) cb(id, event);
+      if (opts.fail) return { ok: false, error: 'Fehlgeschlagen.' };
+      return { ok: true, files: FILES(DOC('x')), html: DOC('x') };
+    }),
+  });
+  return { host, listenerCount: (): number => listeners.size };
 }
 
 describe('useAppStore', () => {
@@ -62,7 +84,7 @@ describe('useAppStore', () => {
 
     await store.generate('Ein Taschenrechner');
 
-    expect(host.generate).toHaveBeenCalledWith('Ein Taschenrechner', [], [], []);
+    expect(host.generate).toHaveBeenCalledWith('Ein Taschenrechner', [], [], [], expect.any(String));
     expect(store.name).toBe('Taschenrechner');
     expect(store.icon).toBe('🧮');
     expect(store.id).toMatch(/^taschenrechner-/);
@@ -210,6 +232,75 @@ describe('useAppStore', () => {
     expect(store.pendingQuestion).toBeNull();
     expect(store.name).toBe('Snake');
     expect(store.chat.map((m) => m.text)).toEqual(['Ein Spiel', 'Snake oder Tetris?', 'Snake bitte', 'Snake ist fertig.']);
+  });
+
+  it('sammelt die Fortschrittsereignisse des laufenden Laufs', async () => {
+    const stream = makeStreamingHost([
+      { kind: 'start' },
+      { kind: 'think' },
+      { kind: 'write', path: 'src/index.html' },
+      { kind: 'done' },
+    ]);
+    setHost(stream.host);
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    await store.generate('Ein Taschenrechner');
+
+    expect(store.activity).toEqual([
+      { kind: 'start' },
+      { kind: 'think' },
+      { kind: 'write', path: 'src/index.html' },
+      { kind: 'done' },
+    ]);
+  });
+
+  it('nimmt nur die Ereignisse des eigenen Laufs an', async () => {
+    const stream = makeStreamingHost([{ kind: 'start' }], { foreignRunId: true });
+    setHost(stream.host);
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    await store.generate('Ein Taschenrechner');
+
+    expect(store.activity).toEqual([]);
+  });
+
+  it('führt gleich lautende Ereignisse nicht doppelt auf', async () => {
+    const stream = makeStreamingHost([{ kind: 'think' }, { kind: 'think' }, { kind: 'think' }]);
+    setHost(stream.host);
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    await store.generate('Ein Taschenrechner');
+
+    expect(store.activity).toEqual([{ kind: 'think' }]);
+  });
+
+  it('meldet sich nach dem Lauf wieder ab und beginnt den Fortschritt neu', async () => {
+    const stream = makeStreamingHost([{ kind: 'start' }]);
+    setHost(stream.host);
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    await store.generate('erste Version');
+    expect(store.activity).toHaveLength(1);
+    expect(stream.listenerCount()).toBe(0);
+
+    await store.generate('zweite Version');
+    expect(store.activity).toEqual([{ kind: 'start' }]); // nicht angehäuft
+  });
+
+  it('meldet sich auch nach einem Fehler wieder ab', async () => {
+    const stream = makeStreamingHost([], { fail: true });
+    setHost(stream.host);
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    await store.generate('Ein Taschenrechner');
+
+    expect(store.error).toBeTruthy();
+    expect(stream.listenerCount()).toBe(0);
   });
 
   it('vermerkt Referenzdateien in der Nutzer-Nachricht und reicht sie an den Host weiter', async () => {

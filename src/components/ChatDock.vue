@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { getHost } from '@/services/host';
+import { agentEventLabel } from '@/core/agent';
 import { renderMarkdown } from '@/core/markdown';
-import type { Attachment, ChatMessage } from '@/types';
+import type { AgentEvent, Attachment, ChatMessage } from '@/types';
 
 const props = defineProps<{
   busy: boolean;
@@ -11,6 +12,8 @@ const props = defineProps<{
   pendingQuestion: string | null;
   /** Name der App, an die die Eingabe geht (zeigt dem Anwender das Ziel an). */
   contextLabel?: string | null;
+  /** Live-Fortschritt des laufenden Laufs (was der Agent gerade tut). */
+  activity?: AgentEvent[];
 }>();
 
 const emit = defineEmits<{ submit: [text: string, attachments: Attachment[]] }>();
@@ -34,6 +37,23 @@ const teleportTarget = computed<HTMLElement | string>(() => portalTarget.value ?
 // Das Eingabefeld wächst mit dem Inhalt (bis zu 6 Zeilen).
 const rows = computed(() => Math.min(6, Math.max(1, text.value.split('\n').length)));
 
+// Die Schritte des laufenden Laufs als fertige Anzeigezeilen (Zeichen + Text).
+const steps = computed(() =>
+  (props.activity ?? []).map((event) => ({ icon: stepIcon(event), label: agentEventLabel(event) })),
+);
+
+function stepIcon(event: AgentEvent): string {
+  switch (event.kind) {
+    case 'start': return '▶';
+    case 'think': return '💭';
+    case 'tool': return '🔧';
+    case 'write': return '📝';
+    case 'delete': return '🗑';
+    case 'say': return '💬';
+    case 'done': return '✓';
+  }
+}
+
 function scrollDown(): void {
   void nextTick(() => {
     if (panel.value) panel.value.scrollTop = panel.value.scrollHeight;
@@ -52,6 +72,15 @@ watch(() => props.pendingQuestion, (q) => {
 });
 watch(() => props.messages.length, scrollDown);
 watch(open, (o) => { if (o) scrollDown(); });
+
+// Läuft ein Agentenlauf, zeigt der Chat ihn mit: gedockt klappt der Verlauf
+// auf, damit der Anwender verfolgen kann, was gerade geschieht.
+watch(() => props.busy, (busy) => {
+  if (!busy) return;
+  if (!popped.value) open.value = true;
+  scrollDown();
+}, { immediate: true });
+watch(() => steps.value.length, scrollDown);
 
 /** Kopiert die Styles der Host-Seite in das Kindfenster (Vue-scoped inklusive). */
 function copyStyles(target: Document): void {
@@ -183,6 +212,18 @@ function fmt(ts: number): string {
               <div class="time">{{ fmt(msg.time) }}</div>
             </div>
           </template>
+
+          <!-- Mitlaufender Fortschritt: was der Agent gerade tut. -->
+          <div v-if="busy" class="activity">
+            <div v-for="(step, i) in steps" :key="i" class="step">
+              <span class="step-icon">{{ step.icon }}</span>
+              <span class="step-label">{{ step.label }}</span>
+            </div>
+            <div class="step running">
+              <span class="step-icon">⏳</span>
+              <span class="step-label">Der Agent arbeitet …</span>
+            </div>
+          </div>
         </div>
 
             <div v-if="contextLabel" class="chat-context" :title="`Deine Eingabe geht an: ${contextLabel}`">
@@ -366,6 +407,36 @@ function fmt(ts: number): string {
   background: none;
   border: 0;
   padding: 0;
+}
+/* Fortschritt des laufenden Laufs — zurückhaltend, unter dem Verlauf. */
+.activity {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-left: 2px solid var(--border);
+  padding: 2px 0 2px 10px;
+  margin: 2px 0 0 4px;
+}
+.step {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.step-icon {
+  flex-shrink: 0;
+  font-size: 11px;
+}
+.step-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.step.running {
+  color: var(--text);
+  opacity: 0.75;
 }
 .atts {
   margin-top: 6px;

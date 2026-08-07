@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type {
+  AgentEvent,
   AppData,
   AppSummary,
   Attachment,
@@ -19,8 +20,21 @@ contextBridge.exposeInMainWorld('morphos', {
   // Betriebssystem, damit die Titelleiste die Fensterknöpfe passend anordnet.
   platform: process.platform,
 
-  generate: (prompt: string, files: SourceFile[], chat: ChatMessage[], attachments: Attachment[]): Promise<GenerateResult> =>
-    ipcRenderer.invoke('morphos:generate', { prompt, files, chat, attachments }),
+  generate: (
+    prompt: string,
+    files: SourceFile[],
+    chat: ChatMessage[],
+    attachments: Attachment[],
+    runId?: string,
+  ): Promise<GenerateResult> =>
+    ipcRenderer.invoke('morphos:generate', { prompt, files, chat, attachments, runId }),
+
+  // Fortschritt eines laufenden Agentenlaufs (Strom der Claude CLI).
+  onAgentEvent: (cb: (runId: string, event: AgentEvent) => void): (() => void) => {
+    const handler = (_e: unknown, runId: string, event: AgentEvent): void => cb(runId, event);
+    ipcRenderer.on('morphos:agentEvent', handler);
+    return () => ipcRenderer.removeListener('morphos:agentEvent', handler);
+  },
 
   chooseFolder: (): Promise<FolderResult> => ipcRenderer.invoke('morphos:chooseFolder'),
   chooseAttachment: (): Promise<{ ok: boolean; attachment?: Attachment; error?: string }> =>

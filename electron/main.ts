@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { AGENT_TIMEOUT_MS, agentTimeoutMessage } from '../src/core/agent';
+import { AGENT_IDLE_TIMEOUT_MS, agentIdleTimeoutMessage, createAgentStream } from '../src/core/agent';
 import { buildPrompt, SYSTEM_PROMPT } from '../src/core/prompt';
 import { extractHtml } from '../src/core/html';
 import { applyChanges, isValidSourcePath, parseLLMOutput } from '../src/core/files';
@@ -16,6 +16,8 @@ import { runFs } from '../src/core/fsaccess';
 import { resolveLibs } from './libcache';
 import type { PromptAttachment, PromptContext } from '../src/core/prompt';
 import type {
+  AgentEvent,
+  AgentResult,
   AppData,
   AppSummary,
   Attachment,
@@ -132,30 +134,52 @@ function preparePromptAttachments(attachments: Attachment[]): { atts: PromptAtta
 
 // ---- Claude CLI ----
 
-/** Ruft die Claude CLI im Print-Modus auf und liefert deren Roh-Ausgabe zurück. */
-function runClaude(prompt: string, extraArgs: string[] = []): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+/**
+ * Ruft die Claude CLI im Strom-Modus auf (stream-json): Sie meldet laufend,
+ * was sie tut — jedes Ereignis geht über `onEvent` an den Chat und setzt
+ * zugleich das Ruhe-Zeitbudget zurück. Ein langer Lauf läuft dadurch nicht
+ * mehr in eine Zeitüberschreitung, solange der Agent arbeitet.
+ */
+function runClaude(
+  prompt: string,
+  extraArgs: string[] = [],
+  onEvent: (event: AgentEvent) => void = () => {},
+): Promise<AgentResult> {
   return new Promise((resolve) => {
-    const args = ['-p', '--output-format', 'json', '--append-system-prompt', SYSTEM_PROMPT, ...extraArgs];
+    const args = [
+      '-p',
+      '--output-format', 'stream-json',
+      '--verbose',
+      '--include-partial-messages',
+      '--append-system-prompt', SYSTEM_PROMPT,
+      ...extraArgs,
+    ];
 
     const child = spawn('claude', args, { stdio: ['pipe', 'pipe', 'pipe'] });
 
-    let stdout = '';
+    const stream = createAgentStream();
     let stderr = '';
 
     // Genau einmal auflösen — 'error' und 'close' können beide feuern,
     // und der Timeout darf ein bereits geliefertes Ergebnis nicht überschreiben.
     let settled = false;
-    const finish = (result: { ok: true; text: string } | { ok: false; error: string }): void => {
+    let timer: NodeJS.Timeout;
+    const finish = (result: AgentResult): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       resolve(result);
     };
 
-    const timer = setTimeout(() => {
-      child.kill();
-      finish({ ok: false, error: agentTimeoutMessage() });
-    }, AGENT_TIMEOUT_MS);
+    // Ruhe-Zeitbudget: Es zählt nur die Zeit OHNE Lebenszeichen der CLI.
+    const keepAlive = (): void => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        child.kill();
+        finish({ ok: false, error: agentIdleTimeoutMessage() });
+      }, AGENT_IDLE_TIMEOUT_MS);
+    };
+    keepAlive();
 
     child.on('error', (err: NodeJS.ErrnoException) => {
       const hint =
@@ -165,26 +189,22 @@ function runClaude(prompt: string, extraArgs: string[] = []): Promise<{ ok: true
       finish({ ok: false, error: hint });
     });
 
-    child.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
-    child.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+    child.stdout.on('data', (d: Buffer) => {
+      keepAlive();
+      for (const event of stream.push(d.toString())) onEvent(event);
+    });
+    child.stderr.on('data', (d: Buffer) => {
+      keepAlive();
+      stderr += d.toString();
+    });
 
     child.on('close', (code) => {
-      if (code !== 0 && !stdout) {
-        finish({ ok: false, error: stderr.trim() || `Claude CLI endete mit Code ${code}.` });
+      const result = stream.result();
+      if (result) {
+        finish(result);
         return;
       }
-      let text = '';
-      try {
-        const parsed = JSON.parse(stdout) as { subtype?: string; result?: string };
-        if (parsed.subtype && parsed.subtype !== 'success') {
-          finish({ ok: false, error: parsed.result || `Claude-Ergebnis: ${parsed.subtype}` });
-          return;
-        }
-        text = parsed.result ?? '';
-      } catch {
-        text = stdout;
-      }
-      finish({ ok: true, text });
+      finish({ ok: false, error: stderr.trim() || `Claude CLI endete mit Code ${code}.` });
     });
 
     // Schlägt der Spawn fehl (z. B. ENOENT), löst das Schreiben auf stdin einen
@@ -200,12 +220,14 @@ function runClaude(prompt: string, extraArgs: string[] = []): Promise<{ ok: true
  * aufrufen, Datei-Blöcke und Rückfrage lesen, Änderungen anwenden,
  * Bibliotheken auflösen (Whitelist + Cache) und zum Artefakt bündeln.
  * Eine reine Rückfrage kommt ohne files/html zurück — es wird nichts committet.
+ * `onEvent` meldet den Fortschritt des Laufs an das aufrufende Fenster.
  */
 async function generate(
   userRequest: string,
   current: SourceFile[],
   chat: ChatMessage[],
   attachments: Attachment[],
+  onEvent: (event: AgentEvent) => void = () => {},
 ): Promise<GenerateResult> {
   const whitelist = readSettings().libWhitelist ?? [];
 
@@ -218,7 +240,7 @@ async function generate(
     .filter((a) => a.kind === 'image' && a.path)
     .flatMap((a) => ['--allowedTools', `Read(${a.path})`]);
 
-  const res = await runClaude(buildPrompt(userRequest, current, whitelist, context), extraArgs);
+  const res = await runClaude(buildPrompt(userRequest, current, whitelist, context), extraArgs, onEvent);
   if (!res.ok) return res;
 
   const changes = parseLLMOutput(res.text);
@@ -290,8 +312,8 @@ function createWindow(): void {
 // ---- IPC ----
 
 ipcMain.handle('morphos:generate', async (
-  _e,
-  payload: { prompt: string; files: SourceFile[]; chat: ChatMessage[]; attachments: Attachment[] },
+  event,
+  payload: { prompt: string; files: SourceFile[]; chat: ChatMessage[]; attachments: Attachment[]; runId?: string },
 ): Promise<GenerateResult> => {
   if (!payload?.prompt?.trim()) return { ok: false, error: 'Bitte gib einen Wunsch ein.' };
   const current = Array.isArray(payload.files)
@@ -303,7 +325,15 @@ ipcMain.handle('morphos:generate', async (
   const attachments = Array.isArray(payload.attachments)
     ? payload.attachments.filter((a) => a && typeof a.path === 'string' && typeof a.name === 'string')
     : [];
-  return generate(payload.prompt, current, chat, attachments);
+  // Der Fortschritt geht an genau das Fenster zurück, das den Lauf gestartet
+  // hat — die Lauf-Id ordnet ihn dort dem richtigen App-Fenster zu.
+  const runId = typeof payload.runId === 'string' ? payload.runId : '';
+  const sender = event.sender;
+  const onEvent = (agentEvent: AgentEvent): void => {
+    if (sender.isDestroyed()) return;
+    sender.send('morphos:agentEvent', runId, agentEvent);
+  };
+  return generate(payload.prompt, current, chat, attachments, onEvent);
 });
 
 ipcMain.handle('morphos:chooseAttachment', async (): Promise<{ ok: boolean; attachment?: Attachment; error?: string }> => {

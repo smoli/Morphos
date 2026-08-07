@@ -23,6 +23,7 @@ const activeStore = computed(() => (desktop.focusedId ? useAppWindow(desktop.foc
 const chatMessages = computed(() => activeStore.value?.chat ?? []);
 const chatBusy = computed(() => activeStore.value?.busy ?? false);
 const chatPending = computed(() => activeStore.value?.pendingQuestion ?? null);
+const chatActivity = computed(() => activeStore.value?.activity ?? []);
 
 // Im Fenster-Modus anzeigen, an welche App die Eingabe geht (Gewissheit für den
 // Anwender). Ohne offenes Fenster entsteht eine neue App.
@@ -113,6 +114,7 @@ function onPrompt(text: string, attachments: Attachment[] = []): void {
         :messages="chatMessages"
         :pending-question="chatPending"
         :context-label="chatContext"
+        :activity="chatActivity"
         @submit="onPrompt"
       />
     </footer>

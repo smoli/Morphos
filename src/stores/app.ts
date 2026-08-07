@@ -1,8 +1,17 @@
 import { defineStore } from 'pinia';
-import type { AppData, Attachment, ChatMessage, SourceFile, VersionInfo } from '@/types';
+import type { AgentEvent, AppData, Attachment, ChatMessage, SourceFile, VersionInfo } from '@/types';
 import { getHost } from '@/services/host';
+import { agentEventLabel } from '@/core/agent';
 import { extractIcon, extractTitle } from '@/core/html';
 import { DEFAULT_ICON, DEFAULT_NAME, makeAppId } from '@/core/app';
+
+/** Deckel für den mitlaufenden Fortschritt — ein langer Lauf soll nicht wachsen ohne Ende. */
+const MAX_ACTIVITY = 200;
+
+// Jeder Agentenlauf bekommt eine eigene Id: Der Hauptprozess schickt seine
+// Fortschrittsereignisse damit an genau das Fenster zurück, das ihn gestartet hat.
+let runCounter = 0;
+const nextRunId = (): string => `run-${(runCounter += 1)}`;
 
 interface AppState {
   folder: string | null;
@@ -20,6 +29,8 @@ interface AppState {
   chat: ChatMessage[];
   /** Offene Rückfrage des LLM — die Oberfläche klappt dann den Chat auf. */
   pendingQuestion: string | null;
+  /** Was der Agent im laufenden (bzw. zuletzt gelaufenen) Lauf getan hat. */
+  activity: AgentEvent[];
   busy: boolean;
   error: string | null;
 }
@@ -46,6 +57,7 @@ export function useAppWindow(instanceId: string) {
     versions: [],
     chat: [],
     pendingQuestion: null,
+    activity: [],
     busy: false,
     error: null,
   }),
@@ -92,6 +104,7 @@ export function useAppWindow(instanceId: string) {
         this.currentHtml = data.html;
         this.chat = data.chat ?? [];
         this.pendingQuestion = null;
+        this.activity = [];
         this.busy = false;
         this.error = null;
         await this.loadVersions();
@@ -103,9 +116,24 @@ export function useAppWindow(instanceId: string) {
     },
 
     /**
+     * Nimmt ein Fortschrittsereignis des laufenden Laufs auf. Gleich lautende
+     * Ereignisse hintereinander (z. B. mehrfaches Nachdenken) werden zu einem
+     * zusammengefasst, damit die Anzeige ruhig bleibt.
+     */
+    addActivity(event: AgentEvent): void {
+      const last = this.activity[this.activity.length - 1];
+      if (last && agentEventLabel(last) === agentEventLabel(event)) return;
+      this.activity.push(event);
+      if (this.activity.length > MAX_ACTIVITY) this.activity.splice(0, this.activity.length - MAX_ACTIVITY);
+    },
+
+    /**
      * Erzeugt oder verändert die App anhand des Wunsches. Das LLM kann statt
      * Änderungen auch eine Rückfrage stellen (pendingQuestion) — dann wird
      * nichts committet und der Anwender antwortet im Chat.
+     *
+     * Während der Lauf arbeitet, strömen seine Fortschrittsereignisse herein
+     * (activity) — der Chat zeigt live, was der Agent gerade tut.
      */
     async generate(prompt: string, attachments: Attachment[] = []): Promise<void> {
       if (this.busy) return;
@@ -117,6 +145,11 @@ export function useAppWindow(instanceId: string) {
 
       this.error = null;
       this.busy = true;
+      this.activity = [];
+      const runId = nextRunId();
+      const unsubscribe = getHost().onAgentEvent?.((id, event) => {
+        if (id === runId) this.addActivity(event);
+      });
       try {
         // Reine Werte übergeben (kein reaktiver Proxy) — Electron-IPC nutzt structured clone.
         const plainFiles = this.files.map((f) => ({ path: f.path, content: f.content }));
@@ -132,7 +165,7 @@ export function useAppWindow(instanceId: string) {
         });
         this.pendingQuestion = null;
 
-        const res = await getHost().generate(text, plainFiles, priorChat, plainAtts);
+        const res = await getHost().generate(text, plainFiles, priorChat, plainAtts, runId);
         if (!res.ok) {
           this.error = res.error;
           return;
@@ -163,6 +196,7 @@ export function useAppWindow(instanceId: string) {
       } catch (err) {
         this.error = err instanceof Error ? err.message : String(err);
       } finally {
+        unsubscribe?.();
         this.busy = false;
       }
     },

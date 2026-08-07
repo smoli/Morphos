@@ -92,6 +92,43 @@ describe('ChatDock', () => {
     expect(wrapper.find('.chat-panel').exists()).toBe(true);
   });
 
+  it('klappt automatisch auf, sobald ein Lauf beginnt', async () => {
+    const wrapper = mountDock();
+    expect(wrapper.find('.chat-panel').exists()).toBe(false);
+
+    await wrapper.setProps({ busy: true });
+    await flushPromises();
+
+    expect(wrapper.find('.chat-panel').exists()).toBe(true);
+  });
+
+  it('zeigt während des Laufs, was der Agent gerade tut', async () => {
+    const wrapper = mountDock({
+      busy: true,
+      activity: [
+        { kind: 'start' },
+        { kind: 'tool', name: 'Read', detail: '/tmp/shot.png' },
+        { kind: 'write', path: 'src/index.html' },
+      ],
+    });
+    await flushPromises();
+
+    const steps = wrapper.findAll('.step:not(.running)');
+    expect(steps).toHaveLength(3);
+    expect(steps[0].text()).toContain('Agent gestartet');
+    expect(steps[1].text()).toContain('Read: /tmp/shot.png');
+    expect(steps[2].text()).toContain('Schreibt src/index.html');
+  });
+
+  it('blendet den Fortschritt aus, sobald der Lauf vorbei ist', async () => {
+    const wrapper = mountDock({ busy: true, activity: [{ kind: 'write', path: 'src/index.html' }] });
+    await flushPromises();
+    expect(wrapper.find('.activity').exists()).toBe(true);
+
+    await wrapper.setProps({ busy: false });
+    expect(wrapper.find('.activity').exists()).toBe(false);
+  });
+
   it('hängt eine Referenzdatei über den Dateidialog an und sendet sie mit', async () => {
     const host = makeHost({
       chooseAttachment: vi.fn(async () => ({
