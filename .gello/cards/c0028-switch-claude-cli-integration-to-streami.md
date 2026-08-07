@@ -1,10 +1,12 @@
 ---
 id: c0028
 title: Switch Claude-cli integration to streaming
-status: in-progress
+status: review
 created: 2026-08-06
 updated: 2026-08-07
-status-changed: 2026-08-07T22:39:45
+status-changed: 2026-08-07T22:50:28
+usage-tokens: 45587
+usage-cost: 5.692752
 ---
 
 Moving to the streaming version gives several advantages
@@ -39,3 +41,4 @@ der Roh-Antworttext.
 
 - 2026-08-07 status → ready (app)
 - 2026-08-07 status → in-progress (agent)
+- 2026-08-07 status → review (agent)

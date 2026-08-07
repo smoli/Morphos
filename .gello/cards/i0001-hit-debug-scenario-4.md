@@ -1,12 +1,14 @@
 ---
 id: i0001
 title: "Hit debug scenario: 4"
-status: in-progress
+status: done
 type: issue
 tags: [ui, security, electron]
 created: 2026-08-07
 updated: 2026-08-07
-status-changed: 2026-08-07T22:50:42
+status-changed: 2026-08-07T23:07:34
+usage-tokens: 34928
+usage-cost: 3.023359
 ---
 
 # Hit debug scenario: 4
@@ -70,3 +72,5 @@ freigegeben. `jsdom` kennt keine Objekt-URLs — dafür gibt es jetzt
 - 2026-08-07 status → in-progress (agent)
 - 2026-08-07 Ursache in Chromium verortet, Auslöser per Electron-Testumgebung eingegrenzt
 - 2026-08-07 AppCanvas auf `blob:`-Dokument umgestellt, Tests ergänzt
+- 2026-08-07 status → review (agent)
+- 2026-08-07 status → done (app)
