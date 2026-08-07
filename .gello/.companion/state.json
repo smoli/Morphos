@@ -10,13 +10,13 @@
       "cardId": "c0028",
       "phase": "running",
       "activity": {
-        "name": "Edit",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/src/components/ChatDock.vue"
+        "name": "Bash",
+        "arg": "npx vitest run src/components/ChatDock.spec.ts 2>&1 | tail -40"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-07T22:46:43",
+  "updated": "2026-08-07T22:47:29",
   "pickupDelay": 10,
   "owned": [
     "c0029",
