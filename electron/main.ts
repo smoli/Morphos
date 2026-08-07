@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { AGENT_TIMEOUT_MS, agentTimeoutMessage } from '../src/core/agent';
 import { buildPrompt, SYSTEM_PROMPT } from '../src/core/prompt';
 import { extractHtml } from '../src/core/html';
 import { applyChanges, isValidSourcePath, parseLLMOutput } from '../src/core/files';
@@ -131,8 +132,6 @@ function preparePromptAttachments(attachments: Attachment[]): { atts: PromptAtta
 
 // ---- Claude CLI ----
 
-const CLAUDE_TIMEOUT_MS = 5 * 60 * 1000;
-
 /** Ruft die Claude CLI im Print-Modus auf und liefert deren Roh-Ausgabe zurück. */
 function runClaude(prompt: string, extraArgs: string[] = []): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
   return new Promise((resolve) => {
@@ -155,8 +154,8 @@ function runClaude(prompt: string, extraArgs: string[] = []): Promise<{ ok: true
 
     const timer = setTimeout(() => {
       child.kill();
-      finish({ ok: false, error: 'Zeitüberschreitung: Die Claude CLI hat nicht innerhalb von 5 Minuten geantwortet.' });
-    }, CLAUDE_TIMEOUT_MS);
+      finish({ ok: false, error: agentTimeoutMessage() });
+    }, AGENT_TIMEOUT_MS);
 
     child.on('error', (err: NodeJS.ErrnoException) => {
       const hint =
