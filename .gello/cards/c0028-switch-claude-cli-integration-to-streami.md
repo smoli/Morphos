@@ -1,10 +1,10 @@
 ---
 id: c0028
 title: Switch Claude-cli integration to streaming
-status: review
+status: done
 created: 2026-08-06
 updated: 2026-08-07
-status-changed: 2026-08-07T22:50:28
+status-changed: 2026-08-07T23:08:06
 usage-tokens: 45587
 usage-cost: 5.692752
 ---
@@ -42,3 +42,4 @@ der Roh-Antworttext.
 - 2026-08-07 status → ready (app)
 - 2026-08-07 status → in-progress (agent)
 - 2026-08-07 status → review (agent)
+- 2026-08-07 status → done (app)

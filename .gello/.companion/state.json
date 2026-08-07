@@ -1,19 +1,9 @@
 {
-  "status": "running",
+  "status": "idle",
   "ready": [],
   "waiting": [],
-  "runs": [
-    {
-      "cardId": "c0031",
-      "phase": "running",
-      "activity": {
-        "name": "Bash",
-        "arg": "git show --stat 2731d55 | head -20; echo ===; git show --stat 9b15566 | head -20"
-      },
-      "model": "claude-opus-5"
-    }
-  ],
-  "updated": "2026-08-07T23:08:03",
+  "runs": [],
+  "updated": "2026-08-07T23:11:44",
   "pickupDelay": 10,
   "owned": [
     "c0029",
