@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
+import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { injectBridge, dispatchFsRequest } from '@/core/appfs';
 import { getHost } from '@/services/host';
 import type { FsOp } from '@/types';
@@ -17,10 +17,24 @@ const props = defineProps<{
 // Netzwerk-Requests blockiert die in injectBridge injizierte CSP.
 const SANDBOX = 'allow-scripts allow-forms allow-modals allow-pointer-lock';
 
-// Das Bridge-SDK (window.morphosFS) wird in das Dokument injiziert.
-const srcdoc = computed(() => injectBridge(props.html));
-
 const iframe = ref<HTMLIFrameElement | null>(null);
+
+// Das Dokument (mit injiziertem Bridge-SDK) wird als blob:-URL geladen, NICHT
+// über srcdoc. Beides ergibt in dieser Sandbox denselben opaken Origin und
+// dieselbe Isolation — aber ein sandboxed srcdoc-Frame lässt Chromium bei jedem
+// Commit "Hit debug scenario: 4" (Browser/Renderer-Origin-Abgleich) auf die
+// Konsole schreiben; bei jedem Lauf des Agenten also eine ERROR-Zeile mehr.
+const docUrl = ref('');
+
+function loadDocument(html: string): void {
+  const previous = docUrl.value;
+  docUrl.value = URL.createObjectURL(new Blob([injectBridge(html)], { type: 'text/html' }));
+  // Das Freigeben löst nur die URL auf; das bereits geladene alte Dokument
+  // bleibt bis zum Austausch stehen.
+  if (previous) URL.revokeObjectURL(previous);
+}
+
+watch(() => props.html, loadDocument, { immediate: true });
 
 async function onMessage(event: MessageEvent): Promise<void> {
   const win = iframe.value?.contentWindow;
@@ -38,14 +52,17 @@ async function onMessage(event: MessageEvent): Promise<void> {
 }
 
 onMounted(() => window.addEventListener('message', onMessage));
-onBeforeUnmount(() => window.removeEventListener('message', onMessage));
+onBeforeUnmount(() => {
+  window.removeEventListener('message', onMessage);
+  if (docUrl.value) URL.revokeObjectURL(docUrl.value);
+});
 </script>
 
 <template>
   <iframe
     ref="iframe"
     class="canvas"
-    :srcdoc="srcdoc"
+    :src="docUrl"
     :sandbox="SANDBOX"
     referrerpolicy="no-referrer"
   ></iframe>
