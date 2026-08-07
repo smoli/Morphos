@@ -10,4 +10,6 @@ updated: 2026-08-07
 
 When the chat is collapsed show the „agent thinks“, „agent works“, etc. in the busy indicators text.
 
+Also right now I see „agents works“ for a loooong time. Any more details we can display here?
+
 Make the chat not auto open after submit
