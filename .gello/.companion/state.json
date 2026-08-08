@@ -7,13 +7,13 @@
       "cardId": "c0037",
       "phase": "running",
       "activity": {
-        "name": "Read",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/cards/c0034.md"
+        "name": "Bash",
+        "arg": "git add .gello/epics/e0002-app-modell/c0037-app-settings-different-icon.md && git commit -q --amend --no-edit && git log --oneline -1 && git show --stat HEAD | tail -6"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-08T22:49:07",
+  "updated": "2026-08-08T22:50:58",
   "pickupDelay": 10,
   "owned": [
     "c0029",
