@@ -77,6 +77,36 @@ Open questions for planning:
   this read-only v1 — worth a follow-up card?
 - Keep the card's file names (`concept.md`, `userdocumentation.md`) as-is.
 
+Answered while implementing (2026-08-08):
+
+- **Prompt-size budget:** both docs go into every prompt (the acceptance criteria
+  ask for it), each capped at 12 000 chars in `buildPrompt` — a doc over the cap
+  is cut at the end with a visible "(gekürzt …)" marker, so an outgrown doc can
+  never blow up the prompt.
+- **Viewer UX:** one 📄 button in the title bar opening an overlay `DocsPanel`
+  with Konzept/Anleitung tabs — same shape as the versions panel; both overlays
+  are mutually exclusive.
+- **Follow-up:** c0036 (editable concept.md) captured in the inbox.
+
+## Notes
+
+Implementation:
+
+- `core/docs.ts` — the two doc paths plus `splitDocs`/`applyDocs`/`toDocs`; the
+  only place that knows `concept.md`/`userdocumentation.md`.
+- `core/files.ts` — new `isValidOutputPath` (src/ **or** exactly the two docs)
+  guards FILE blocks; DELETE still only accepts `src/` paths, so a doc can never
+  be deleted.
+- `core/prompt.ts` — SYSTEM_PROMPT section "DIE BEIDEN DOKUMENTE DER APP" plus
+  rule 3 (nothing else outside `src/`); `buildPrompt` always emits both doc
+  sections, with a "lege es an"-hint when a doc is still missing.
+- `core/appstore.ts` — `readDocs`/`writeDocs`; `writeAppState` takes the docs, so
+  they are committed with the app state (only `/chat.json` stays git-ignored).
+- `electron/main.ts` — splits docs out of the parsed file set before
+  `applyChanges`/`bundle` and returns the carried-forward docs; the renderer
+  store keeps them in state and passes them back into the next generation.
+- `components/DocsPanel.vue` — read-only markdown viewer (tabs), reached via 📄.
+
 ## Log
 
 - 2026-08-08 status → discuss (app)
