@@ -1,12 +1,11 @@
 ---
 id: c0040
 title: Notifications / toasts
-status: ready
+status: in-progress
 epic: e09
 created: 2026-08-08
 updated: 2026-08-08
-status-changed: 2026-08-08T23:11:41
-order: 20
+status-changed: 2026-08-08T23:16:41
 ---
 
 ## What
@@ -34,3 +33,4 @@ don't each invent their own banner.
 
 - 2026-08-08 created from the e09 epic breakdown
 - 2026-08-08 status → ready (app)
+- 2026-08-08 status → in-progress (agent)
