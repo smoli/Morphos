@@ -119,7 +119,7 @@ async function applyIcon(icon: string | null): Promise<void> {
             </button>
             <BusyDot v-if="agents.isBusy(app.id)" class="tile-busy" />
             <span class="tile-actions">
-              <button type="button" class="act" title="Icon ändern" @click.stop="iconAppId = app.id">🎨</button>
+              <button type="button" class="act" title="Icon ändern" @click.stop="iconAppId = app.id">⚙</button>
               <button type="button" class="act del" title="Löschen" @click.stop="removeApp(app.id, app.name)">🗑</button>
             </span>
           </div>

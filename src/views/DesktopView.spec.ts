@@ -205,6 +205,14 @@ describe('DesktopView', () => {
       return wrapper.getComponent(IconDialog);
     }
 
+    it('trägt auf der Kachel ein Zahnrad (Einstellungen), keine Palette', async () => {
+      const { wrapper } = await mountView();
+      const tile = wrapper.findAll('.tile-wrap').find((t) => t.text().includes('Rechner'))!;
+      const button = tile.get('[title="Icon ändern"]');
+      expect(button.text()).toBe('⚙');
+      expect(button.text()).not.toContain('🎨');
+    });
+
     it('zeigt ein Bild-Icon als Bild — auf der Kachel und an der Promptleiste', async () => {
       setHost(makeHost({
         listApps: vi.fn(async () => [{ ...apps[0], icon: IMAGE_ICON, iconCustom: true }, apps[1]]),
