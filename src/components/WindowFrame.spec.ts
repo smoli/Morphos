@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import WindowFrame from './WindowFrame.vue';
 import WelcomeScreen from './WelcomeScreen.vue';
 import IconDialog from './IconDialog.vue';
+import DocsPanel from './DocsPanel.vue';
 import { useAppWindow } from '@/stores/app';
 import { useDesktopStore } from '@/stores/desktop';
 import { useWorkspaceStore } from '@/stores/workspace';
@@ -115,6 +116,49 @@ describe('WindowFrame', () => {
     await wrapper.get('.w-versions').trigger('click');
     expect(wrapper.find('.w-versions-panel').exists()).toBe(true);
     expect(wrapper.find('.w-versions-panel').text()).toContain('a');
+  });
+
+  describe('Dokumente aus der Titelleiste', () => {
+    const DOCS = { concept: '# Rechner\n\nRechnet.', userdoc: '# Anleitung\n\nZahl tippen.' };
+
+    it('öffnet Konzept und Anleitung als Nur-Lese-Ansicht', async () => {
+      const { wrapper } = await mountFrameForApp({
+        loadApp: vi.fn(async () => appData({ docs: DOCS })),
+      });
+      expect(wrapper.findComponent(DocsPanel).exists()).toBe(false);
+
+      await wrapper.get('.w-docs').trigger('click');
+
+      const panel = wrapper.getComponent(DocsPanel);
+      expect(panel.props('docs')).toEqual(DOCS);
+      expect(panel.text()).toContain('Rechnet.');
+      // Nur lesen — nichts zum Bearbeiten.
+      expect(panel.find('textarea').exists()).toBe(false);
+    });
+
+    it('legt Dokumente und Versionen nicht übereinander', async () => {
+      const { wrapper } = await mountFrameForApp({
+        loadApp: vi.fn(async () => appData({ docs: DOCS })),
+      });
+      await wrapper.get('.w-versions').trigger('click');
+      await wrapper.get('.w-docs').trigger('click');
+
+      expect(wrapper.findComponent(DocsPanel).exists()).toBe(true);
+      expect(wrapper.find('.w-versions-panel').exists()).toBe(false);
+    });
+
+    it('bietet einem Entwurf (noch ohne App) keine Dokumente an', async () => {
+      setActivePinia(createPinia());
+      setHost(makeHost());
+      useWorkspaceStore().folder = '/apps';
+      const desktop = useDesktopStore();
+      const id = desktop.openDraft();
+      const win = desktop.windows.find((w) => w.instanceId === id)!;
+      const wrapper = mount(WindowFrame, { props: { win } });
+      await flushPromises();
+
+      expect(wrapper.find('.w-docs').exists()).toBe(false);
+    });
   });
 
   it('verschiebt das Fenster per Ziehen der Titelleiste (mit Schutzschicht)', async () => {

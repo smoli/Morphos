@@ -29,8 +29,9 @@ stellen, und Referenzdateien (Screenshots, Textvorlagen) lassen sich anhängen.
 
 Jede App wird als **eigener Ordner** im gewählten Verzeichnis gespeichert und ist
 zugleich ein **eigenes Git-Repository**: `app.json` (Manifest), `src/` (die
-Quelldateien, die das LLM bearbeitet) und `index.html` als eigenständig öffenbares,
-gebündeltes Artefakt. Jede Generierung wird ein Commit — die Botschaft ist der
+Quelldateien, die das LLM bearbeitet), `index.html` als eigenständig öffenbares,
+gebündeltes Artefakt sowie `concept.md` und `userdocumentation.md` — die beiden
+vom LLM gepflegten Dokumente der App. Jede Generierung wird ein Commit — die Botschaft ist der
 Wunsch des Anwenders. Apps bleiben dauerhaft erhalten und werden beim Öffnen
 geladen, nicht neu erzeugt; Apps im alten JSON-Historienformat werden beim ersten
 Öffnen automatisch nach Git migriert.
@@ -95,6 +96,15 @@ geladen, nicht neu erzeugt; Apps im alten JSON-Historienformat werden beim erste
   max. 100 KB). Bilder lassen sich auch direkt mit **Cmd/Ctrl+V** aus der
   Zwischenablage in die Eingabe einfügen (sie landen als temporäre Datei).
   Es sind nur Pfade zulässig, die der Anwender selbst gewählt bzw. eingefügt hat.
+- **Konzept & Anleitung:** Neben ihren Quellen führt jede App zwei mitwachsende
+  Dokumente im App-Ordner: `concept.md` — die **lebende Spezifikation** (Zweck,
+  Aufbau, Entscheidungen), die als Kontext in **jeden** Prompt zurückgeht und die
+  App über den Dialog hinaus zusammenhält — und `userdocumentation.md`, die
+  **Anleitung für den Anwender**. Beide entstehen in **derselben Generierung**
+  wie die Änderung (als Datei-Blöcke; außerhalb von `src/` sind genau diese zwei
+  Pfade zulässig), sind **mitversioniert** (ein Revert holt sie mit zurück) und
+  werden **nicht** in das Artefakt gebündelt. Über 📄 in der Fenster-Titelleiste
+  lassen sie sich als **Nur-Lese-Ansicht** lesen (Markdown, escape-first).
 - **Name & Icon:** Das LLM setzt in `src/index.html` einen `<title>` (App-Name)
   und ein `<meta name="morphos:icon">` (Emoji); daraus entstehen Name und Icon
   der Desktop-Kachel.
@@ -121,10 +131,11 @@ src/
   core/                Framework-unabhängige, reine Logik (voll getestet)
     prompt.ts          Systemprompt + Zusammenbau des LLM-Prompts
     files.ts           Datei-Blockformat: serialisieren/parsen, Pfad-Validierung
+    docs.ts            Die zwei Dokumente je App: Pfade, Abtrennen, Fortschreiben
     bundle.ts          Bündelt Quelldateien + Bibliotheken zu EINEM Dokument
     libs.ts            morphos:lib-Extraktion + Whitelist-Abgleich
     gitstore.ts        Git je App: init, commit, log, Wiederherstellen (System-Git)
-    appstore.ts        App-Ablage: Manifest, src/, Artefakt, Migration Alt→Git
+    appstore.ts        App-Ablage: Manifest, src/, Artefakt, Dokumente, Migration
     html.ts            Extraktion von HTML-Dokument, Titel und Icon
     app.ts             App-Identität: Slug/Id, Vorgaben für Name & Icon
     appfs.ts           Bridge-SDK (window.morphosFS) + Injektion + Dispatch
@@ -136,7 +147,7 @@ src/
     workspace.ts       Pinia-Store: Verzeichnis, zuletzt genutzte Ordner, App-Liste
     app.ts             Pinia-Store: EINE geöffnete App (Historie, generate/revert)
   components/          Präsentations-Komponenten (Props rein, Events raus)
-    WindowFrame · ChatDock · WelcomeScreen · AppCanvas · HistoryList
+    WindowFrame · ChatDock · WelcomeScreen · AppCanvas · HistoryList · DocsPanel
     TopBar (Titelleiste) · SettingsDialog · PermissionDialog
   views/
     StartView.vue      Startbildschirm: Ordnerauswahl + zuletzt genutzte Ordner

@@ -1,5 +1,6 @@
 import type { FileChanges, SourceFile } from '@/types';
 import { extractHtml } from './html';
+import { isDocPath } from './docs';
 
 /**
  * Austauschformat zwischen Shell und LLM: Quelldateien als markierte Blöcke.
@@ -10,6 +11,9 @@ import { extractHtml } from './html';
  *   ===MORPHOS:DELETE src/alt.js===
  *
  * Das LLM gibt NUR geänderte/neue/gelöschte Dateien aus (inkrementell).
+ * Neben den Quelldateien unter src/ sind das die beiden Dokumente der App
+ * (concept.md, userdocumentation.md — siehe core/docs), die im selben Zug
+ * fortgeschrieben werden.
  * Zusätzlich kann es dem Anwender etwas mitteilen — eine Rückfrage bei
  * unklarem Wunsch (dann ohne Datei-Blöcke) oder eine kurze Erläuterung:
  *
@@ -30,6 +34,15 @@ export function isValidSourcePath(p: string): boolean {
   const segments = p.split('/');
   if (segments.length > 8) return false;
   return segments.every((s) => s.length > 0 && s !== '.' && s !== '..');
+}
+
+/**
+ * Was das LLM überhaupt schreiben darf: Quelldateien unter src/ — und daneben
+ * GENAU die beiden Dokumente der App im Wurzelverzeichnis (core/docs). Jeder
+ * andere Pfad außerhalb von src/ bleibt ausgeschlossen.
+ */
+export function isValidOutputPath(p: string): boolean {
+  return isValidSourcePath(p) || isDocPath(p);
 }
 
 /** Serialisiert einen Dateisatz für den LLM-Prompt (gleiches Blockformat). */
@@ -53,9 +66,11 @@ export function parseLLMOutput(raw: string): FileChanges {
   const fileRe = /^===MORPHOS:FILE (.+?)===\r?\n([\s\S]*?)\r?\n?^===MORPHOS:END===/gm;
   for (let m = fileRe.exec(text); m; m = fileRe.exec(text)) {
     const path = m[1].trim();
-    if (isValidSourcePath(path)) files.push({ path, content: m[2] });
+    if (isValidOutputPath(path)) files.push({ path, content: m[2] });
   }
 
+  // Gelöscht werden dürfen nur Quelldateien — die beiden Dokumente der App
+  // gehören zu ihr und verschwinden nie.
   const delRe = /^===MORPHOS:DELETE (.+?)===\s*$/gm;
   for (let m = delRe.exec(text); m; m = delRe.exec(text)) {
     const path = m[1].trim();

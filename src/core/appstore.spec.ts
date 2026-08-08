@@ -6,12 +6,14 @@ import {
   defaultIconOf,
   loadAppFromDisk,
   readChat,
+  readDocs,
   readManifest,
   readSourceFiles,
   setManifestIcon,
   touchManifest,
   writeAppState,
   writeChat,
+  writeDocs,
 } from './appstore';
 import { commitAll, ensureRepo, listVersions, restoreVersion } from './gitstore';
 import type { AppMeta, ChatMessage, SourceFile } from '@/types';
@@ -111,6 +113,66 @@ describe('setManifestIcon', () => {
 
   it('wirft ohne Manifest', () => {
     expect(() => setManifestIcon(dir, '🎯')).toThrow(/Manifest/);
+  });
+});
+
+describe('Dokumente der App', () => {
+  const DOCS = { concept: '# Konzept\nEin Rechner.', userdoc: '# Anleitung\nZahlen tippen.' };
+
+  it('schreibt Konzept und Anleitung als Markdown in den App-Ordner', () => {
+    writeAppState(dir, META, [{ path: 'src/index.html', content: 'x' }], 'x', DOCS);
+
+    expect(fs.readFileSync(path.join(dir, 'concept.md'), 'utf8')).toBe(DOCS.concept);
+    expect(fs.readFileSync(path.join(dir, 'userdocumentation.md'), 'utf8')).toBe(DOCS.userdoc);
+    expect(readDocs(dir)).toEqual(DOCS);
+  });
+
+  it('liefert leere Dokumente, solange keine geschrieben wurden', () => {
+    expect(readDocs(dir)).toEqual({ concept: '', userdoc: '' });
+  });
+
+  it('legt für ein leeres Dokument keine Datei an', () => {
+    writeDocs(dir, { concept: '# nur Konzept', userdoc: '' });
+    expect(fs.existsSync(path.join(dir, 'userdocumentation.md'))).toBe(false);
+  });
+
+  it('hält die Dokumente aus src/ und dem Artefakt heraus', () => {
+    writeAppState(dir, META, [{ path: 'src/index.html', content: '<html>q</html>' }], '<html>art</html>', DOCS);
+
+    expect(readSourceFiles(dir).map((f) => f.path)).toEqual(['src/index.html']);
+    expect(fs.readFileSync(path.join(dir, 'index.html'), 'utf8')).toBe('<html>art</html>');
+    expect(fs.existsSync(path.join(dir, 'src', 'concept.md'))).toBe(false);
+  });
+
+  it('überlebt das erneute Schreiben des Quelldatei-Satzes', () => {
+    writeAppState(dir, META, [{ path: 'src/index.html', content: 'a' }], 'a', DOCS);
+    writeAppState(dir, META, [{ path: 'src/index.html', content: 'b' }], 'b');
+
+    expect(readDocs(dir)).toEqual(DOCS);
+  });
+
+  it('ist mitversioniert: ein Revert holt die Dokumente des alten Standes zurück', async () => {
+    writeAppState(dir, META, [{ path: 'src/index.html', content: 'v1' }], 'v1', DOCS);
+    await ensureRepo(dir);
+    await commitAll(dir, 'erste');
+    const v1 = (await listVersions(dir))[0].sha;
+
+    writeAppState(dir, META, [{ path: 'src/index.html', content: 'v2' }], 'v2', {
+      concept: '# Konzept\nEin Rechner mit Prozent.',
+      userdoc: '# Anleitung\nProzenttaste nutzen.',
+    });
+    await commitAll(dir, 'zweite');
+    expect(readDocs(dir).concept).toContain('Prozent');
+
+    await restoreVersion(dir, v1, 'Zurück zu: erste');
+
+    expect(readDocs(dir)).toEqual(DOCS);
+  });
+
+  it('lädt die Dokumente beim Öffnen der App mit', async () => {
+    writeAppState(dir, META, [{ path: 'src/index.html', content: 'x' }], 'x', DOCS);
+    const app = await loadAppFromDisk(dir);
+    expect(app!.docs).toEqual(DOCS);
   });
 });
 

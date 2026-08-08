@@ -9,6 +9,7 @@ import { clampMaxAgents, DEFAULT_MAX_AGENTS } from '../src/core/queue';
 import { buildPrompt, SYSTEM_PROMPT } from '../src/core/prompt';
 import { extractHtml } from '../src/core/html';
 import { applyChanges, isValidSourcePath, parseLLMOutput } from '../src/core/files';
+import { applyDocs, hasDocChanges, splitDocs, toDocs } from '../src/core/docs';
 import { bundle, ENTRY_FILE } from '../src/core/bundle';
 import { extractLibs } from '../src/core/libs';
 import { commitAll, countVersions, ensureRepo, listVersions, restoreTree } from '../src/core/gitstore';
@@ -21,6 +22,7 @@ import type {
   AgentEvent,
   AgentResult,
   AppData,
+  AppDocs,
   AppSummary,
   Attachment,
   ChatMessage,
@@ -237,16 +239,19 @@ function runClaude(
 }
 
 /**
- * Eine Generierung: Prompt bauen (samt Dialog und Referenzen), Claude CLI
- * aufrufen, Datei-Blöcke und Rückfrage lesen, Änderungen anwenden,
- * Bibliotheken auflösen (Whitelist + Cache) und zum Artefakt bündeln.
- * Eine reine Rückfrage kommt ohne files/html zurück — es wird nichts committet.
+ * Eine Generierung: Prompt bauen (samt Dialog, Referenzen und den beiden
+ * Dokumenten der App), Claude CLI aufrufen, Datei-Blöcke und Rückfrage lesen,
+ * Dokumente von den Quellen trennen, Änderungen anwenden, Bibliotheken auflösen
+ * (Whitelist + Cache) und zum Artefakt bündeln.
+ * Eine reine Rückfrage kommt ohne files/html/docs zurück — es wird nichts
+ * committet und auch kein Dokument angefasst.
  * `onEvent` meldet den Fortschritt des Laufs an das aufrufende Fenster,
  * `runId` macht ihn abbrechbar.
  */
 async function generate(
   userRequest: string,
   current: SourceFile[],
+  currentDocs: AppDocs,
   chat: ChatMessage[],
   attachments: Attachment[],
   onEvent: (event: AgentEvent) => void = () => {},
@@ -256,7 +261,7 @@ async function generate(
 
   const prepared = preparePromptAttachments(attachments);
   if (prepared.error) return { ok: false, error: prepared.error };
-  const context: PromptContext = { chat, attachments: prepared.atts };
+  const context: PromptContext = { chat, attachments: prepared.atts, docs: currentDocs };
 
   // Bild-Referenzen liest die CLI selbst — Read nur für genau diese Pfade freigeben.
   const extraArgs = prepared.atts
@@ -267,14 +272,17 @@ async function generate(
   if (!res.ok) return res;
 
   const changes = parseLLMOutput(res.text);
+  // Die beiden Dokumente kommen im selben Dateisatz — sie gehören aber neben
+  // die App, nicht in sie hinein.
+  const { sources, docs: docChanges } = splitDocs(changes.files);
 
-  // Reine Rückfrage: nichts anwenden, nichts bündeln.
-  if (changes.files.length === 0 && changes.deletions.length === 0) {
+  // Reine Rückfrage: nichts anwenden, nichts bündeln, kein Dokument anfassen.
+  if (sources.length === 0 && changes.deletions.length === 0 && !hasDocChanges(docChanges)) {
     if (changes.say) return { ok: true, say: changes.say };
     return { ok: false, error: 'Es wurden keine verwertbaren Dateien erzeugt. Bitte den Wunsch anders formulieren.' };
   }
 
-  const files = applyChanges(current, changes);
+  const files = applyChanges(current, { ...changes, files: sources });
   const entry = files.find((f) => f.path === ENTRY_FILE);
   if (!entry || !extractHtml(entry.content)) {
     return { ok: false, error: 'Die App hat kein gültiges src/index.html. Bitte den Wunsch anders formulieren.' };
@@ -285,7 +293,13 @@ async function generate(
 
   const html = bundle(files, libRes.libs);
   if (!html) return { ok: false, error: 'Das Bündeln der App ist fehlgeschlagen.' };
-  return { ok: true, files, html, ...(changes.say ? { say: changes.say } : {}) };
+  return {
+    ok: true,
+    files,
+    html,
+    docs: applyDocs(currentDocs, docChanges),
+    ...(changes.say ? { say: changes.say } : {}),
+  };
 }
 
 // ---- Fenster ----
@@ -336,12 +350,20 @@ function createWindow(): void {
 
 ipcMain.handle('morphos:generate', async (
   event,
-  payload: { prompt: string; files: SourceFile[]; chat: ChatMessage[]; attachments: Attachment[]; runId?: string },
+  payload: {
+    prompt: string;
+    files: SourceFile[];
+    docs?: AppDocs;
+    chat: ChatMessage[];
+    attachments: Attachment[];
+    runId?: string;
+  },
 ): Promise<GenerateResult> => {
   if (!payload?.prompt?.trim()) return { ok: false, error: 'Bitte gib einen Wunsch ein.' };
   const current = Array.isArray(payload.files)
     ? payload.files.filter((f) => f && isValidSourcePath(f.path) && typeof f.content === 'string')
     : [];
+  const docs = toDocs(payload.docs);
   const chat = Array.isArray(payload.chat)
     ? payload.chat.filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.text === 'string')
     : [];
@@ -356,7 +378,7 @@ ipcMain.handle('morphos:generate', async (
     if (sender.isDestroyed()) return;
     sender.send('morphos:agentEvent', runId, agentEvent);
   };
-  return generate(payload.prompt, current, chat, attachments, onEvent, runId);
+  return generate(payload.prompt, current, docs, chat, attachments, onEvent, runId);
 });
 
 // Abbruch eines laufenden Agenten: Der Kindprozess zu dieser Lauf-Id wird
@@ -513,6 +535,8 @@ ipcMain.handle('morphos:saveApp', async (_e, folder: string, appData: AppData, m
       },
       appData.files,
       appData.html,
+      // Konzept und Anleitung liegen neben der App und wandern mit in den Commit.
+      toDocs(appData.docs),
     );
     await ensureRepo(dir);
     await commitAll(dir, message || appData.name);

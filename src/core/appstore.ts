@@ -1,19 +1,25 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AppData, AppMeta, ChatMessage, LegacyHistoryEntry, SourceFile } from '@/types';
+import type { AppData, AppDocs, AppMeta, ChatMessage, LegacyHistoryEntry, SourceFile } from '@/types';
 import { isValidSourcePath } from './files';
 import { ENTRY_FILE } from './bundle';
 import { commitAll, ensureRepo } from './gitstore';
+import { CONCEPT_FILE, USERDOC_FILE } from './docs';
 import { DEFAULT_ICON } from './app';
 import { extractIcon } from './html';
 
 /**
  * Ablage einer App auf der Platte (nur Hauptprozess):
- *   <app>/app.json     Manifest (Kopfdaten, ohne Historie)
- *   <app>/src/…        Quelldateien
- *   <app>/index.html   gebündeltes Artefakt (eigenständig öffenbar)
- *   <app>/chat.json    Dialogverlauf (von Git ausgenommen — kein Revert)
- *   <app>/.git         Versionshistorie (ein Commit je Generierung)
+ *   <app>/app.json                Manifest (Kopfdaten, ohne Historie)
+ *   <app>/src/…                   Quelldateien
+ *   <app>/index.html              gebündeltes Artefakt (eigenständig öffenbar)
+ *   <app>/concept.md              lebende Spezifikation (geht in jeden Prompt)
+ *   <app>/userdocumentation.md    Anleitung für den Anwender
+ *   <app>/chat.json               Dialogverlauf (von Git ausgenommen — kein Revert)
+ *   <app>/.git                    Versionshistorie (ein Commit je Generierung)
+ *
+ * Die beiden Dokumente sind mitversioniert (anders als chat.json): Ein Revert
+ * holt den Stand der App samt der Dokumente zurück, die ihn beschreiben.
  */
 
 type ManifestOnDisk = AppMeta & { history?: LegacyHistoryEntry[]; activeId?: string | null };
@@ -102,13 +108,45 @@ export function writeChat(dir: string, chat: ChatMessage[]): void {
   fs.writeFileSync(path.join(dir, 'chat.json'), JSON.stringify({ messages: chat }, null, 2), 'utf8');
 }
 
-/** Schreibt den kompletten App-Stand (Manifest, Quellen, Artefakt) — ohne Commit. */
-export function writeAppState(dir: string, meta: AppMeta, files: SourceFile[], html: string): void {
+/** Liest die beiden Dokumente der App (leer, wo noch keines vorhanden ist). */
+export function readDocs(dir: string): AppDocs {
+  const read = (name: string): string => {
+    try {
+      return fs.readFileSync(path.join(dir, name), 'utf8');
+    } catch {
+      return '';
+    }
+  };
+  return { concept: read(CONCEPT_FILE), userdoc: read(USERDOC_FILE) };
+}
+
+/**
+ * Schreibt die Dokumente in den App-Ordner. Ein leeres Dokument wird NICHT
+ * angelegt — solange das LLM keines geliefert hat, gibt es auch keine Datei.
+ */
+export function writeDocs(dir: string, docs: AppDocs): void {
+  fs.mkdirSync(dir, { recursive: true });
+  if (docs.concept) fs.writeFileSync(path.join(dir, CONCEPT_FILE), docs.concept, 'utf8');
+  if (docs.userdoc) fs.writeFileSync(path.join(dir, USERDOC_FILE), docs.userdoc, 'utf8');
+}
+
+/**
+ * Schreibt den kompletten App-Stand (Manifest, Quellen, Artefakt und — sofern
+ * übergeben — die beiden Dokumente) — ohne Commit.
+ */
+export function writeAppState(
+  dir: string,
+  meta: AppMeta,
+  files: SourceFile[],
+  html: string,
+  docs?: AppDocs,
+): void {
   fs.mkdirSync(dir, { recursive: true });
   ensureGitignore(dir);
   syncSourceFiles(dir, files);
   writeManifest(dir, meta);
   fs.writeFileSync(path.join(dir, 'index.html'), html, 'utf8');
+  if (docs) writeDocs(dir, docs);
 }
 
 /** Aktualisiert den updatedAt-Zeitstempel im Manifest (z. B. nach einem Revert). */
@@ -222,5 +260,6 @@ export async function loadAppFromDisk(dir: string): Promise<AppData | null> {
     files: readSourceFiles(dir),
     html,
     chat: readChat(dir),
+    docs: readDocs(dir),
   };
 }

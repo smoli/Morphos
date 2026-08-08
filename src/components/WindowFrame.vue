@@ -10,6 +10,7 @@ import { useSetAppIcon } from '@/composables/useSetAppIcon';
 import AppCanvas from './AppCanvas.vue';
 import WelcomeScreen from './WelcomeScreen.vue';
 import HistoryList from './HistoryList.vue';
+import DocsPanel from './DocsPanel.vue';
 import BusyDot from './BusyDot.vue';
 import AppIcon from './AppIcon.vue';
 import IconDialog from './IconDialog.vue';
@@ -25,6 +26,7 @@ const store = useAppWindow(props.win.instanceId);
 const setAppIcon = useSetAppIcon();
 
 const showVersions = ref(false);
+const showDocs = ref(false);
 const showIcon = ref(false);
 const interacting = ref(false); // Ziehen/Größe ändern → Schutzschicht über den iframes
 
@@ -100,6 +102,17 @@ function backToDesktop(): void {
 // zentrale Warteschlange (wie die globale Promptleiste).
 function onWelcomePick(text: string, attachments: Attachment[] = []): void {
   agents.submit(props.win.instanceId, text, attachments);
+}
+
+// Versionen und Dokumente legen sich beide über die App — es liegt also stets
+// höchstens eine der beiden Ansichten oben.
+function toggleVersions(): void {
+  showVersions.value = !showVersions.value;
+  if (showVersions.value) showDocs.value = false;
+}
+function toggleDocs(): void {
+  showDocs.value = !showDocs.value;
+  if (showDocs.value) showVersions.value = false;
 }
 
 async function onRevert(sha: string): Promise<void> {
@@ -189,10 +202,20 @@ function stopInteraction(): void {
         <button
           v-if="!store.isDraft"
           type="button"
+          class="w-docs"
+          title="Konzept und Anleitung"
+          @mousedown.stop
+          @click="toggleDocs"
+        >
+          📄
+        </button>
+        <button
+          v-if="!store.isDraft"
+          type="button"
           class="w-versions"
           title="Versionen"
           @mousedown.stop
-          @click="showVersions = !showVersions"
+          @click="toggleVersions"
         >
           ⟲ {{ store.versionCount }}
         </button>
@@ -245,6 +268,8 @@ function stopInteraction(): void {
         </div>
         <HistoryList :versions="store.versions" :active-sha="store.activeSha" @select="onRevert" />
       </div>
+
+      <DocsPanel v-if="showDocs" :docs="store.docs" @close="showDocs = false" />
     </div>
 
     <IconDialog

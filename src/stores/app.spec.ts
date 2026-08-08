@@ -47,7 +47,7 @@ function makeStreamingHost(events: AgentEvent[], opts: { foreignRunId?: boolean;
       listeners.add(cb);
       return () => listeners.delete(cb);
     },
-    generate: vi.fn(async (_p, _f, _c, _a, runId?: string): Promise<GenerateResult> => {
+    generate: vi.fn(async (_p, _f, _d, _c, _a, runId?: string): Promise<GenerateResult> => {
       const id = opts.foreignRunId ? 'anderer-lauf' : (runId ?? '');
       for (const event of events) for (const cb of listeners) cb(id, event);
       if (opts.fail) return { ok: false, error: 'Fehlgeschlagen.' };
@@ -85,7 +85,14 @@ describe('useAppStore', () => {
 
     await store.generate('Ein Taschenrechner');
 
-    expect(host.generate).toHaveBeenCalledWith('Ein Taschenrechner', [], [], [], expect.any(String));
+    expect(host.generate).toHaveBeenCalledWith(
+      'Ein Taschenrechner',
+      [],
+      { concept: '', userdoc: '' },
+      [],
+      [],
+      expect.any(String),
+    );
     expect(store.name).toBe('Taschenrechner');
     expect(store.icon).toBe('🧮');
     expect(store.id).toMatch(/^taschenrechner-/);
@@ -188,9 +195,97 @@ describe('useAppStore', () => {
     await store.generate('zweite');
 
     const secondCall = (host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[1];
-    const chatArg = secondCall[2] as { role: string; text: string }[];
+    const chatArg = secondCall[3] as { role: string; text: string }[];
     expect(chatArg.map((m) => m.text)).toEqual(['erste', 'Umgesetzt.']);
     expect(chatArg.map((m) => m.text)).not.toContain('zweite');
+  });
+
+  describe('Konzept und Anleitung', () => {
+    const DOCS = { concept: '# Rechner\nRechnet.', userdoc: '# Anleitung\nZahl tippen.' };
+
+    it('übernimmt die Dokumente der Generierung und speichert sie mit', async () => {
+      const doc = DOC('calc');
+      const host = makeHost({
+        generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(doc), html: doc, docs: DOCS })),
+      });
+      setHost(host);
+      const store = useAppStore();
+      store.newDraft('/apps');
+
+      await store.generate('Ein Taschenrechner');
+
+      expect(store.docs).toEqual(DOCS);
+      expect(store.hasDocs).toBe(true);
+      const [, dataArg] = (host.saveApp as unknown as { mock: { calls: [string, AppData, string][] } }).mock.calls[0];
+      expect(dataArg.docs).toEqual(DOCS);
+    });
+
+    it('reicht den aktuellen Stand der Dokumente an die nächste Generierung weiter', async () => {
+      const doc = DOC('calc');
+      const host = makeHost({
+        generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(doc), html: doc, docs: DOCS })),
+      });
+      setHost(host);
+      const store = useAppStore();
+      store.newDraft('/apps');
+
+      await store.generate('Ein Taschenrechner');
+      await store.generate('Mit Prozenttaste');
+
+      const secondCall = (host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[1];
+      expect(secondCall[2]).toEqual(DOCS);
+    });
+
+    it('lädt die Dokumente beim Öffnen einer App mit', async () => {
+      const host = makeHost({
+        loadApp: vi.fn(async (): Promise<AppData> => ({
+          id: 'rechner-1', name: 'Rechner', icon: '🧮', createdAt: 1, updatedAt: 2,
+          files: FILES(DOC('calc')), html: DOC('calc'), chat: [], docs: DOCS,
+        })),
+      });
+      setHost(host);
+      const store = useAppStore();
+
+      await store.open('/apps', 'rechner-1');
+
+      expect(store.docs).toEqual(DOCS);
+    });
+
+    it('bleibt bei einem Alt-Stand ohne Dokumente leer', async () => {
+      const host = makeHost({
+        loadApp: vi.fn(async (): Promise<AppData> => ({
+          id: 'rechner-1', name: 'Rechner', icon: '🧮', createdAt: 1, updatedAt: 2,
+          files: FILES(DOC('calc')), html: DOC('calc'), chat: [],
+        })),
+      });
+      setHost(host);
+      const store = useAppStore();
+
+      await store.open('/apps', 'rechner-1');
+
+      expect(store.docs).toEqual({ concept: '', userdoc: '' });
+      expect(store.hasDocs).toBe(false);
+    });
+
+    it('rührt die Dokumente bei einer reinen Rückfrage nicht an', async () => {
+      let call = 0;
+      const host = makeHost({
+        generate: vi.fn(async (): Promise<GenerateResult> => {
+          call += 1;
+          if (call === 1) return { ok: true, files: FILES(DOC('calc')), html: DOC('calc'), docs: DOCS };
+          return { ok: true, say: 'Wie genau meinst du das?' };
+        }),
+      });
+      setHost(host);
+      const store = useAppStore();
+      store.newDraft('/apps');
+
+      await store.generate('Ein Taschenrechner');
+      await store.generate('Mach es schöner');
+
+      expect(store.pendingQuestion).toBeTruthy();
+      expect(store.docs).toEqual(DOCS);
+    });
   });
 
   it('behandelt eine reine Rückfrage: kein Speichern, Frage im Chat, pendingQuestion gesetzt', async () => {
@@ -334,7 +429,7 @@ describe('useAppStore', () => {
     await store.generate('Nutze diese Vorlage', [{ path: '/tmp/vorlage.png', name: 'vorlage.png', kind: 'image' }]);
 
     const call = (host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[0];
-    expect(call[3]).toEqual([{ path: '/tmp/vorlage.png', name: 'vorlage.png', kind: 'image' }]);
+    expect(call[4]).toEqual([{ path: '/tmp/vorlage.png', name: 'vorlage.png', kind: 'image' }]);
     expect(store.chat[0].attachments).toEqual(['vorlage.png']);
   });
 

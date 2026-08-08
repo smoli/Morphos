@@ -183,7 +183,7 @@ describe('useAgentsStore', () => {
       const secondCall = (slow.host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[1];
       expect((secondCall[1] as SourceFile[])[0].content).toContain('v2');
       // Der Dialog des ersten Laufs ist Kontext des zweiten.
-      expect((secondCall[2] as { text: string }[]).map((m) => m.text)).toEqual(['eins', 'Umgesetzt.']);
+      expect((secondCall[3] as { text: string }[]).map((m) => m.text)).toEqual(['eins', 'Umgesetzt.']);
     });
 
     it('meldet eine App mit laufendem oder wartendem Auftrag als beschäftigt', async () => {

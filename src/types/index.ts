@@ -14,6 +14,19 @@ export interface FileChanges {
   say?: string;
 }
 
+/**
+ * Die beiden mitwachsenden Dokumente einer App (Inhalt, leer = noch keines):
+ * das Konzept (lebende Spezifikation, geht in jeden Prompt zurück) und die
+ * Anleitung für den Anwender. Siehe core/docs.
+ */
+export interface AppDocs {
+  concept: string;
+  userdoc: string;
+}
+
+/** Vom LLM geliefertes Dokument-Update: nur die genannten Dokumente. */
+export type DocChanges = Partial<AppDocs>;
+
 /** Eine Nachricht im Dialog zwischen Anwender und LLM (pro App). */
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -33,12 +46,13 @@ export interface Attachment {
 
 /**
  * Ergebnis einer Generierung durch das LLM. Bei Dateiänderungen kommt der
- * vollständige NEUE Quelldatei-Satz plus gebündeltes Artefakt zurück; `say`
- * trägt eine etwaige Rückfrage/Erläuterung. Eine reine Rückfrage hat KEINE
- * files/html — es wird nichts committet.
+ * vollständige NEUE Quelldatei-Satz plus gebündeltes Artefakt zurück, dazu der
+ * fortgeschriebene Stand der beiden Dokumente; `say` trägt eine etwaige
+ * Rückfrage/Erläuterung. Eine reine Rückfrage hat KEINE files/html/docs — es
+ * wird nichts committet.
  */
 export type GenerateResult =
-  | { ok: true; files?: SourceFile[]; html?: string; say?: string }
+  | { ok: true; files?: SourceFile[]; html?: string; docs?: AppDocs; say?: string }
   | { ok: false; error: string };
 
 /**
@@ -97,6 +111,8 @@ export interface AppData extends AppMeta {
   html: string;
   /** Dialogverlauf der App (chat.json — von Git ausgenommen, kein Revert). */
   chat: ChatMessage[];
+  /** Konzept und Anleitung der App (mitversioniert; fehlt bei Alt-Ständen). */
+  docs?: AppDocs;
 }
 
 /** Kurzfassung einer App für die Desktop-Kacheln. */
@@ -225,14 +241,17 @@ export interface MorphosHost {
 
   /**
    * Erzeugt bzw. verändert die App über die Claude CLI. `files` ist der aktuelle
-   * Quelldatei-Satz (leer bei einer neuen App), `chat` der bisherige Dialog
-   * (für den Kontext), `attachments` mitgeschickte Referenzdateien. Zurück
-   * kommen Dateiänderungen und/oder eine Rückfrage (`say`). `runId` markiert
-   * den Lauf, unter dem seine Fortschrittsereignisse gemeldet werden.
+   * Quelldatei-Satz (leer bei einer neuen App), `docs` der aktuelle Stand von
+   * Konzept und Anleitung (steuert die Generierung und wird fortgeschrieben),
+   * `chat` der bisherige Dialog (für den Kontext), `attachments` mitgeschickte
+   * Referenzdateien. Zurück kommen Dateiänderungen samt fortgeschriebener
+   * Dokumente und/oder eine Rückfrage (`say`). `runId` markiert den Lauf, unter
+   * dem seine Fortschrittsereignisse gemeldet werden.
    */
   generate(
     prompt: string,
     files: SourceFile[],
+    docs: AppDocs,
     chat: ChatMessage[],
     attachments: Attachment[],
     runId?: string,

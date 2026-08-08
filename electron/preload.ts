@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type {
   AgentEvent,
   AppData,
+  AppDocs,
   AppSummary,
   Attachment,
   ChatMessage,
@@ -24,11 +25,12 @@ contextBridge.exposeInMainWorld('morphos', {
   generate: (
     prompt: string,
     files: SourceFile[],
+    docs: AppDocs,
     chat: ChatMessage[],
     attachments: Attachment[],
     runId?: string,
   ): Promise<GenerateResult> =>
-    ipcRenderer.invoke('morphos:generate', { prompt, files, chat, attachments, runId }),
+    ipcRenderer.invoke('morphos:generate', { prompt, files, docs, chat, attachments, runId }),
 
   // Fortschritt eines laufenden Agentenlaufs (Strom der Claude CLI).
   onAgentEvent: (cb: (runId: string, event: AgentEvent) => void): (() => void) => {

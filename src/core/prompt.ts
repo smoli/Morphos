@@ -1,5 +1,6 @@
-import type { ChatMessage, SourceFile } from '@/types';
+import type { AppDocs, ChatMessage, SourceFile } from '@/types';
 import { serializeFiles } from './files';
+import { CONCEPT_FILE, EMPTY_DOCS, USERDOC_FILE } from './docs';
 
 /** Für den Prompt aufbereitete Referenzdatei: Text inline, Bild als Pfad. */
 export interface PromptAttachment {
@@ -11,14 +12,22 @@ export interface PromptAttachment {
   path?: string;
 }
 
-/** Zusatzkontext für buildPrompt: bisheriger Dialog und Referenzdateien. */
+/** Zusatzkontext für buildPrompt: bisheriger Dialog, Referenzdateien, Dokumente. */
 export interface PromptContext {
   chat?: ChatMessage[];
   attachments?: PromptAttachment[];
+  /** Der aktuelle Stand der beiden Dokumente der App (core/docs). */
+  docs?: AppDocs;
 }
 
 const MAX_CHAT_MESSAGES = 10;
 const MAX_CHAT_CHARS = 1500;
+/**
+ * Deckel je Dokument im Prompt: Beide gehen bei JEDEM Wunsch mit, ein
+ * ausuferndes Dokument darf den Prompt daher nicht sprengen. Gekürzt wird am
+ * Ende — der Anfang trägt Zweck und Aufbau.
+ */
+const MAX_DOC_CHARS = 12000;
 
 /**
  * Systemprompt für die Claude CLI: legt die "Engine"-Rolle fest — das LLM
@@ -37,6 +46,26 @@ export const SYSTEM_PROMPT = [
   '  beim Rendern wird alles zu EINEM in sich geschlossenen Dokument gebündelt.',
   '- Teile größere Apps sinnvoll auf (z. B. src/style.css, src/app.js, src/ui/…).',
   '',
+  'DIE BEIDEN DOKUMENTE DER APP:',
+  `- Neben den Quellen führt jede App genau zwei Dokumente — im Wurzelverzeichnis,`,
+  '  NICHT unter src/, und niemals in die App eingebettet:',
+  `    ${CONCEPT_FILE}            die lebende Spezifikation: Zweck, Nutzen, Aufbau und`,
+  '                         getroffene Entscheidungen. Sie ist das Gedächtnis der App',
+  '                         über den Dialog hinaus und steht dir unten unter',
+  '                         "KONZEPT DER APP" im aktuellen Stand zur Verfügung.',
+  `    ${USERDOC_FILE}  die Anleitung für den Anwender: was die App kann und wie`,
+  '                         man sie bedient — ohne Technik, in der Sprache des Anwenders.',
+  '- Halte die App IMMER mit dem Konzept konsistent und schreibe das Konzept fort,',
+  '  sobald ein Wunsch die Absicht der App verändert oder erweitert.',
+  '- Änderst du die App, gibst du in DERSELBEN Antwort BEIDE Dokumente vollständig',
+  '  mit aus — als ganz normale Datei-Blöcke mit genau diesen Pfaden:',
+  `    ===MORPHOS:FILE ${CONCEPT_FILE}===`,
+  `    ===MORPHOS:FILE ${USERDOC_FILE}===`,
+  '  Schreibe den unten stehenden Stand FORT, statt ihn blind neu zu erfinden.',
+  '- Bei einer NEUEN App legst du beide Dokumente an.',
+  '- Stellst du nur eine Rückfrage (SAY ohne Datei-Blöcke), rührst du auch die',
+  '  Dokumente NICHT an.',
+  '',
   'HARTE REGELN FÜR DEINE AUSGABE:',
   '1. Gib AUSSCHLIESSLICH markierte Blöcke aus — keinen weiteren Text. Datei-Blöcke:',
   '   ===MORPHOS:FILE src/pfad===',
@@ -51,18 +80,21 @@ export const SYSTEM_PROMPT = [
   '2. Gib NUR geänderte oder neue Dateien aus — unveränderte Dateien NICHT wiederholen.',
   '   Jede ausgegebene Datei aber IMMER vollständig (kein Diff, keine Auslassungen).',
   '   Bei einer NEUEN App: der vollständige Dateisatz inklusive src/index.html.',
-  '3. Kein Markdown, keine Code-Fences, keine Erklärungen außerhalb der Blöcke.',
-  '4. Ist der Wunsch zu unklar, um ihn sinnvoll umzusetzen, stelle GENAU EINE kurze',
+  '   Die beiden Dokumente sind hiervon ausgenommen: Sie gehen bei JEDER Änderung mit.',
+  `3. Außerhalb von src/ darfst du AUSSCHLIESSLICH ${CONCEPT_FILE} und`,
+  `   ${USERDOC_FILE} schreiben — keine andere Datei im Wurzelverzeichnis.`,
+  '4. Kein Markdown, keine Code-Fences, keine Erklärungen außerhalb der Blöcke.',
+  '5. Ist der Wunsch zu unklar, um ihn sinnvoll umzusetzen, stelle GENAU EINE kurze',
   '   Rückfrage im SAY-Block und gib dann KEINE Datei-Blöcke aus. Frage nur, wenn es',
   '   wirklich nötig ist — triff sonst selbst eine vernünftige Annahme und erwähne sie',
   '   knapp im SAY-Block neben den Datei-Blöcken.',
-  '5. Keine externen Dateien, keine CDNs, keine Netzwerk-Requests, keine externen',
+  '6. Keine externen Dateien, keine CDNs, keine Netzwerk-Requests, keine externen',
   '   Schriftarten. Die App läuft offline — eine Content-Security-Policy blockiert',
   '   jeden Netzwerkzugriff technisch. Bilder/Medien nur als data:-URI oder Canvas/SVG.',
-  '6. Die App läuft in einem gesicherten Sandbox-iframe OHNE same-origin-Zugriff.',
+  '7. Die App läuft in einem gesicherten Sandbox-iframe OHNE same-origin-Zugriff.',
   '   Verwende daher KEIN localStorage, sessionStorage, keine Cookies und kein window.parent.',
-  '7. Baue eine ansprechende, moderne, benutzbare Oberfläche.',
-  '8. Setze im <head> von src/index.html immer einen kurzen, sprechenden <title>',
+  '8. Baue eine ansprechende, moderne, benutzbare Oberfläche.',
+  '9. Setze im <head> von src/index.html immer einen kurzen, sprechenden <title>',
   '   (der Name der App, höchstens drei Wörter) sowie ein Icon als',
   '   <meta name="morphos:icon" content="…"> mit GENAU EINEM passenden Emoji.',
   '',
@@ -120,9 +152,25 @@ function clip(text: string): string {
 }
 
 /**
+ * Ein Dokument als Prompt-Abschnitt: Der Agent sieht immer BEIDE Überschriften —
+ * auch wenn ein Dokument noch fehlt, denn dann soll er es anlegen. Zu lange
+ * Dokumente werden am Ende gekappt (Deckel je Dokument).
+ */
+function docSection(title: string, content: string, missing: string): string[] {
+  const text = content.trim();
+  if (!text) return [title, missing, ''];
+  const body =
+    text.length > MAX_DOC_CHARS
+      ? `${text.slice(0, MAX_DOC_CHARS)}\n… (gekürzt — schreibe das Dokument dennoch vollständig zurück)`
+      : text;
+  return [title, body, ''];
+}
+
+/**
  * Setzt den an das LLM gesendeten Prompt zusammen: freigegebene
- * Bibliotheks-Quellen, bisheriger Dialog, Referenzdateien, aktueller
- * Quelldatei-Satz (falls vorhanden) und der neue Wunsch des Anwenders.
+ * Bibliotheks-Quellen, bisheriger Dialog, Referenzdateien, die beiden
+ * Dokumente der App, der aktuelle Quelldatei-Satz (falls vorhanden) und der
+ * neue Wunsch des Anwenders.
  */
 export function buildPrompt(
   userRequest: string,
@@ -163,6 +211,22 @@ export function buildPrompt(
     }
     parts.push('');
   }
+
+  // Das Konzept steuert JEDE Generierung, die Anleitung wird fortgeschrieben —
+  // beide gehen deshalb immer mit, direkt vor den Quelldateien.
+  const docs = context.docs ?? EMPTY_DOCS;
+  parts.push(
+    ...docSection(
+      `KONZEPT DER APP (${CONCEPT_FILE} — verbindliche Leitlinie, halte die App damit konsistent):`,
+      docs.concept,
+      '(noch keines — lege es mit dieser Generierung an)',
+    ),
+    ...docSection(
+      `ANWENDER-DOKUMENTATION (${USERDOC_FILE} — aktueller Stand, schreibe ihn fort):`,
+      docs.userdoc,
+      '(noch keine — lege sie mit dieser Generierung an)',
+    ),
+  );
 
   if (files.length > 0) {
     parts.push('AKTUELLE QUELLDATEIEN:');

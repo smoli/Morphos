@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   FILE_MARKER,
+  isValidOutputPath,
   isValidSourcePath,
   serializeFiles,
   parseLLMOutput,
@@ -29,6 +30,24 @@ describe('isValidSourcePath', () => {
     expect(isValidSourcePath('src\\win.js')).toBe(false);
     expect(isValidSourcePath('src/mit leerzeichen.js')).toBe(false);
     expect(isValidSourcePath('')).toBe(false);
+  });
+});
+
+describe('isValidOutputPath', () => {
+  it('lässt zusätzlich GENAU die beiden Dokumente der App zu', () => {
+    expect(isValidOutputPath('src/app.js')).toBe(true);
+    expect(isValidOutputPath('concept.md')).toBe(true);
+    expect(isValidOutputPath('userdocumentation.md')).toBe(true);
+  });
+
+  it('weist jeden anderen Pfad außerhalb von src/ weiterhin ab', () => {
+    expect(isValidOutputPath('README.md')).toBe(false);
+    expect(isValidOutputPath('app.json')).toBe(false);
+    expect(isValidOutputPath('.gitignore')).toBe(false);
+    expect(isValidOutputPath('index.html')).toBe(false);
+    expect(isValidOutputPath('../concept.md')).toBe(false);
+    expect(isValidOutputPath('src/../concept.md')).toBe(false);
+    expect(isValidOutputPath('/concept.md')).toBe(false);
   });
 });
 
@@ -96,6 +115,55 @@ describe('parseLLMOutput', () => {
     const changes = parseLLMOutput(raw);
     expect(changes.files).toEqual([{ path: 'src/gut.js', content: 'y' }]);
     expect(changes.deletions).toEqual([]);
+  });
+
+  it('liest die beiden Dokumente der App aus Wurzel-Blöcken', () => {
+    const raw = [
+      '===MORPHOS:FILE src/index.html===',
+      INDEX,
+      '===MORPHOS:END===',
+      '===MORPHOS:FILE concept.md===',
+      '# Rechner',
+      '===MORPHOS:END===',
+      '===MORPHOS:FILE userdocumentation.md===',
+      '# So rechnest du',
+      '===MORPHOS:END===',
+    ].join('\n');
+    const changes = parseLLMOutput(raw);
+    expect(changes.files.map((f) => f.path)).toEqual([
+      'src/index.html',
+      'concept.md',
+      'userdocumentation.md',
+    ]);
+    expect(changes.files[1].content).toBe('# Rechner');
+  });
+
+  it('verwirft andere Dateien im Wurzelverzeichnis (kein beliebiges Schreiben)', () => {
+    const raw = [
+      '===MORPHOS:FILE README.md===',
+      'nein',
+      '===MORPHOS:END===',
+      '===MORPHOS:FILE app.json===',
+      '{}',
+      '===MORPHOS:END===',
+      '===MORPHOS:FILE ../concept.md===',
+      'nein',
+      '===MORPHOS:END===',
+      '===MORPHOS:FILE concept.md===',
+      'ja',
+      '===MORPHOS:END===',
+    ].join('\n');
+    const changes = parseLLMOutput(raw);
+    expect(changes.files).toEqual([{ path: 'concept.md', content: 'ja' }]);
+  });
+
+  it('löscht keine Dokumente — DELETE gilt nur für Quelldateien', () => {
+    const raw = [
+      '===MORPHOS:DELETE concept.md===',
+      '===MORPHOS:DELETE userdocumentation.md===',
+      '===MORPHOS:DELETE src/alt.js===',
+    ].join('\n');
+    expect(parseLLMOutput(raw).deletions).toEqual(['src/alt.js']);
   });
 
   it('fällt bei reinem HTML-Dokument auf src/index.html zurück (Alt-Verhalten)', () => {

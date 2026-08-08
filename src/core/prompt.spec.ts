@@ -52,6 +52,28 @@ describe('SYSTEM_PROMPT', () => {
     expect(SYSTEM_PROMPT).toContain('===MORPHOS:SAY===');
     expect(SYSTEM_PROMPT).toMatch(/Rückfrage/i);
   });
+
+  it('verlangt die beiden Dokumente in derselben Antwort wie die Änderung', () => {
+    expect(SYSTEM_PROMPT).toContain('===MORPHOS:FILE concept.md===');
+    expect(SYSTEM_PROMPT).toContain('===MORPHOS:FILE userdocumentation.md===');
+    expect(SYSTEM_PROMPT).toMatch(/DERSELBEN Antwort BEIDE Dokumente/);
+  });
+
+  it('macht das Konzept zur Leitlinie und verlangt seine Fortschreibung', () => {
+    expect(SYSTEM_PROMPT).toMatch(/Halte die App IMMER mit dem Konzept konsistent/);
+    expect(SYSTEM_PROMPT).toMatch(/schreibe das Konzept fort/);
+    // Die Anleitung ist für den Anwender, nicht für Technik.
+    expect(SYSTEM_PROMPT).toMatch(/Anleitung für den Anwender/);
+  });
+
+  it('lässt außerhalb von src/ nur genau diese beiden Dateien zu', () => {
+    expect(SYSTEM_PROMPT).toMatch(/Außerhalb von src\/ darfst du AUSSCHLIESSLICH/);
+    expect(SYSTEM_PROMPT).toMatch(/keine andere Datei im Wurzelverzeichnis/);
+  });
+
+  it('nimmt die Dokumente bei einer reinen Rückfrage ausdrücklich aus', () => {
+    expect(SYSTEM_PROMPT).toMatch(/Rückfrage \(SAY ohne Datei-Blöcke\), rührst du auch die\n\s*Dokumente NICHT an/);
+  });
 });
 
 describe('buildPrompt', () => {
@@ -112,6 +134,35 @@ describe('buildPrompt', () => {
     const p = buildPrompt('weiter', [], [], { chat });
     expect(p).not.toContain('Nachricht 0');
     expect(p).toContain('Nachricht 29');
+  });
+
+  it('gibt Konzept und Anleitung als Kontext mit — vor den Quelldateien', () => {
+    const p = buildPrompt('Runde Knöpfe', FILES, [], {
+      docs: { concept: '# Rechner\nRechnet mit vier Grundrechenarten.', userdoc: '# Anleitung\nZahlen tippen.' },
+    });
+    expect(p).toContain('KONZEPT DER APP (concept.md');
+    expect(p).toContain('Rechnet mit vier Grundrechenarten.');
+    expect(p).toContain('ANWENDER-DOKUMENTATION (userdocumentation.md');
+    expect(p).toContain('Zahlen tippen.');
+    expect(p.indexOf('KONZEPT DER APP')).toBeLessThan(p.indexOf('AKTUELLE QUELLDATEIEN'));
+  });
+
+  it('weist ohne Dokumente darauf hin, dass sie anzulegen sind', () => {
+    const p = buildPrompt('Ein Taschenrechner', [], []);
+    expect(p).toContain('KONZEPT DER APP');
+    expect(p).toContain('ANWENDER-DOKUMENTATION');
+    expect(p).toMatch(/noch keines — lege es mit dieser Generierung an/);
+    expect(p).toMatch(/noch keine — lege sie mit dieser Generierung an/);
+  });
+
+  it('kappt überlange Dokumente, statt den Prompt zu sprengen', () => {
+    const p = buildPrompt('x', FILES, [], {
+      docs: { concept: 'K'.repeat(20_000), userdoc: 'kurz' },
+    });
+    expect(p).toContain('gekürzt');
+    expect(p.length).toBeLessThan(20_000);
+    // Die Anleitung bleibt davon unberührt.
+    expect(p).toContain('kurz');
   });
 
   it('bettet Text-Referenzen mit Inhalt und Bild-Referenzen mit Pfad ein', () => {

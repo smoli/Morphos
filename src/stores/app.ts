@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia';
-import type { AgentEvent, AppData, Attachment, ChatMessage, SourceFile, VersionInfo } from '@/types';
+import type { AgentEvent, AppData, AppDocs, Attachment, ChatMessage, SourceFile, VersionInfo } from '@/types';
 import { getHost } from '@/services/host';
 import { agentEventLabel } from '@/core/agent';
 import { extractIcon, extractTitle } from '@/core/html';
+import { EMPTY_DOCS, toDocs } from '@/core/docs';
 import { DEFAULT_ICON, DEFAULT_NAME, makeAppId } from '@/core/app';
 
 /** Deckel für den mitlaufenden Fortschritt — ein langer Lauf soll nicht wachsen ohne Ende. */
@@ -25,6 +26,8 @@ interface AppState {
   files: SourceFile[];
   /** Das gebündelte Artefakt für die Anzeige im Canvas. */
   currentHtml: string;
+  /** Konzept und Anleitung der App — vom LLM gepflegt, im Fenster lesbar. */
+  docs: AppDocs;
   /** Git-Historie, neueste zuerst (HEAD = aktiver Stand). */
   versions: VersionInfo[];
   /** Dialogverlauf mit dem LLM (persistiert als chat.json, ohne Revert). */
@@ -63,6 +66,7 @@ export function useAppWindow(instanceId: string) {
     createdAt: 0,
     files: [],
     currentHtml: '',
+    docs: { ...EMPTY_DOCS },
     versions: [],
     chat: [],
     pendingQuestion: null,
@@ -76,6 +80,8 @@ export function useAppWindow(instanceId: string) {
 
   getters: {
     hasApp: (s): boolean => s.currentHtml.length > 0,
+    /** Gibt es überhaupt etwas zu lesen (Konzept oder Anleitung)? */
+    hasDocs: (s): boolean => s.docs.concept.length > 0 || s.docs.userdoc.length > 0,
     versionCount: (s): number => s.versions.length,
     isDraft: (s): boolean => s.id === null,
     /** Der aktive Stand ist immer der neueste Commit (HEAD). */
@@ -115,6 +121,7 @@ export function useAppWindow(instanceId: string) {
         this.createdAt = data.createdAt;
         this.files = data.files;
         this.currentHtml = data.html;
+        this.docs = toDocs(data.docs);
         this.chat = data.chat ?? [];
         this.pendingQuestion = null;
         this.activity = [];
@@ -189,6 +196,7 @@ export function useAppWindow(instanceId: string) {
       try {
         // Reine Werte übergeben (kein reaktiver Proxy) — Electron-IPC nutzt structured clone.
         const plainFiles = this.files.map((f) => ({ path: f.path, content: f.content }));
+        const plainDocs = { concept: this.docs.concept, userdoc: this.docs.userdoc };
         const plainAtts = attachments.map((a) => ({ path: a.path, name: a.name, kind: a.kind }));
         // Der bisherige Dialog OHNE den aktuellen Wunsch — der geht separat in den Prompt.
         const priorChat = JSON.parse(JSON.stringify(this.chat)) as ChatMessage[];
@@ -201,7 +209,7 @@ export function useAppWindow(instanceId: string) {
         });
         this.pendingQuestion = null;
 
-        const res = await getHost().generate(text, plainFiles, priorChat, plainAtts, runId);
+        const res = await getHost().generate(text, plainFiles, plainDocs, priorChat, plainAtts, runId);
         // Abgebrochen: Das (Teil-)Ergebnis wird verworfen und der Wunsch aus dem
         // Dialog genommen — die App bleibt, wie sie war, und der Abbruch selbst
         // ist kein Fehler.
@@ -217,6 +225,8 @@ export function useAppWindow(instanceId: string) {
         if (res.files && res.html) {
           this.files = res.files;
           this.currentHtml = res.html;
+          // Konzept und Anleitung sind Teil derselben Generierung.
+          if (res.docs) this.docs = toDocs(res.docs);
 
           // Erste Version: Name und Icon aus dem Artefakt ableiten und Id/Ordner festlegen.
           if (this.id === null) {
@@ -313,6 +323,7 @@ export function useAppWindow(instanceId: string) {
           updatedAt: Date.now(),
           files: this.files,
           html: this.currentHtml,
+          docs: this.docs,
         }),
       );
       try {
