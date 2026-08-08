@@ -11,6 +11,16 @@ describe('BRIDGE_SDK', () => {
     // Kommuniziert per postMessage mit dem Host.
     expect(BRIDGE_SDK).toContain('postMessage');
   });
+
+  it('stellt die drei Dateidialoge bereit', () => {
+    for (const m of ['openFile', 'saveFile', 'pickDirectory']) {
+      expect(BRIDGE_SDK).toContain(m);
+    }
+    // Die Dialoge laufen über dieselbe Brücke, aber nicht als Dateisystem-Operation.
+    expect(BRIDGE_SDK).toContain("dialog('open'");
+    expect(BRIDGE_SDK).toContain("dialog('save'");
+    expect(BRIDGE_SDK).toContain("dialog('directory'");
+  });
 });
 
 describe('injectBridge', () => {

@@ -10,12 +10,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "git show --stat d532f1c | head -20"
+        "arg": "git add src/core/dialog.ts src/core/dialog.spec.ts src/components/FileDialog.vue src/components/FileDialog.spec.ts src/components/AppCanvas.vue src/components/AppCanvas.spec.ts src/core/appfs.ts src/core/appfs.spec.ts src/core/prompt.ts src/core/prompt.spec.ts src/types/index.ts .gello/epics/e0001-fundament/c0033-provide-system-file-dialogs.md .gello/.companion/state.json && git status --short"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-08T07:03:16",
+  "updated": "2026-08-08T07:03:30",
   "pickupDelay": 10,
   "owned": [
     "c0029",

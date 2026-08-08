@@ -168,6 +168,27 @@ export type FsResponse =
   | { ok: true; result?: FsResult }
   | { ok: false; error: string };
 
+/** Die Dateidialoge, die die Shell für eine App zeichnet. */
+export type DialogKind = 'open' | 'save' | 'directory';
+
+/** Anfrage einer App an einen Dateidialog (alle Angaben optional und geprüft). */
+export interface DialogRequest {
+  kind: DialogKind;
+  /** Startordner, relativ zum Datenordner ("" = der Datenordner selbst). */
+  startDir: string;
+  /** Erlaubte Dateiendungen ohne Punkt; leer = alle. */
+  extensions: string[];
+  /** Vorgeschlagener Dateiname (nur kind=save). */
+  suggestedName?: string;
+  /** Überschrift des Dialogs. */
+  title?: string;
+}
+
+/** Antwort auf eine DialogRequest: relativer Pfad oder null bei Abbruch. */
+export type DialogResponse =
+  | { ok: true; result: string | null }
+  | { ok: false; error: string };
+
 /** Ergebnis eines Speichervorgangs. */
 export interface SaveResult {
   ok: boolean;

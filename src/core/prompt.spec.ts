@@ -33,6 +33,17 @@ describe('SYSTEM_PROMPT', () => {
     expect(SYSTEM_PROMPT).toMatch(/readFile/);
   });
 
+  it('dokumentiert die Dateidialoge der Shell', () => {
+    expect(SYSTEM_PROMPT).toContain('openFile');
+    expect(SYSTEM_PROMPT).toContain('saveFile');
+    expect(SYSTEM_PROMPT).toContain('pickDirectory');
+    // Der Agent soll sie nutzen, statt einen eigenen Dateibrowser zu bauen.
+    expect(SYSTEM_PROMPT).toMatch(/KEINEN eigenen Dateibrowser/i);
+    // Und wissen, was zurückkommt: relativer Pfad oder null bei Abbruch.
+    expect(SYSTEM_PROMPT).toMatch(/relativ zum Datenordner/i);
+    expect(SYSTEM_PROMPT).toMatch(/null/);
+  });
+
   it('dokumentiert Bibliotheken über morphos:lib', () => {
     expect(SYSTEM_PROMPT).toContain('morphos:lib');
   });

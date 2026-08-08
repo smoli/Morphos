@@ -21,6 +21,22 @@ export const BRIDGE_SDK = `(function(){
       parent.postMessage({ __morphosFS: 'request', id: id, op: op, path: String(path == null ? '' : path), data: data }, '*');
     });
   }
+  // Die Dateidialoge zeichnet die Shell. Die Optionen werden hier auf einfache
+  // Werte reduziert — so ist die Nachricht immer klonbar (postMessage).
+  function dialog(kind, options){
+    var o = options || {};
+    var opts = {
+      startDir: o.startDir == null ? '' : String(o.startDir),
+      suggestedName: o.suggestedName == null ? '' : String(o.suggestedName),
+      title: o.title == null ? '' : String(o.title),
+      extensions: Array.isArray(o.extensions) ? o.extensions.map(String) : []
+    };
+    return new Promise(function(resolve, reject){
+      var id = 'dlg' + (++seq);
+      pending[id] = { resolve: resolve, reject: reject };
+      parent.postMessage({ __morphosFS: 'request', id: id, dialog: kind, options: opts }, '*');
+    });
+  }
   window.morphosFS = {
     readFile: function(path){ return call('read', path); },
     writeFile: function(path, data){ return call('write', path, String(data)); },
@@ -28,7 +44,10 @@ export const BRIDGE_SDK = `(function(){
     exists: function(path){ return call('exists', path); },
     stat: function(path){ return call('stat', path); },
     mkdir: function(path){ return call('mkdir', path); },
-    remove: function(path){ return call('delete', path); }
+    remove: function(path){ return call('delete', path); },
+    openFile: function(options){ return dialog('open', options); },
+    saveFile: function(options){ return dialog('save', options); },
+    pickDirectory: function(options){ return dialog('directory', options); }
   };
 })();`;
 
