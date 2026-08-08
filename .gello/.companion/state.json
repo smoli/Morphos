@@ -1,16 +1,19 @@
 {
   "status": "running",
-  "ready": [
-    "c0035"
-  ],
+  "ready": [],
   "waiting": [],
   "runs": [
     {
       "cardId": "c0035",
-      "phase": "running"
+      "phase": "running",
+      "activity": {
+        "name": "Read",
+        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e08-concept/epic.md"
+      },
+      "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-08T17:07:55",
+  "updated": "2026-08-08T17:08:12",
   "pickupDelay": 10,
   "owned": [
     "c0029",

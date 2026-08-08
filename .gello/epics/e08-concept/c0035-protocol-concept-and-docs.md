@@ -1,12 +1,11 @@
 ---
 id: c0035
 title: Protocol concept and docs
-status: ready
+status: in-progress
 created: 2026-08-08
 updated: 2026-08-08
-status-changed: 2026-08-08T17:07:45
+status-changed: 2026-08-08T17:08:02
 epic: e08
-order: 10
 ---
 
 ## What
@@ -82,3 +81,4 @@ Open questions for planning:
 
 - 2026-08-08 status → discuss (app)
 - 2026-08-08 status → ready (app)
+- 2026-08-08 status → in-progress (agent)
