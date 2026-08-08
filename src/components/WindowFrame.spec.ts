@@ -211,6 +211,47 @@ describe('WindowFrame', () => {
     expect(wrapper.find('.w-desktop').exists()).toBe(false);
   });
 
+  describe('Lebensdauer des Instanz-Zustands', () => {
+    it('behält den Store, wenn nur die Ansicht verschwindet (das Fenster bleibt offen)', async () => {
+      const { wrapper, win } = await mountSingleFrame();
+      const store = useAppWindow(win.instanceId);
+      store.busy = true;
+      store.activity = [{ kind: 'tool', name: 'Read', detail: 'src/index.html' }];
+
+      wrapper.unmount();
+
+      // Dasselbe Fenster erneut anzeigen: derselbe Store, unverändert.
+      const again = useAppWindow(win.instanceId);
+      expect(again).toBe(store);
+      expect(again.busy).toBe(true);
+      expect(again.activity).toHaveLength(1);
+      expect(again.id).toBe('rechner-1');
+    });
+
+    it('gibt den Store frei, sobald das Fenster wirklich geschlossen ist', async () => {
+      const { wrapper, desktop, win } = await mountSingleFrame();
+      const store = useAppWindow(win.instanceId);
+      desktop.closeWindow(win.instanceId);
+
+      wrapper.unmount();
+
+      expect(useAppWindow(win.instanceId)).not.toBe(store);
+    });
+
+    it('lädt eine bereits geladene App beim erneuten Anzeigen nicht noch einmal', async () => {
+      const loadApp = vi.fn(async () => appData());
+      const { wrapper, win } = await mountSingleFrame({ loadApp });
+      expect(loadApp).toHaveBeenCalledTimes(1);
+
+      wrapper.unmount();
+      const again = mount(WindowFrame, { props: { win, single: true } });
+      await flushPromises();
+
+      expect(loadApp).toHaveBeenCalledTimes(1);
+      expect(again.get('.w-title').text()).toBe('Rechner');
+    });
+  });
+
   it('bewegt das Fenster im Einzel-Modus nicht per Ziehen der Titelleiste', async () => {
     const { wrapper, desktop, win } = await mountSingleFrame();
     const startX = win.x;

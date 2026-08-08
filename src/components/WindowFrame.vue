@@ -48,7 +48,12 @@ const runningElsewhere = computed(
 );
 
 onMounted(async () => {
-  if (props.win.appId && workspace.folder) {
+  // Hält der Store diese App schon, wird die Ansicht nur wieder eingeblendet
+  // (Einzel-Modus: zurück vom Desktop). Neu laden hieße hier: den Stand der
+  // Platte über einen laufenden Lauf legen — Verlauf und Fortschritt wären weg.
+  if (props.win.appId && store.id === props.win.appId) {
+    syncMeta();
+  } else if (props.win.appId && workspace.folder) {
     await store.open(workspace.folder, props.win.appId);
     syncMeta();
   } else if (workspace.folder && !store.folder) {
@@ -58,7 +63,10 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   stopInteraction();
-  store.$dispose();
+  // Nur ein wirklich geschlossenes Fenster gibt seinen Zustand auf. Im
+  // Einzel-Modus verschwindet die Ansicht auch beim Wechsel zum Desktop oder zu
+  // einer anderen App — das Fenster (und sein Agent) läuft dann weiter.
+  if (!desktop.find(props.win.instanceId)) store.$dispose();
 });
 
 /** Titel/Icon des Fensters mit der (ggf. umbenannten) App abgleichen. */

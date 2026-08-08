@@ -7,13 +7,20 @@ import WindowFrame from '@/components/WindowFrame.vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useDesktopStore } from '@/stores/desktop';
 import { useAgentsStore } from '@/stores/agents';
+import { useAppWindow } from '@/stores/app';
 import { setHost } from '@/services/host';
-import type { AppSummary, MorphosHost } from '@/types';
+import type { AppData, AppSummary, MorphosHost } from '@/types';
 
 const apps: AppSummary[] = [
   { id: 'rechner-1', name: 'Rechner', icon: '🧮', createdAt: 1, updatedAt: 5, versions: 3 },
   { id: 'editor-2', name: 'Editor', icon: '📝', createdAt: 2, updatedAt: 9, versions: 1 },
 ];
+
+const HTML = '<!DOCTYPE html><html><head><title>Rechner</title></head><body>calc</body></html>';
+const rechnerData: AppData = {
+  id: 'rechner-1', name: 'Rechner', icon: '🧮', createdAt: 1, updatedAt: 5,
+  files: [{ path: 'src/index.html', content: HTML }], html: HTML, chat: [],
+};
 
 function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
   return {
@@ -231,6 +238,62 @@ describe('DesktopView', () => {
     await wrapper.get('.dock-item').trigger('click');
     await flushPromises();
     expect(wrapper.findAllComponents(WindowFrame)).toHaveLength(1);
+  });
+
+  describe('Ein laufender Agent überlebt den Abstecher zum Desktop', () => {
+    /** Ein Fenster im Einzel-Modus, für das gerade ein Agent arbeitet. */
+    async function runningSingleApp() {
+      useWorkspaceStore().uiMode = 'single';
+      const loadApp = vi.fn(async () => rechnerData);
+      setHost(makeHost({ loadApp }));
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      const instanceId = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await flushPromises();
+
+      const store = useAppWindow(instanceId);
+      store.chat = [{ role: 'user', text: 'Mach die Tasten blau', time: 1 }];
+      store.busy = true;
+      store.runStartedAt = Date.now() - 65_000;
+      store.activity = [{ kind: 'tool', name: 'Read', detail: 'src/index.html' }];
+      await flushPromises();
+      return { wrapper, desktop, instanceId, loadApp };
+    }
+
+    /** ← Desktop und über das Dock wieder zurück in die App. */
+    async function toDesktopAndBack(wrapper: Awaited<ReturnType<typeof mountView>>['wrapper']) {
+      await wrapper.get('.w-desktop').trigger('click');
+      await flushPromises();
+      await wrapper.get('.dock-item').trigger('click');
+      await flushPromises();
+    }
+
+    it('behält Verlauf und Fortschritt des laufenden Laufs', async () => {
+      const { wrapper, instanceId } = await runningSingleApp();
+      await toDesktopAndBack(wrapper);
+
+      const store = useAppWindow(instanceId);
+      expect(store.busy).toBe(true);
+      expect(store.chat.map((m) => m.text)).toContain('Mach die Tasten blau');
+      expect(store.activity).toHaveLength(1);
+      expect(store.runStartedAt).not.toBeNull();
+    });
+
+    it('führt den laufenden Schritt in der Warteanzeige weiter vor', async () => {
+      const { wrapper } = await runningSingleApp();
+      await toDesktopAndBack(wrapper);
+
+      const loading = wrapper.get('.w-loading');
+      expect(loading.get('.w-step').text()).toContain('Read: src/index.html');
+      expect(loading.get('.w-elapsed').text()).toBe('1:05');
+    });
+
+    it('lädt die App dabei nicht von der Platte neu (das überschriebe den Lauf)', async () => {
+      const { wrapper, loadApp } = await runningSingleApp();
+      const before = loadApp.mock.calls.length;
+      await toDesktopAndBack(wrapper);
+      expect(loadApp.mock.calls.length).toBe(before);
+    });
   });
 
   it('meldet an der Promptleiste, dass auf dem Desktop eine neue App entsteht', async () => {
