@@ -1,10 +1,10 @@
 ---
 id: c0033
 title: Provide system file dialogs
-status: review
+status: done
 created: 2026-08-08
 updated: 2026-08-08
-status-changed: 2026-08-08T07:03:08
+status-changed: 2026-08-08T07:34:20
 epic: e0001
 usage-tokens: 51594
 usage-cost: 5.886407
@@ -120,3 +120,4 @@ Planning questions, answered 2026-08-08 (see the checked block at the top):
 - 2026-08-08 umgesetzt: core/dialog.ts, FileDialog.vue, Brücke in AppCanvas, SYSTEM_PROMPT;
   418 Tests grün, typecheck und build sauber
 - 2026-08-08 status → review (agent)
+- 2026-08-08 status → done (app)

@@ -1,12 +1,14 @@
 ---
 id: i0002
 title: Cannot enter prompt after separating and rejoining chat
-status: review
+status: done
 type: issue
 created: 2026-08-07
 updated: 2026-08-08
-status-changed: 2026-08-08T07:17:00
+status-changed: 2026-08-08T07:34:19
 epic: e0004
+usage-tokens: 27946
+usage-cost: 2.354219
 ---
 
 After I separated and rejoined the chat I cannot send the prompt. The send button never get’s active
@@ -53,3 +55,4 @@ Wechsel ein *neuer* Knoten ist.
 - 2026-08-08 status → ready (app)
 - 2026-08-08 status → in-progress (agent)
 - 2026-08-08 status → review (agent)
+- 2026-08-08 status → done (app)
