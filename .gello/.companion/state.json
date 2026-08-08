@@ -1,22 +1,21 @@
 {
   "status": "running",
   "ready": [
-    "c0033",
     "i0002"
   ],
   "waiting": [],
   "runs": [
     {
-      "cardId": "c0030",
+      "cardId": "c0033",
       "phase": "running",
       "activity": {
-        "name": "Bash",
-        "arg": "git add electron src .gello && git status --short"
+        "name": "Read",
+        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e0001-fundament/c0033-provide-system-file-dialogs.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-08T06:50:11",
+  "updated": "2026-08-08T06:54:29",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -24,6 +23,7 @@
     "i0001",
     "c0031",
     "c0032",
-    "c0030"
+    "c0030",
+    "c0033"
   ]
 }

@@ -1,13 +1,31 @@
 ---
 id: c0033
 title: Provide system file dialogs
-status: ready
+status: in-progress
 created: 2026-08-08
 updated: 2026-08-08
-status-changed: 2026-08-08T06:32:38
+status-changed: 2026-08-08T06:50:49
 epic: e0001
-order: 20
+usage-tokens: 5724
+usage-cost: 0.963674
 ---
+
+Die drei „offenen Fragen für die Planung“ aus der Discussion — bitte je eine Option ankreuzen (meine Empfehlung ist jeweils markiert). Danach baue ich durch.
+
+**1. Dateityp-Filter (Endungen) für open/save**
+
+- [x] a) v1: `openFile({ extensions: ['txt','md'] })` blendet nicht passende Dateien aus; `saveFile` hängt die erste Endung an, wenn keine getippt wurde. **(Empfehlung — klein, und der Agent baut sonst eigene Filterlogik)**
+- [ ] b) Später — v1 ohne Filter, Optionsobjekt bleibt erweiterbar.
+
+**2. Modalität des Pickers**
+
+- [ ] a) Globaler Modal wie `PermissionDialog` (in `App.vue`, Zustand im workspace-Store, Warteschlange: nur ein Picker gleichzeitig auf dem ganzen Desktop). **(Empfehlung — genau das Muster, das der Berechtigungsdialog schon hat; „einer pro App“ ist damit erfüllt)**
+- [x] b) Pro Fenster modal (Overlay im `WindowFrame`), mehrere Fenster können gleichzeitig je einen Picker zeigen.
+
+**3. Neuen Unterordner im Dialog anlegen (save / pickDirectory)**
+
+- [x] a) Ja, in v1: Knopf „Neuer Ordner“ im Dialog (legt ihn direkt im Datenordner an, ohne `mkdir`-Berechtigungsprompt — der Anwender klickt ihn ja selbst).
+- [ ] b) Nein, später — v1 lässt nur vorhandene Ordner wählen; die App kann weiterhin `morphosFS.mkdir` nutzen. **(Empfehlung — hält v1 klein, und es ist der einzige Punkt, der eine Schreiboperation am Berechtigungsgatter vorbei einführen würde)**
 
 ## What
 
@@ -78,3 +96,4 @@ Open questions for planning:
 
 - 2026-08-08 status → discuss (app)
 - 2026-08-08 status → ready (app)
+- 2026-08-08 status → in-progress (agent)
