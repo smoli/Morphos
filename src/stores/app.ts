@@ -31,6 +31,8 @@ interface AppState {
   pendingQuestion: string | null;
   /** Was der Agent im laufenden (bzw. zuletzt gelaufenen) Lauf getan hat. */
   activity: AgentEvent[];
+  /** Beginn des laufenden Laufs (ms) — Grundlage der angezeigten Laufzeit; sonst null. */
+  runStartedAt: number | null;
   busy: boolean;
   error: string | null;
 }
@@ -58,6 +60,7 @@ export function useAppWindow(instanceId: string) {
     chat: [],
     pendingQuestion: null,
     activity: [],
+    runStartedAt: null,
     busy: false,
     error: null,
   }),
@@ -105,6 +108,7 @@ export function useAppWindow(instanceId: string) {
         this.chat = data.chat ?? [];
         this.pendingQuestion = null;
         this.activity = [];
+        this.runStartedAt = null;
         this.busy = false;
         this.error = null;
         await this.loadVersions();
@@ -146,6 +150,7 @@ export function useAppWindow(instanceId: string) {
       this.error = null;
       this.busy = true;
       this.activity = [];
+      this.runStartedAt = Date.now();
       const runId = nextRunId();
       const unsubscribe = getHost().onAgentEvent?.((id, event) => {
         if (id === runId) this.addActivity(event);
@@ -197,6 +202,7 @@ export function useAppWindow(instanceId: string) {
         this.error = err instanceof Error ? err.message : String(err);
       } finally {
         unsubscribe?.();
+        this.runStartedAt = null;
         this.busy = false;
       }
     },

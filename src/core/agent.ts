@@ -35,6 +35,57 @@ export function agentEventLabel(event: AgentEvent): string {
   }
 }
 
+/** Zeichen zu einem Fortschrittsereignis (für Chat und Warteanzeige). */
+export function agentEventIcon(event: AgentEvent): string {
+  switch (event.kind) {
+    case 'start':
+      return '▶';
+    case 'think':
+      return '💭';
+    case 'tool':
+      return '🔧';
+    case 'write':
+      return '📝';
+    case 'delete':
+      return '🗑';
+    case 'say':
+      return '💬';
+    case 'done':
+      return '✓';
+  }
+}
+
+/**
+ * Was der Agent GERADE tut — der letzte Schritt des Laufs, als eine Zeile für
+ * die Warteanzeige. Solange noch nichts gemeldet wurde (oder der Lauf gerade
+ * fertig geworden ist), bleibt es beim allgemeinen Hinweis.
+ */
+export function agentBusyLabel(activity: readonly AgentEvent[] = []): string {
+  const last = activity[activity.length - 1];
+  if (!last || last.kind === 'done') return 'Der Agent arbeitet …';
+  return agentEventLabel(last);
+}
+
+/** Passendes Zeichen zu agentBusyLabel — die Sanduhr steht für „noch nichts gemeldet“. */
+export function agentBusyIcon(activity: readonly AgentEvent[] = []): string {
+  const last = activity[activity.length - 1];
+  if (!last || last.kind === 'done') return '⏳';
+  return agentEventIcon(last);
+}
+
+/**
+ * Laufzeit als m:ss (ab einer Stunde h:mm:ss) — die Anzeige zeigt damit, dass
+ * ein langer Lauf lebt, auch wenn der Schritt lange derselbe bleibt.
+ */
+export function formatElapsed(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const seconds = String(total % 60).padStart(2, '0');
+  const minutes = Math.floor(total / 60) % 60;
+  const hours = Math.floor(total / 3600);
+  if (hours === 0) return `${minutes}:${seconds}`;
+  return `${hours}:${String(minutes).padStart(2, '0')}:${seconds}`;
+}
+
 /** Ein laufender Strom der Claude CLI: Datenblöcke rein, Ereignisse raus. */
 export interface AgentStream {
   /**

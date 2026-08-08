@@ -3,6 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import WindowFrame from './WindowFrame.vue';
 import WelcomeScreen from './WelcomeScreen.vue';
+import { useAppWindow } from '@/stores/app';
 import { useDesktopStore } from '@/stores/desktop';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { setHost } from '@/services/host';
@@ -176,6 +177,33 @@ describe('WindowFrame', () => {
     expect(desktop.showingDesktop).toBe(true);
     // Das Fenster bleibt offen — es liegt nur hinter dem Desktop.
     expect(desktop.windows).toHaveLength(1);
+  });
+
+  it('führt in der Warteanzeige den laufenden Schritt und die Laufzeit vor', async () => {
+    const { wrapper, win } = await mountFrameForApp();
+    expect(wrapper.find('.w-loading').exists()).toBe(false);
+
+    const store = useAppWindow(win.instanceId);
+    store.busy = true;
+    store.runStartedAt = Date.now() - 65_000;
+    store.activity = [{ kind: 'start' }, { kind: 'tool', name: 'Read', detail: 'src/index.html' }];
+    await wrapper.vm.$nextTick();
+
+    const loading = wrapper.get('.w-loading');
+    expect(loading.text()).toContain('Die Änderung wird umgesetzt');
+    expect(loading.get('.w-step').text()).toContain('Read: src/index.html');
+    expect(loading.get('.w-elapsed').text()).toBe('1:05');
+  });
+
+  it('bleibt in der Warteanzeige beim allgemeinen Hinweis, solange nichts gemeldet wurde', async () => {
+    const { wrapper, win } = await mountFrameForApp();
+
+    const store = useAppWindow(win.instanceId);
+    store.busy = true;
+    store.runStartedAt = Date.now();
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.get('.w-step').text()).toContain('Der Agent arbeitet');
   });
 
   it('zeigt den Desktop-Knopf im Fenster-Modus nicht', async () => {

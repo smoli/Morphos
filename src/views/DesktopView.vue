@@ -32,6 +32,7 @@ const chatMessages = computed(() => activeStore.value?.chat ?? []);
 const chatBusy = computed(() => activeStore.value?.busy ?? false);
 const chatPending = computed(() => activeStore.value?.pendingQuestion ?? null);
 const chatActivity = computed(() => activeStore.value?.activity ?? []);
+const chatStartedAt = computed(() => activeStore.value?.runStartedAt ?? null);
 
 // Anzeigen, an welche App die Eingabe geht (Gewissheit für den Anwender). Ohne
 // aktives Fenster entsteht eine neue App. Im Einzel-Modus zeigt die laufende
@@ -125,6 +126,7 @@ function onPrompt(text: string, attachments: Attachment[] = []): void {
         :pending-question="chatPending"
         :context-label="chatContext"
         :activity="chatActivity"
+        :started-at="chatStartedAt"
         @submit="onPrompt"
       />
     </footer>

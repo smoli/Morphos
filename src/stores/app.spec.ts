@@ -255,6 +255,27 @@ describe('useAppStore', () => {
     ]);
   });
 
+  it('hält den Startzeitpunkt des Laufs fest und gibt ihn danach wieder frei', async () => {
+    let duringRun: number | null = -1;
+    const host = makeHost({
+      generate: vi.fn(async (): Promise<GenerateResult> => {
+        duringRun = store.runStartedAt;
+        return { ok: true, files: FILES(DOC('x')), html: DOC('x') };
+      }),
+    });
+    setHost(host);
+    const store = useAppStore();
+    store.newDraft('/apps');
+    expect(store.runStartedAt).toBeNull();
+
+    const before = Date.now();
+    await store.generate('Ein Taschenrechner');
+
+    expect(duringRun).not.toBeNull();
+    expect(duringRun!).toBeGreaterThanOrEqual(before);
+    expect(store.runStartedAt).toBeNull();
+  });
+
   it('nimmt nur die Ereignisse des eigenen Laufs an', async () => {
     const stream = makeStreamingHost([{ kind: 'start' }], { foreignRunId: true });
     setHost(stream.host);

@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   AGENT_IDLE_TIMEOUT_MS,
+  agentBusyIcon,
+  agentBusyLabel,
+  agentEventIcon,
   agentEventLabel,
   agentIdleTimeoutMessage,
   createAgentStream,
+  formatElapsed,
 } from './agent';
 import type { AgentEvent } from '@/types';
 
@@ -48,6 +52,59 @@ describe('agentEventLabel', () => {
   it('nennt beim Werkzeug den Namen und — wenn vorhanden — das Ziel', () => {
     expect(agentEventLabel({ kind: 'tool', name: 'Read', detail: '/tmp/bild.png' })).toBe('Read: /tmp/bild.png');
     expect(agentEventLabel({ kind: 'tool', name: 'Read' })).toBe('Read');
+  });
+});
+
+describe('agentEventIcon', () => {
+  it('gibt jedem Ereignis ein eigenes Zeichen', () => {
+    expect(agentEventIcon({ kind: 'start' })).toBe('▶');
+    expect(agentEventIcon({ kind: 'think' })).toBe('💭');
+    expect(agentEventIcon({ kind: 'tool', name: 'Read' })).toBe('🔧');
+    expect(agentEventIcon({ kind: 'write', path: 'a' })).toBe('📝');
+    expect(agentEventIcon({ kind: 'delete', path: 'a' })).toBe('🗑');
+    expect(agentEventIcon({ kind: 'say' })).toBe('💬');
+    expect(agentEventIcon({ kind: 'done' })).toBe('✓');
+  });
+});
+
+describe('agentBusyLabel', () => {
+  it('nennt den zuletzt gemeldeten Schritt', () => {
+    expect(agentBusyLabel([{ kind: 'start' }, { kind: 'think' }])).toBe('Denkt nach …');
+    expect(agentBusyLabel([{ kind: 'think' }, { kind: 'tool', name: 'Read', detail: 'src/app.js' }]))
+      .toBe('Read: src/app.js');
+  });
+
+  it('bleibt beim allgemeinen Hinweis, solange nichts gemeldet wurde', () => {
+    expect(agentBusyLabel([])).toBe('Der Agent arbeitet …');
+    expect(agentBusyLabel()).toBe('Der Agent arbeitet …');
+  });
+
+  it('meldet nach dem letzten Schritt keinen Vollzug — der Lauf läuft weiter', () => {
+    expect(agentBusyLabel([{ kind: 'write', path: 'src/app.js' }, { kind: 'done' }])).toBe('Der Agent arbeitet …');
+  });
+
+  it('setzt das Zeichen passend zum Schritt', () => {
+    expect(agentBusyIcon([{ kind: 'write', path: 'a' }])).toBe('📝');
+    expect(agentBusyIcon([])).toBe('⏳');
+    expect(agentBusyIcon([{ kind: 'done' }])).toBe('⏳');
+  });
+});
+
+describe('formatElapsed', () => {
+  it('zeigt Minuten und Sekunden', () => {
+    expect(formatElapsed(0)).toBe('0:00');
+    expect(formatElapsed(7_400)).toBe('0:07');
+    expect(formatElapsed(65_000)).toBe('1:05');
+    expect(formatElapsed(59 * 60_000 + 59_000)).toBe('59:59');
+  });
+
+  it('nimmt ab einer Stunde die Stunden dazu', () => {
+    expect(formatElapsed(3_600_000)).toBe('1:00:00');
+    expect(formatElapsed(3_725_000)).toBe('1:02:05');
+  });
+
+  it('kennt keine negative Laufzeit', () => {
+    expect(formatElapsed(-5_000)).toBe('0:00');
   });
 });
 

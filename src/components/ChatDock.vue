@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { getHost } from '@/services/host';
-import { agentEventLabel } from '@/core/agent';
+import { agentEventIcon, agentEventLabel } from '@/core/agent';
+import { useElapsed } from '@/composables/useElapsed';
 import { renderMarkdown } from '@/core/markdown';
 import type { AgentEvent, Attachment, ChatMessage } from '@/types';
 
@@ -14,6 +15,8 @@ const props = defineProps<{
   contextLabel?: string | null;
   /** Live-Fortschritt des laufenden Laufs (was der Agent gerade tut). */
   activity?: AgentEvent[];
+  /** Beginn des laufenden Laufs (ms) — daraus wächst die angezeigte Laufzeit. */
+  startedAt?: number | null;
 }>();
 
 const emit = defineEmits<{ submit: [text: string, attachments: Attachment[]] }>();
@@ -39,20 +42,15 @@ const rows = computed(() => Math.min(6, Math.max(1, text.value.split('\n').lengt
 
 // Die Schritte des laufenden Laufs als fertige Anzeigezeilen (Zeichen + Text).
 const steps = computed(() =>
-  (props.activity ?? []).map((event) => ({ icon: stepIcon(event), label: agentEventLabel(event) })),
+  (props.activity ?? []).map((event) => ({ icon: agentEventIcon(event), label: agentEventLabel(event) })),
 );
 
-function stepIcon(event: AgentEvent): string {
-  switch (event.kind) {
-    case 'start': return '▶';
-    case 'think': return '💭';
-    case 'tool': return '🔧';
-    case 'write': return '📝';
-    case 'delete': return '🗑';
-    case 'say': return '💬';
-    case 'done': return '✓';
-  }
-}
+// Ein Lauf kann lange bei einem Schritt verharren — die mitlaufende Laufzeit
+// zeigt, dass er trotzdem lebt.
+const elapsed = useElapsed(() => props.startedAt);
+const runningLabel = computed(() =>
+  elapsed.value ? `Der Agent arbeitet … (${elapsed.value})` : 'Der Agent arbeitet …',
+);
 
 function scrollDown(): void {
   void nextTick(() => {
@@ -73,12 +71,12 @@ watch(() => props.pendingQuestion, (q) => {
 watch(() => props.messages.length, scrollDown);
 watch(open, (o) => { if (o) scrollDown(); });
 
-// Läuft ein Agentenlauf, zeigt der Chat ihn mit: gedockt klappt der Verlauf
-// auf, damit der Anwender verfolgen kann, was gerade geschieht.
+// Läuft ein Agentenlauf, zeigt der Chat ihn mit — er klappt dafür aber NICHT
+// von selbst auf: Was der Agent tut, führt die Warteanzeige über der App vor;
+// wer den ganzen Verlauf sehen will, klappt ihn selbst auf (und bleibt dann
+// auch aufgeklappt).
 watch(() => props.busy, (busy) => {
-  if (!busy) return;
-  if (!popped.value) open.value = true;
-  scrollDown();
+  if (busy) scrollDown();
 }, { immediate: true });
 watch(() => steps.value.length, scrollDown);
 
@@ -221,7 +219,7 @@ function fmt(ts: number): string {
             </div>
             <div class="step running">
               <span class="step-icon">⏳</span>
-              <span class="step-label">Der Agent arbeitet …</span>
+              <span class="step-label">{{ runningLabel }}</span>
             </div>
           </div>
         </div>

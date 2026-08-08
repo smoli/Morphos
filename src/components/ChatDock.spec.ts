@@ -35,6 +35,13 @@ function mountDock(props: Partial<InstanceType<typeof ChatDock>['$props']> = {})
   });
 }
 
+/** Wie mountDock, aber mit aufgeklapptem Verlauf (der Anwender hat geklickt). */
+async function mountOpenDock(props: Partial<InstanceType<typeof ChatDock>['$props']> = {}) {
+  const wrapper = mountDock(props);
+  await wrapper.get('.toggle').trigger('click');
+  return wrapper;
+}
+
 describe('ChatDock', () => {
   beforeEach(() => setHost(makeHost()));
 
@@ -92,9 +99,20 @@ describe('ChatDock', () => {
     expect(wrapper.find('.chat-panel').exists()).toBe(true);
   });
 
-  it('klappt automatisch auf, sobald ein Lauf beginnt', async () => {
+  it('klappt beim Absenden NICHT von selbst auf — die Warteanzeige führt den Lauf vor', async () => {
     const wrapper = mountDock();
     expect(wrapper.find('.chat-panel').exists()).toBe(false);
+
+    await wrapper.setProps({ busy: true, activity: [{ kind: 'think' }] });
+    await flushPromises();
+
+    expect(wrapper.find('.chat-panel').exists()).toBe(false);
+  });
+
+  it('lässt einen aufgeklappten Verlauf während des Laufs aufgeklappt', async () => {
+    const wrapper = mountDock();
+    await wrapper.get('.toggle').trigger('click');
+    expect(wrapper.find('.chat-panel').exists()).toBe(true);
 
     await wrapper.setProps({ busy: true });
     await flushPromises();
@@ -102,8 +120,8 @@ describe('ChatDock', () => {
     expect(wrapper.find('.chat-panel').exists()).toBe(true);
   });
 
-  it('zeigt während des Laufs, was der Agent gerade tut', async () => {
-    const wrapper = mountDock({
+  it('zeigt im aufgeklappten Verlauf, was der Agent gerade tut', async () => {
+    const wrapper = await mountOpenDock({
       busy: true,
       activity: [
         { kind: 'start' },
@@ -120,8 +138,28 @@ describe('ChatDock', () => {
     expect(steps[2].text()).toContain('Schreibt src/index.html');
   });
 
+  it('zeigt in der laufenden Zeile die Laufzeit mit', async () => {
+    const wrapper = await mountOpenDock({
+      busy: true,
+      startedAt: Date.now() - 65_000,
+      activity: [{ kind: 'think' }],
+    });
+    await flushPromises();
+
+    const running = wrapper.get('.step.running');
+    expect(running.text()).toContain('Der Agent arbeitet');
+    expect(running.text()).toContain('1:05');
+  });
+
+  it('kommt ohne Startzeitpunkt aus (dann eben ohne Laufzeit)', async () => {
+    const wrapper = await mountOpenDock({ busy: true, activity: [{ kind: 'think' }] });
+    await flushPromises();
+
+    expect(wrapper.get('.step.running').text()).toContain('Der Agent arbeitet');
+  });
+
   it('blendet den Fortschritt aus, sobald der Lauf vorbei ist', async () => {
-    const wrapper = mountDock({ busy: true, activity: [{ kind: 'write', path: 'src/index.html' }] });
+    const wrapper = await mountOpenDock({ busy: true, activity: [{ kind: 'write', path: 'src/index.html' }] });
     await flushPromises();
     expect(wrapper.find('.activity').exists()).toBe(true);
 

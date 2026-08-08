@@ -3,6 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useAppWindow } from '@/stores/app';
 import { useDesktopStore } from '@/stores/desktop';
 import { useWorkspaceStore } from '@/stores/workspace';
+import { agentBusyIcon, agentBusyLabel } from '@/core/agent';
+import { useElapsed } from '@/composables/useElapsed';
 import AppCanvas from './AppCanvas.vue';
 import WelcomeScreen from './WelcomeScreen.vue';
 import HistoryList from './HistoryList.vue';
@@ -20,6 +22,13 @@ const interacting = ref(false); // Ziehen/Größe ändern → Schutzschicht übe
 
 // Vollflächig (kein Ziehen/Größe): im Einzel-Modus oder wenn maximiert.
 const full = computed(() => props.single || props.win.maximized);
+
+// Die Warteanzeige führt den Lauf vor, ohne dass der Chat aufklappen muss: was
+// der Agent gerade tut plus die mitlaufende Laufzeit (ein Schritt kann lange
+// derselbe bleiben — die Zeit zeigt, dass es weitergeht).
+const busyIcon = computed(() => agentBusyIcon(store.activity));
+const busyLabel = computed(() => agentBusyLabel(store.activity));
+const elapsed = useElapsed(() => store.runStartedAt);
 
 onMounted(async () => {
   if (props.win.appId && workspace.folder) {
@@ -168,6 +177,11 @@ function stopInteraction(): void {
       <div v-if="store.busy" class="w-loading">
         <div class="spinner"></div>
         <div>{{ store.hasApp ? 'Die Änderung wird umgesetzt …' : 'Die Anwendung wird entwickelt …' }}</div>
+        <div class="w-step" :title="busyLabel">
+          <span class="w-step-icon">{{ busyIcon }}</span>
+          <span class="w-step-label">{{ busyLabel }}</span>
+        </div>
+        <div v-if="elapsed" class="w-elapsed">{{ elapsed }}</div>
       </div>
 
       <div v-if="store.error" class="w-error">{{ store.error }}</div>
@@ -291,6 +305,33 @@ function stopInteraction(): void {
   gap: 14px;
   background: rgba(15, 17, 21, 0.82);
   color: var(--muted);
+  padding: 0 24px;
+  box-sizing: border-box;
+  text-align: center;
+}
+/* Der laufende Schritt — dieselbe Meldung, die der Chat im Verlauf zeigt. */
+.w-step {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: -6px;
+  font-size: 13px;
+  max-width: 100%;
+}
+.w-step-icon {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+.w-step-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.w-elapsed {
+  margin-top: -8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
 }
 .spinner {
   width: 40px;
