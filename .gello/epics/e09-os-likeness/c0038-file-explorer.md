@@ -1,12 +1,13 @@
 ---
 id: c0038
 title: File-Explorer
-status: discuss
+status: ready
 created: 2026-08-08
 updated: 2026-08-08
-status-changed: 2026-08-08T22:51:33
+status-changed: 2026-08-08T23:18:25
 epic: e09
 depends: [c0047, c0048, c0049, c0050]
+order: 150
 ---
 
 ## Breakdown
@@ -129,3 +130,4 @@ Open questions for planning:
 ## Log
 
 - 2026-08-08 status → discuss (app)
+- 2026-08-08 status → ready (app)

@@ -1,10 +1,12 @@
 ---
 id: c0047
 title: "File-Explorer: system window in the desktop manager"
-status: backlog
+status: ready
 epic: e09
 created: 2026-08-08
 updated: 2026-08-08
+status-changed: 2026-08-08T23:18:11
+order: 110
 ---
 
 ## What
@@ -37,3 +39,4 @@ of the explorer builds on.
 ## Log
 
 - 2026-08-08 created from the c0038 File-Explorer breakdown
+- 2026-08-08 status → ready (app)

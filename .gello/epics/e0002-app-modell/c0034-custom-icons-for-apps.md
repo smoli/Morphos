@@ -1,10 +1,10 @@
 ---
 id: c0034
 title: Custom icons for apps
-status: review
+status: done
 created: 2026-08-08
 updated: 2026-08-08
-status-changed: 2026-08-08T08:02:45
+status-changed: 2026-08-08T23:18:37
 epic: e0002
 commit: 5c9dd16
 usage-tokens: 65435
@@ -107,3 +107,4 @@ them the other way — each is a small change):
 - 2026-08-08 status → ready (app)
 - 2026-08-08 status → in-progress (agent)
 - 2026-08-08 status → review (agent)
+- 2026-08-08 status → done (app)

@@ -1,13 +1,13 @@
 ---
 id: i0003
 title: Background agents loose UI progress
-status: review
+status: done
 type: issue
 ref: c0030
 epic: e07
 created: 2026-08-08
 updated: 2026-08-08
-status-changed: 2026-08-08T07:47:21
+status-changed: 2026-08-08T23:18:43
 usage-tokens: 25523
 usage-cost: 2.693289
 ---
@@ -59,3 +59,4 @@ Fall als der gemeldete und bleibt, wie es war.
 - 2026-08-08 status → ready (app)
 - 2026-08-08 status → in-progress (agent)
 - 2026-08-08 status → review (agent)
+- 2026-08-08 status → done (app)

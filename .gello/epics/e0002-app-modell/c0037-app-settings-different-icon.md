@@ -1,12 +1,12 @@
 ---
 id: c0037
 title: App-Settings - different icon
-status: review
+status: done
 ref: c0034
 epic: e0002
 created: 2026-08-08
 updated: 2026-08-08
-status-changed: 2026-08-08T22:50:38
+status-changed: 2026-08-08T23:18:33
 commit: 806b342
 usage-tokens: 5913
 usage-cost: 0.843419
@@ -33,3 +33,4 @@ usage-cost: 0.843419
 
 - 2026-08-08 status → in-progress (agent)
 - 2026-08-08 status → review (agent)
+- 2026-08-08 status → done (app)

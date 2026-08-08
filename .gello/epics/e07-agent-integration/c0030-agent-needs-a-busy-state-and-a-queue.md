@@ -1,10 +1,10 @@
 ---
 id: c0030
 title: Agent needs a busy state and a queue
-status: review
+status: done
 created: 2026-08-06
 updated: 2026-08-08
-status-changed: 2026-08-08T06:50:00
+status-changed: 2026-08-08T23:18:41
 epic: e07
 usage-tokens: 87203
 usage-cost: 14.214753
@@ -121,3 +121,4 @@ Aufbau:
 - 2026-08-08 status → ready (app)
 - 2026-08-08 status → in-progress (agent)
 - 2026-08-08 status → review (agent)
+- 2026-08-08 status → done (app)

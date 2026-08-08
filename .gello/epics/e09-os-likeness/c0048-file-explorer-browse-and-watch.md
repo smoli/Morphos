@@ -1,11 +1,13 @@
 ---
 id: c0048
 title: "File-Explorer: browse + live watch"
-status: backlog
+status: ready
 epic: e09
 depends: [c0047]
 created: 2026-08-08
 updated: 2026-08-08
+status-changed: 2026-08-08T23:18:14
+order: 120
 ---
 
 ## What
@@ -30,3 +32,4 @@ listing primitives from the file-dialog work (`core/dialog.ts`, `getHost().fs`).
 ## Log
 
 - 2026-08-08 created from the c0038 File-Explorer breakdown
+- 2026-08-08 status → ready (app)

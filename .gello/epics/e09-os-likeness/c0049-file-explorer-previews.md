@@ -1,11 +1,13 @@
 ---
 id: c0049
 title: "File-Explorer: content previews"
-status: backlog
+status: ready
 epic: e09
 depends: [c0048]
 created: 2026-08-08
 updated: 2026-08-08
+status-changed: 2026-08-08T23:18:16
+order: 130
 ---
 
 ## What
@@ -36,3 +38,4 @@ the trusted renderer.
 ## Log
 
 - 2026-08-08 created from the c0038 File-Explorer breakdown
+- 2026-08-08 status → ready (app)

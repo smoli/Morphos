@@ -1,11 +1,11 @@
 ---
 id: c0039
 title: Proper settings dialog
-status: review
+status: done
 epic: e09
 created: 2026-08-08
 updated: 2026-08-08
-status-changed: 2026-08-08T23:15:55
+status-changed: 2026-08-08T23:18:35
 usage-tokens: 19240
 usage-cost: 1.794177
 ---
@@ -56,3 +56,4 @@ The four existing sections moved into `settings/AgentsSection.vue`,
   `SettingsDialog.spec.ts` (Kategoriewechsel, Registrierung, jede Einstellung);
   Gesamtsuite 522 Tests grün, `vue-tsc` sauber
 - 2026-08-08 status → review (agent)
+- 2026-08-08 status → done (app)

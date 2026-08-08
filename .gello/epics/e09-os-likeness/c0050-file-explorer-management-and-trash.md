@@ -1,11 +1,13 @@
 ---
 id: c0050
 title: "File-Explorer: file management + waste bin"
-status: backlog
+status: ready
 epic: e09
 depends: [c0048]
 created: 2026-08-08
 updated: 2026-08-08
+status-changed: 2026-08-08T23:18:22
+order: 140
 ---
 
 ## What
@@ -40,3 +42,4 @@ data root; operations are user actions in the trusted shell, not app fs requests
 ## Log
 
 - 2026-08-08 created from the c0038 File-Explorer breakdown
+- 2026-08-08 status → ready (app)
