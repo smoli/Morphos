@@ -30,6 +30,7 @@ import type {
   FsRequest,
   FsResponse,
   GenerateResult,
+  IconPos,
   IconResult,
   SaveResult,
   Settings,
@@ -67,7 +68,8 @@ function readSettings(): Settings {
       : [];
     const uiMode = parsed.uiMode === 'single' ? 'single' : 'windows';
     const maxAgents = clampMaxAgents(parsed.maxAgents);
-    return { recentFolders: recent, accessRoots, permissions, libWhitelist, uiMode, maxAgents };
+    const iconPositions = cleanIconPositions(parsed.iconPositions);
+    return { recentFolders: recent, accessRoots, permissions, libWhitelist, uiMode, maxAgents, iconPositions };
   } catch {
     return {
       recentFolders: [],
@@ -76,8 +78,28 @@ function readSettings(): Settings {
       libWhitelist: [],
       uiMode: 'windows',
       maxAgents: DEFAULT_MAX_AGENTS,
+      iconPositions: {},
     };
   }
+}
+
+/**
+ * Kachel-Positionen des Desktops auf reine Zahlenpaare eintüten — fremde oder
+ * beschädigte Einträge fallen weg (dann ordnet das Raster diese Kachel an).
+ */
+function cleanIconPositions(raw: Settings['iconPositions']): Record<string, Record<string, IconPos>> {
+  const out: Record<string, Record<string, IconPos>> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [folder, positions] of Object.entries(raw)) {
+    if (!positions || typeof positions !== 'object') continue;
+    const clean: Record<string, IconPos> = {};
+    for (const [appId, pos] of Object.entries(positions)) {
+      if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) continue;
+      clean[appId] = { x: Math.round(pos.x), y: Math.round(pos.y) };
+    }
+    if (Object.keys(clean).length) out[folder] = clean;
+  }
+  return out;
 }
 
 /**
@@ -466,6 +488,7 @@ ipcMain.handle('morphos:saveSettings', async (_e, settings: Settings): Promise<S
       libWhitelist: (settings?.libWhitelist ?? []).filter((p) => typeof p === 'string' && p.trim()).slice(0, 100),
       uiMode: settings?.uiMode === 'single' ? 'single' : 'windows',
       maxAgents: clampMaxAgents(settings?.maxAgents),
+      iconPositions: cleanIconPositions(settings?.iconPositions),
     };
     fs.writeFileSync(settingsFile(), JSON.stringify(clean, null, 2), 'utf8');
     return { ok: true };

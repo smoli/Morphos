@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useDesktopStore } from '@/stores/desktop';
 import { useAgentsStore } from '@/stores/agents';
@@ -10,7 +10,20 @@ import ChatDock from '@/components/ChatDock.vue';
 import BusyDot from '@/components/BusyDot.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import IconDialog from '@/components/IconDialog.vue';
-import type { AppSummary, Attachment } from '@/types';
+import {
+  arrangeIcons,
+  CELL_H,
+  clampPos,
+  columns,
+  DRAG_THRESHOLD,
+  layoutHeight,
+  PAD,
+  slotPos,
+  TILE_H,
+  TILE_W,
+  type Bounds,
+} from '@/core/arrange';
+import type { AppSummary, Attachment, IconPos } from '@/types';
 
 const workspace = useWorkspaceStore();
 const desktop = useDesktopStore();
@@ -67,11 +80,112 @@ const chatContextIcon = computed<string | null>(() => {
   return activeWindow.value?.icon ?? null;
 });
 
+// ---- Anordnung der Kacheln (frei abgelegt, sonst Raster — siehe core/arrange) ----
+
+const launcher = ref<HTMLElement | null>(null);
+const bounds = ref<Bounds>({ w: 0, h: 0 });
+
+/** Die sichtbare Fläche messen — sie begrenzt, wohin eine Kachel darf. */
+function measure(): void {
+  const el = launcher.value;
+  bounds.value = el ? { w: el.clientWidth, h: el.clientHeight } : { w: 0, h: 0 };
+}
+
+// Der erste Rasterplatz gehört der festen „Neue App“-Kachel.
+const layout = computed(() =>
+  arrangeIcons(workspace.apps.map((a) => a.id), workspace.iconLayout, bounds.value, 1),
+);
+const newAppPos = computed(() => slotPos(0, columns(bounds.value)));
+// Beim Ziehen folgt die Kachel der Maus, bevor die Position gemerkt ist.
+const positions = computed<Record<string, IconPos>>(() =>
+  dragId.value && dragPos.value ? { ...layout.value, [dragId.value]: dragPos.value } : layout.value,
+);
+// Die Fläche reicht bis unter die tiefste Kachel (sonst fehlt der Rollbereich).
+const surfaceHeight = computed(() => `${layoutHeight(positions.value)}px`);
+const hintTop = computed(() => `${PAD + CELL_H}px`);
+
+function tileStyle(pos: IconPos | undefined) {
+  return {
+    left: `${pos?.x ?? 0}px`,
+    top: `${pos?.y ?? 0}px`,
+    width: `${TILE_W}px`,
+    height: `${TILE_H}px`,
+  };
+}
+
+const dragId = ref<string | null>(null);
+const dragPos = ref<IconPos | null>(null);
+let dragStart: { x: number; y: number; base: IconPos } | null = null;
+let moved = false;
+// Nach einem Ziehen kommt noch der Klick des Loslassens — er darf die App nicht
+// öffnen. Das nächste Drücken auf eine Kachel setzt die Sperre wieder zurück,
+// damit sie nicht hängen bleibt, wenn der Klick woanders landet.
+let swallowClick = false;
+
+function startTileDrag(e: MouseEvent, appId: string): void {
+  if (e.button !== 0) return;
+  swallowClick = false;
+  moved = false;
+  dragId.value = appId;
+  dragStart = { x: e.clientX, y: e.clientY, base: layout.value[appId] ?? { x: 0, y: 0 } };
+  window.addEventListener('mousemove', onTileDrag);
+  window.addEventListener('mouseup', endTileDrag);
+}
+
+function onTileDrag(e: MouseEvent): void {
+  if (!dragStart) return;
+  const dx = e.clientX - dragStart.x;
+  const dy = e.clientY - dragStart.y;
+  // Ein Wackler beim Klicken ist noch kein Ziehen.
+  if (!moved && Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+  moved = true;
+  dragPos.value = clampPos({ x: dragStart.base.x + dx, y: dragStart.base.y + dy }, bounds.value);
+}
+
+function endTileDrag(): void {
+  window.removeEventListener('mousemove', onTileDrag);
+  window.removeEventListener('mouseup', endTileDrag);
+  const appId = dragId.value;
+  const pos = dragPos.value;
+  dragId.value = null;
+  dragPos.value = null;
+  dragStart = null;
+  swallowClick = moved;
+  if (moved && appId && pos) workspace.setIconPosition(appId, pos);
+  moved = false;
+}
+
+/** Aufräumen: alle Kacheln dieses Verzeichnisses zurück ins Raster. */
+function tidy(): void {
+  workspace.resetIconPositions();
+}
+
+// Die Fläche ändert sich nicht nur mit dem Fenster (auch die Promptleiste
+// wächst), darum beobachten wir sie, wo der Browser es anbietet.
+let observer: ResizeObserver | null = null;
+
 onMounted(() => {
+  measure();
+  window.addEventListener('resize', measure);
+  if (typeof ResizeObserver === 'function' && launcher.value) {
+    observer = new ResizeObserver(measure);
+    observer.observe(launcher.value);
+  }
   void workspace.refresh();
 });
 
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  window.removeEventListener('resize', measure);
+  window.removeEventListener('mousemove', onTileDrag);
+  window.removeEventListener('mouseup', endTileDrag);
+});
+
 function openApp(app: AppSummary): void {
+  if (swallowClick) {
+    swallowClick = false;
+    return;
+  }
   desktop.openApp(app.id, { title: app.name, icon: app.icon });
 }
 function newApp(): void {
@@ -104,15 +218,40 @@ async function applyIcon(icon: string | null): Promise<void> {
 <template>
   <div class="desktop">
     <div class="stage">
-      <!-- Launcher: Icons der Apps (liegt hinter den Fenstern). -->
-      <div class="launcher">
-        <div class="grid">
-          <button type="button" class="tile new" @click="newApp">
-            <span class="icon">＋</span>
-            <span class="name">Neue App</span>
-          </button>
-          <div v-for="app in workspace.apps" :key="app.id" class="tile-wrap">
-            <button type="button" class="tile" @click="openApp(app)" :title="app.name">
+      <!-- Launcher: Icons der Apps (liegt hinter den Fenstern). Jede Kachel
+           liegt dort, wo der Anwender sie abgelegt hat — sonst im Raster. -->
+      <div ref="launcher" class="launcher">
+        <button
+          v-if="workspace.hasIconLayout"
+          type="button"
+          class="tidy"
+          title="Kacheln wieder ins Raster legen"
+          @click="tidy"
+        >
+          ⌗ Aufräumen
+        </button>
+
+        <div class="icons" :style="{ minHeight: surfaceHeight }">
+          <div class="tile-wrap fixed" :style="tileStyle(newAppPos)">
+            <button type="button" class="tile new" @click="newApp">
+              <span class="icon">＋</span>
+              <span class="name">Neue App</span>
+            </button>
+          </div>
+          <div
+            v-for="app in workspace.apps"
+            :key="app.id"
+            class="tile-wrap"
+            :class="{ dragging: dragId === app.id }"
+            :style="tileStyle(positions[app.id])"
+          >
+            <button
+              type="button"
+              class="tile"
+              @mousedown="startTileDrag($event, app.id)"
+              @click="openApp(app)"
+              :title="app.name"
+            >
               <AppIcon class="icon" :icon="app.icon" :size="42" />
               <span class="name">{{ app.name }}</span>
               <span class="meta">{{ app.versions }} Version(en)</span>
@@ -123,11 +262,11 @@ async function applyIcon(icon: string | null): Promise<void> {
               <button type="button" class="act del" title="Löschen" @click.stop="removeApp(app.id, app.name)">🗑</button>
             </span>
           </div>
+          <p v-if="!workspace.loading && workspace.apps.length === 0" class="hint" :style="{ top: hintTop }">
+            Noch keine Apps in diesem Verzeichnis. Beschreibe unten, was deine erste App sein soll —
+            oder öffne „Neue App“.
+          </p>
         </div>
-        <p v-if="!workspace.loading && workspace.apps.length === 0" class="hint">
-          Noch keine Apps in diesem Verzeichnis. Beschreibe unten, was deine erste App sein soll —
-          oder öffne „Neue App“.
-        </p>
       </div>
 
       <!-- Fenster-Ebene. -->
@@ -197,25 +336,51 @@ async function applyIcon(icon: string | null): Promise<void> {
 .launcher {
   position: absolute;
   inset: 0;
-  overflow-y: auto;
-  padding: 24px;
+  overflow: auto;
+}
+/* Die Fläche, auf der die Kacheln liegen — jede an ihrer eigenen Stelle. */
+.icons {
+  position: relative;
+  min-height: 100%;
 }
 .windows-layer {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 16px;
+/* Aufräumen — erscheint erst, wenn etwas aufzuräumen ist. */
+.tidy {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  z-index: 3;
+  background: rgba(20, 22, 28, 0.8);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 10px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.tidy:hover {
+  border-color: var(--accent);
+  color: var(--text);
 }
 .tile-wrap {
-  position: relative;
+  position: absolute;
+}
+/* Die gezogene Kachel liegt über den anderen. */
+.tile-wrap.dragging {
+  z-index: 2;
+}
+.tile-wrap.dragging .tile {
+  cursor: grabbing;
+  border-color: var(--accent);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
 }
 .tile {
   width: 100%;
-  aspect-ratio: 1 / 1;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -225,13 +390,17 @@ async function applyIcon(icon: string | null): Promise<void> {
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 16px;
-  cursor: pointer;
+  cursor: grab;
   padding: 12px;
-  transition: border-color 0.15s, transform 0.1s;
+  /* Beim Ziehen soll kein Text markiert werden. */
+  user-select: none;
+  transition: border-color 0.15s;
 }
 .tile:hover {
   border-color: var(--accent);
-  transform: translateY(-2px);
+}
+.tile.new {
+  cursor: pointer;
 }
 .tile.new {
   border-style: dashed;
@@ -291,9 +460,11 @@ async function applyIcon(icon: string | null): Promise<void> {
   color: #ffb3b3;
 }
 .hint {
+  position: absolute;
+  left: 24px;
+  right: 24px;
   color: var(--muted);
   text-align: center;
-  margin-top: 32px;
   font-size: 14px;
 }
 .dock {

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import type { AppSummary, FsOp, FsPermissions, PermDecision, PermMode, UiMode } from '@/types';
+import type { AppSummary, FsOp, FsPermissions, IconPos, PermDecision, PermMode, UiMode } from '@/types';
 import { getHost } from '@/services/host';
 import { decideOutcome, effectivePermission } from '@/core/permissions';
 import { clampMaxAgents, DEFAULT_MAX_AGENTS } from '@/core/queue';
@@ -22,6 +22,8 @@ interface WorkspaceState {
   uiMode: UiMode;
   /** Wie viele Agentenläufe gleichzeitig arbeiten dürfen (global). */
   maxAgents: number;
+  /** Frei abgelegte Kachel-Positionen, je Workspace-Pfad, je App-Id. */
+  iconPositions: Record<string, Record<string, IconPos>>;
   /** Aktuell zur Genehmigung anstehende Anfrage (für den Dialog). */
   pendingPermission: PendingPermission | null;
   apps: AppSummary[];
@@ -47,6 +49,7 @@ export const useWorkspaceStore = defineStore('workspace', {
     libWhitelist: [],
     uiMode: 'windows',
     maxAgents: DEFAULT_MAX_AGENTS,
+    iconPositions: {},
     pendingPermission: null,
     apps: [],
     loading: false,
@@ -61,6 +64,12 @@ export const useWorkspaceStore = defineStore('workspace', {
     /** Effektive Berechtigung einer Operation im aktuellen Verzeichnis. */
     permissionFor: (s) => (op: FsOp): PermMode =>
       effectivePermission(s.folder ? s.permissions[s.folder] : undefined, op),
+    /** Die gemerkten Kachel-Positionen des aktuellen Verzeichnisses. */
+    iconLayout: (s): Record<string, IconPos> => (s.folder ? s.iconPositions[s.folder] ?? {} : {}),
+    /** Hat der Anwender hier überhaupt schon eine Kachel abgelegt? */
+    hasIconLayout(): boolean {
+      return Object.keys(this.iconLayout).length > 0;
+    },
   },
 
   actions: {
@@ -74,6 +83,8 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.libWhitelist = Array.isArray(settings?.libWhitelist) ? settings.libWhitelist : [];
         this.uiMode = settings?.uiMode === 'single' ? 'single' : 'windows';
         this.maxAgents = clampMaxAgents(settings?.maxAgents);
+        this.iconPositions =
+          settings?.iconPositions && typeof settings.iconPositions === 'object' ? settings.iconPositions : {};
       } catch {
         this.recentFolders = [];
         this.accessRoots = {};
@@ -81,6 +92,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.libWhitelist = [];
         this.uiMode = 'windows';
         this.maxAgents = DEFAULT_MAX_AGENTS;
+        this.iconPositions = {};
       }
     },
 
@@ -137,6 +149,35 @@ export const useWorkspaceStore = defineStore('workspace', {
     /** Legt fest, wie viele Agentenläufe gleichzeitig arbeiten dürfen. */
     setMaxAgents(count: number): void {
       this.maxAgents = clampMaxAgents(count);
+      void this.persistSettings();
+    },
+
+    /** Merkt, wo der Anwender eine Kachel abgelegt hat (für dieses Verzeichnis). */
+    setIconPosition(appId: string, pos: IconPos): void {
+      if (!this.folder) return;
+      const current = this.iconPositions[this.folder] ?? {};
+      this.iconPositions = {
+        ...this.iconPositions,
+        [this.folder]: { ...current, [appId]: { x: pos.x, y: pos.y } },
+      };
+      void this.persistSettings();
+    },
+
+    /** Aufräumen: Die Kacheln dieses Verzeichnisses fallen zurück ins Raster. */
+    resetIconPositions(): void {
+      if (!this.folder || !this.iconPositions[this.folder]) return;
+      const { [this.folder]: _weg, ...rest } = this.iconPositions;
+      this.iconPositions = rest;
+      void this.persistSettings();
+    },
+
+    /** Vergisst die gemerkte Position einer App (sie gibt es nicht mehr). */
+    forgetIconPosition(appId: string): void {
+      if (!this.folder) return;
+      const current = this.iconPositions[this.folder];
+      if (!current || !(appId in current)) return;
+      const { [appId]: _weg, ...rest } = current;
+      this.iconPositions = { ...this.iconPositions, [this.folder]: rest };
       void this.persistSettings();
     },
 
@@ -235,6 +276,7 @@ export const useWorkspaceStore = defineStore('workspace', {
       if (!this.folder) return;
       try {
         await getHost().deleteApp(this.folder, id);
+        this.forgetIconPosition(id);
         await this.refresh();
       } catch (err) {
         this.error = err instanceof Error ? err.message : String(err);
@@ -255,8 +297,17 @@ export const useWorkspaceStore = defineStore('workspace', {
       const libWhitelist = [...this.libWhitelist];
       const uiMode = this.uiMode;
       const maxAgents = this.maxAgents;
+      const iconPositions = JSON.parse(JSON.stringify(this.iconPositions)) as Record<string, Record<string, IconPos>>;
       try {
-        await getHost().saveSettings({ recentFolders, accessRoots, permissions, libWhitelist, uiMode, maxAgents });
+        await getHost().saveSettings({
+          recentFolders,
+          accessRoots,
+          permissions,
+          libWhitelist,
+          uiMode,
+          maxAgents,
+          iconPositions,
+        });
       } catch {
         /* nicht kritisch */
       }

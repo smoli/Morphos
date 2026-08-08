@@ -52,7 +52,7 @@ describe('useWorkspaceStore', () => {
     expect(ws.folder).toBe('/neu');
     expect(ws.recentFolders[0]).toBe('/neu');
     expect(ws.apps).toHaveLength(2);
-    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows', maxAgents: 2 });
+    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows', maxAgents: 2, iconPositions: {} });
     expect(host.listApps).toHaveBeenCalledWith('/neu');
   });
 
@@ -314,6 +314,75 @@ describe('useWorkspaceStore', () => {
       expect(await ws.setAppIcon(apps[0].id, 'x')).toBeNull();
       expect(ws.error).toBe('Das Bild ist zu groß.');
       expect(ws.apps[0].icon).toBe(vorher);
+    });
+  });
+
+  describe('Kachel-Positionen', () => {
+    it('lädt die gemerkten Positionen des Workspace', async () => {
+      setHost(makeHost({
+        loadSettings: vi.fn(async () => ({
+          recentFolders: [],
+          accessRoots: {},
+          iconPositions: { '/apps': { 'a-1': { x: 300, y: 100 } }, '/andere': { 'b-2': { x: 0, y: 0 } } },
+        })),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.init();
+      expect(ws.iconLayout).toEqual({}); // noch kein Ordner geöffnet
+      await ws.openFolder('/apps');
+      expect(ws.iconLayout).toEqual({ 'a-1': { x: 300, y: 100 } });
+    });
+
+    it('merkt eine abgelegte Kachel je Workspace und speichert sie', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      ws.setIconPosition('a-1', { x: 240, y: 60 });
+
+      expect(ws.iconLayout).toEqual({ 'a-1': { x: 240, y: 60 } });
+      expect(ws.hasIconLayout).toBe(true);
+      expect(host.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ iconPositions: { '/apps': { 'a-1': { x: 240, y: 60 } } } }),
+      );
+    });
+
+    it('rührt ohne geöffneten Ordner nichts an', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      ws.setIconPosition('a-1', { x: 10, y: 10 });
+      expect(ws.iconPositions).toEqual({});
+    });
+
+    it('räumt nur den aktuellen Workspace ins Raster zurück', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      ws.iconPositions = { '/andere': { 'x-9': { x: 5, y: 5 } } };
+      await ws.openFolder('/apps');
+      ws.setIconPosition('a-1', { x: 240, y: 60 });
+
+      ws.resetIconPositions();
+
+      expect(ws.iconLayout).toEqual({});
+      expect(ws.hasIconLayout).toBe(false);
+      expect(ws.iconPositions).toEqual({ '/andere': { 'x-9': { x: 5, y: 5 } } });
+      expect(host.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ iconPositions: { '/andere': { 'x-9': { x: 5, y: 5 } } } }),
+      );
+    });
+
+    it('vergisst die Position einer gelöschten App', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+      ws.setIconPosition('a-1', { x: 240, y: 60 });
+      ws.setIconPosition('b-2', { x: 10, y: 10 });
+
+      await ws.removeApp('a-1');
+
+      expect(ws.iconLayout).toEqual({ 'b-2': { x: 10, y: 10 } });
     });
   });
 

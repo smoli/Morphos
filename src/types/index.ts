@@ -144,6 +144,17 @@ export interface Settings {
    * es eine Claude-Anmeldung ist). Weitere Wünsche warten (siehe core/queue).
    */
   maxAgents?: number;
+  /**
+   * Frei abgelegte Kachel-Positionen auf dem Desktop: je Workspace-Pfad, je
+   * App-Id. Was hier fehlt, ordnet das Raster an (siehe core/arrange).
+   */
+  iconPositions?: Record<string, Record<string, IconPos>>;
+}
+
+/** Position einer Desktop-Kachel in Bildpunkten, relativ zur Desktop-Fläche. */
+export interface IconPos {
+  x: number;
+  y: number;
 }
 
 /** Desktop-Modus: mehrere überlappende Fenster oder genau eine App im Vollbild. */

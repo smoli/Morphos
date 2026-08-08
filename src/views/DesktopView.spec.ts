@@ -10,6 +10,7 @@ import { useDesktopStore } from '@/stores/desktop';
 import { useAgentsStore } from '@/stores/agents';
 import { useAppWindow } from '@/stores/app';
 import { setHost } from '@/services/host';
+import { columns, slotPos } from '@/core/arrange';
 import type { AppData, AppSummary, MorphosHost } from '@/types';
 
 const apps: AppSummary[] = [
@@ -286,6 +287,99 @@ describe('DesktopView', () => {
 
       expect(wrapper.findComponent(IconDialog).exists()).toBe(true);
       expect(useWorkspaceStore().error).toBe('Das Bild ist zu groß.');
+    });
+  });
+
+  describe('Kacheln anordnen', () => {
+    // Ohne gemessene Fläche (jsdom) rechnet die Anordnung mit der Vorgabe.
+    const cols = columns({ w: 0, h: 0 });
+
+    /** Die Kachel einer App samt ihrer gesetzten Position. */
+    function tileOf(wrapper: VueWrapper, name: string) {
+      const wrap = wrapper.findAll('.tile-wrap').find((t) => t.text().includes(name))!;
+      const style = (wrap.element as HTMLElement).style;
+      return { wrap, x: parseFloat(style.left), y: parseFloat(style.top) };
+    }
+
+    /** Zieht eine Kachel um (dx, dy) — mit Maustaste halten, bewegen, loslassen. */
+    async function drag(wrapper: VueWrapper, name: string, dx: number, dy: number) {
+      const { wrap } = tileOf(wrapper, name);
+      await wrap.get('.tile').trigger('mousedown', { button: 0, clientX: 500, clientY: 400 });
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: 500 + dx, clientY: 400 + dy }));
+      window.dispatchEvent(new MouseEvent('mouseup'));
+      await flushPromises();
+      // Der Browser schickt nach dem Loslassen noch den Klick hinterher.
+      await wrap.get('.tile').trigger('click');
+      await flushPromises();
+    }
+
+    it('legt Apps ohne gemerkte Position ins Raster, hinter die Neu-Kachel', async () => {
+      const { wrapper } = await mountView();
+      const rechner = tileOf(wrapper, 'Rechner');
+      const editor = tileOf(wrapper, 'Editor');
+      expect({ x: rechner.x, y: rechner.y }).toEqual(slotPos(1, cols));
+      expect({ x: editor.x, y: editor.y }).toEqual(slotPos(2, cols));
+    });
+
+    it('stellt eine gemerkte Position wieder her', async () => {
+      const ws = useWorkspaceStore();
+      ws.iconPositions = { '/apps': { 'rechner-1': { x: 300, y: 220 } } };
+      const { wrapper } = await mountView();
+
+      expect(tileOf(wrapper, 'Rechner')).toMatchObject({ x: 300, y: 220 });
+      // Der freie Platz im Raster bleibt für die übrigen Kacheln.
+      expect(tileOf(wrapper, 'Editor')).toMatchObject(slotPos(1, cols));
+    });
+
+    it('zieht eine Kachel an eine neue Stelle und merkt sie', async () => {
+      const { wrapper } = await mountView();
+      const before = tileOf(wrapper, 'Rechner');
+
+      await drag(wrapper, 'Rechner', 90, 60);
+
+      const ws = useWorkspaceStore();
+      expect(ws.iconLayout['rechner-1']).toEqual({ x: before.x + 90, y: before.y + 60 });
+      expect(tileOf(wrapper, 'Rechner')).toMatchObject({ x: before.x + 90, y: before.y + 60 });
+    });
+
+    it('öffnet die App beim Ziehen nicht', async () => {
+      const { wrapper } = await mountView();
+      await drag(wrapper, 'Rechner', 90, 60);
+      expect(useDesktopStore().windows).toHaveLength(0);
+    });
+
+    it('öffnet die App weiterhin per Klick (ohne Ziehen)', async () => {
+      const { wrapper } = await mountView();
+      const { wrap } = tileOf(wrapper, 'Rechner');
+
+      await wrap.get('.tile').trigger('mousedown', { button: 0, clientX: 500, clientY: 400 });
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: 501, clientY: 400 })); // Wackler
+      window.dispatchEvent(new MouseEvent('mouseup'));
+      await wrap.get('.tile').trigger('click');
+      await flushPromises();
+
+      expect(useDesktopStore().windows).toHaveLength(1);
+      expect(useWorkspaceStore().iconLayout).toEqual({});
+    });
+
+    it('lässt keine Kachel über den Rand hinaus verschwinden', async () => {
+      const { wrapper } = await mountView();
+      await drag(wrapper, 'Rechner', -900, -900);
+      expect(useWorkspaceStore().iconLayout['rechner-1']).toEqual({ x: 0, y: 0 });
+    });
+
+    it('räumt die Kacheln über den Aufräumen-Knopf zurück ins Raster', async () => {
+      const { wrapper } = await mountView();
+      expect(wrapper.find('.tidy').exists()).toBe(false); // nichts zum Aufräumen
+
+      await drag(wrapper, 'Rechner', 90, 60);
+      expect(wrapper.find('.tidy').exists()).toBe(true);
+
+      await wrapper.get('.tidy').trigger('click');
+      await flushPromises();
+
+      expect(useWorkspaceStore().iconLayout).toEqual({});
+      expect(tileOf(wrapper, 'Rechner')).toMatchObject(slotPos(1, cols));
     });
   });
 
