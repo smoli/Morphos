@@ -1,12 +1,12 @@
 ---
 id: c0030
 title: Agent needs a busy state and a queue
-status: backlog
+status: ready
 created: 2026-08-06
-updated: 2026-08-07
-status-changed: 2026-08-07T22:46:37
+updated: 2026-08-08
+status-changed: 2026-08-08T06:19:17
 epic: e07
-order: 10
+order: 20
 ---
 
 ## What
@@ -83,3 +83,4 @@ Open questions for planning:
 
 - 2026-08-07 status → discuss (app)
 - 2026-08-07 status → backlog (app)
+- 2026-08-08 status → ready (app)

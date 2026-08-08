@@ -1,14 +1,28 @@
 {
-  "status": "idle",
-  "ready": [],
+  "status": "running",
+  "ready": [
+    "i0002",
+    "c0030"
+  ],
   "waiting": [],
-  "runs": [],
-  "updated": "2026-08-07T23:38:51",
+  "runs": [
+    {
+      "cardId": "c0032",
+      "phase": "running",
+      "activity": {
+        "name": "Read",
+        "arg": "/Users/stephan/WebstormProjects/Morphos/src/components/ChatDock.vue"
+      },
+      "model": "claude-opus-5"
+    }
+  ],
+  "updated": "2026-08-08T06:19:44",
   "pickupDelay": 10,
   "owned": [
     "c0029",
     "c0028",
     "i0001",
-    "c0031"
+    "c0031",
+    "c0032"
   ]
 }
