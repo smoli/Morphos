@@ -5,6 +5,7 @@ import { createRouter, createMemoryHistory, type Router } from 'vue-router';
 import DesktopView from './DesktopView.vue';
 import WindowFrame from '@/components/WindowFrame.vue';
 import IconDialog from '@/components/IconDialog.vue';
+import LauncherOverlay from '@/components/LauncherOverlay.vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useDesktopStore } from '@/stores/desktop';
 import { useAgentsStore } from '@/stores/agents';
@@ -511,6 +512,92 @@ describe('DesktopView', () => {
       const before = loadApp.mock.calls.length;
       await toDesktopAndBack(wrapper);
       expect(loadApp.mock.calls.length).toBe(before);
+    });
+  });
+
+  describe('Suchleiste (Startmenü)', () => {
+    /** Öffnet das Startmenü über seinen Knopf auf dem Desktop. */
+    async function openLauncher(wrapper: VueWrapper) {
+      await wrapper.get('.search-btn').trigger('click');
+      await flushPromises();
+      return wrapper.getComponent(LauncherOverlay);
+    }
+
+    /** Tippt in das Suchfeld und drückt eine Taste. */
+    async function search(wrapper: VueWrapper, text: string, key = 'Enter') {
+      await wrapper.get('.lp-input').setValue(text);
+      await wrapper.get('.lp-input').trigger('keydown', { key });
+      await flushPromises();
+    }
+
+    it('öffnet das Startmenü über den Knopf auf dem Desktop', async () => {
+      const { wrapper } = await mountView();
+      expect(wrapper.findComponent(LauncherOverlay).exists()).toBe(false);
+
+      await openLauncher(wrapper);
+      expect(wrapper.findComponent(LauncherOverlay).exists()).toBe(true);
+      // Es kennt die Apps des Verzeichnisses.
+      expect(wrapper.get('.lp-list').text()).toContain('Rechner');
+    });
+
+    it('öffnet das Startmenü auch per Tastenkürzel (Strg/⌘ + K)', async () => {
+      const { wrapper } = await mountView();
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }));
+      await flushPromises();
+      expect(wrapper.findComponent(LauncherOverlay).exists()).toBe(true);
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
+      await flushPromises();
+      expect(wrapper.findAllComponents(LauncherOverlay)).toHaveLength(1);
+    });
+
+    it('öffnet die getippte App mit der Eingabetaste und schließt sich dabei', async () => {
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      await openLauncher(wrapper);
+
+      await search(wrapper, 'editor');
+
+      expect(desktop.windows).toHaveLength(1);
+      expect(desktop.windows[0].appId).toBe('editor-2');
+      expect(wrapper.findComponent(LauncherOverlay).exists()).toBe(false);
+    });
+
+    it('holt eine schon laufende App nur in den Vordergrund', async () => {
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      const instanceId = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      desktop.minimizeWindow(instanceId);
+      await flushPromises();
+
+      await openLauncher(wrapper);
+      await search(wrapper, 'rechner');
+
+      expect(desktop.windows).toHaveLength(1);
+      expect(desktop.windows[0].instanceId).toBe(instanceId);
+      expect(desktop.windows[0].minimized).toBe(false);
+    });
+
+    it('legt über „Neue App“ einen Entwurf an', async () => {
+      const { wrapper } = await mountView();
+      await openLauncher(wrapper);
+
+      await search(wrapper, 'neue app');
+
+      const desktop = useDesktopStore();
+      expect(desktop.windows).toHaveLength(1);
+      expect(desktop.windows[0].appId).toBeNull();
+      expect(wrapper.findComponent(LauncherOverlay).exists()).toBe(false);
+    });
+
+    it('schließt das Startmenü mit Escape, ohne etwas zu öffnen', async () => {
+      const { wrapper } = await mountView();
+      await openLauncher(wrapper);
+
+      await search(wrapper, 'rechner', 'Escape');
+
+      expect(wrapper.findComponent(LauncherOverlay).exists()).toBe(false);
+      expect(useDesktopStore().windows).toHaveLength(0);
     });
   });
 

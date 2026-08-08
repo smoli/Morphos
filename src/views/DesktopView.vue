@@ -10,6 +10,7 @@ import ChatDock from '@/components/ChatDock.vue';
 import BusyDot from '@/components/BusyDot.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import IconDialog from '@/components/IconDialog.vue';
+import LauncherOverlay from '@/components/LauncherOverlay.vue';
 import {
   arrangeIcons,
   CELL_H,
@@ -167,6 +168,7 @@ let observer: ResizeObserver | null = null;
 onMounted(async () => {
   measure();
   window.addEventListener('resize', measure);
+  window.addEventListener('keydown', onShortcut);
   if (typeof ResizeObserver === 'function' && launcher.value) {
     observer = new ResizeObserver(measure);
     observer.observe(launcher.value);
@@ -180,6 +182,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   observer?.disconnect();
   window.removeEventListener('resize', measure);
+  window.removeEventListener('keydown', onShortcut);
   window.removeEventListener('mousemove', onTileDrag);
   window.removeEventListener('mouseup', endTileDrag);
 });
@@ -199,6 +202,29 @@ async function removeApp(id: string, name: string): Promise<void> {
   const open = desktop.windows.find((w) => w.appId === id);
   if (open) desktop.closeWindow(open.instanceId);
   await workspace.removeApp(id);
+}
+
+// ---- Startmenü: eine App tippend finden (siehe components/LauncherOverlay) ----
+
+const searchOpen = ref(false);
+
+/** Strg/⌘ + K öffnet die Suche — von überall auf dem Desktop aus. */
+function onShortcut(e: KeyboardEvent): void {
+  if (e.altKey || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'k') return;
+  e.preventDefault();
+  searchOpen.value = true;
+}
+
+/** Aus der Suche heraus öffnen: laufende Apps kommen nur nach vorn (openApp). */
+function openFromSearch(appId: string): void {
+  searchOpen.value = false;
+  const app = workspace.apps.find((a) => a.id === appId);
+  if (app) desktop.openApp(app.id, { title: app.name, icon: app.icon });
+}
+
+function newFromSearch(): void {
+  searchOpen.value = false;
+  newApp();
 }
 
 function onPrompt(text: string, attachments: Attachment[] = []): void {
@@ -224,15 +250,25 @@ async function applyIcon(icon: string | null): Promise<void> {
       <!-- Launcher: Icons der Apps (liegt hinter den Fenstern). Jede Kachel
            liegt dort, wo der Anwender sie abgelegt hat — sonst im Raster. -->
       <div ref="launcher" class="launcher">
-        <button
-          v-if="workspace.hasIconLayout"
-          type="button"
-          class="tidy"
-          title="Kacheln wieder ins Raster legen"
-          @click="tidy"
-        >
-          ⌗ Aufräumen
-        </button>
+        <div class="desk-tools">
+          <button
+            type="button"
+            class="tool search-btn"
+            title="Apps suchen (Strg/⌘ + K)"
+            @click="searchOpen = true"
+          >
+            🔍 Suchen
+          </button>
+          <button
+            v-if="workspace.hasIconLayout"
+            type="button"
+            class="tool tidy"
+            title="Kacheln wieder ins Raster legen"
+            @click="tidy"
+          >
+            ⌗ Aufräumen
+          </button>
+        </div>
 
         <div class="icons" :style="{ minHeight: surfaceHeight }">
           <div class="tile-wrap fixed" :style="tileStyle(newAppPos)">
@@ -281,6 +317,15 @@ async function applyIcon(icon: string | null): Promise<void> {
           <WindowFrame v-for="w in desktop.stacked" v-show="!w.minimized" :key="w.instanceId" :win="w" />
         </template>
       </div>
+
+      <!-- Startmenü: liegt über allem auf der Bühne, auch über den Fenstern. -->
+      <LauncherOverlay
+        v-if="searchOpen"
+        :apps="workspace.apps"
+        @close="searchOpen = false"
+        @open="openFromSearch"
+        @new="newFromSearch"
+      />
 
       <!-- Dock für minimierte bzw. (Einzel-Modus) laufende Fenster. -->
       <div v-if="dockWindows.length" class="dock">
@@ -351,12 +396,16 @@ async function applyIcon(icon: string | null): Promise<void> {
   inset: 0;
   pointer-events: none;
 }
-/* Aufräumen — erscheint erst, wenn etwas aufzuräumen ist. */
-.tidy {
+/* Werkzeuge des Desktops — Suchen, und Aufräumen, sobald es etwas aufzuräumen gibt. */
+.desk-tools {
   position: absolute;
   top: 12px;
   right: 16px;
   z-index: 3;
+  display: flex;
+  gap: 8px;
+}
+.tool {
   background: rgba(20, 22, 28, 0.8);
   border: 1px solid var(--border);
   color: var(--muted);
@@ -365,7 +414,7 @@ async function applyIcon(icon: string | null): Promise<void> {
   font-size: 12px;
   cursor: pointer;
 }
-.tidy:hover {
+.tool:hover {
   border-color: var(--accent);
   color: var(--text);
 }
