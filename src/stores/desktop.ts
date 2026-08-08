@@ -1,13 +1,23 @@
 import { defineStore } from 'pinia';
 import { useWorkspaceStore } from './workspace';
 import { restorableSession, serializeSession } from '@/core/session';
+import { systemWindow } from '@/core/system';
+
+/**
+ * Was ein Fenster zeigt: eine (erzeugte) App oder eine Ansicht der Schale
+ * selbst — etwa den Datei-Explorer (siehe core/system).
+ */
+export type WindowKind = 'app' | 'system';
 
 /** Ein Fenster auf dem Desktop. Trägt nur Geometrie/Stapel — die App-Daten
  *  liegen im zugehörigen Instanz-Store (useAppWindow(instanceId)). */
 export interface DesktopWindow {
   instanceId: string;
-  /** Id der geöffneten App, oder null für einen noch nicht gespeicherten Entwurf. */
+  kind: WindowKind;
+  /** Id der geöffneten App, oder null für einen Entwurf bzw. ein System-Fenster. */
   appId: string | null;
+  /** Welche Ansicht der Schale — nur bei `kind: 'system'`, sonst null. */
+  systemId: string | null;
   title: string;
   icon: string;
   x: number;
@@ -72,6 +82,16 @@ export const useDesktopStore = defineStore('desktop', {
       if (this.showingDesktop && useWorkspaceStore().uiMode === 'single') return null;
       return this.focusedId;
     },
+    /**
+     * Das aktive Fenster, sofern es eine App zeigt. Ein System-Fenster (der
+     * Explorer) nimmt keine Wünsche entgegen — die Promptleiste legt dann eine
+     * neue App an, statt an der Schale herumzuentwickeln.
+     */
+    activeAppId(): string | null {
+      const id = this.activeId;
+      const w = this.windows.find((win) => win.instanceId === id);
+      return w && w.kind === 'app' ? id : null;
+    },
     /** Fenster von hinten nach vorn (aufsteigendes z) — stabile Renderreihenfolge. */
     stacked: (s): DesktopWindow[] => [...s.windows].sort((a, b) => a.z - b.z),
   },
@@ -98,21 +118,48 @@ export const useDesktopStore = defineStore('desktop', {
       return this.spawn(null, 'Neue App', '🧩');
     },
 
+    /**
+     * Öffnet eine Ansicht der Schale (Datei-Explorer) als Fenster: dieselben
+     * Rechte wie ein App-Fenster, aber ohne App dahinter. Es gibt sie jeweils
+     * nur einmal — ein zweites Öffnen holt das bestehende Fenster nach vorn.
+     * Liefert null, wenn es die Ansicht nicht gibt.
+     */
+    openSystem(systemId: string): string | null {
+      const info = systemWindow(systemId);
+      if (!info) return null;
+      const existing = this.windows.find((w) => w.systemId === systemId);
+      if (existing) {
+        this.focusWindow(existing.instanceId);
+        return existing.instanceId;
+      }
+      return this.spawnWindow({
+        kind: 'system',
+        appId: null,
+        systemId: info.id,
+        title: info.title,
+        icon: info.icon,
+      });
+    },
+
     /** Einzel-Modus: die laufende App verlassen und den Launcher zeigen. */
     showDesktop(): void {
       this.showingDesktop = true;
     },
 
+    /** Legt ein App-Fenster an (Entwurf, wenn appId null ist). */
     spawn(appId: string | null, title: string, icon: string): string {
+      return this.spawnWindow({ kind: 'app', appId, systemId: null, title, icon });
+    },
+
+    /** Ein neues Fenster: um eine Stufe versetzt, ganz vorn im Stapel. */
+    spawnWindow(meta: Pick<DesktopWindow, 'kind' | 'appId' | 'systemId' | 'title' | 'icon'>): string {
       this.showingDesktop = false;
       this.seq += 1;
       const instanceId = `win-${this.seq}`;
       const step = (this.windows.length % 8) * CASCADE;
       this.windows.push({
         instanceId,
-        appId,
-        title,
-        icon,
+        ...meta,
         x: 40 + step,
         y: 40 + step,
         w: DEFAULT_W,

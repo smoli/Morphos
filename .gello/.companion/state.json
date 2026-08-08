@@ -2,11 +2,6 @@
   "status": "running",
   "ready": [
     "c0038",
-    "c0041",
-    "c0042",
-    "c0045",
-    "c0046",
-    "c0047",
     "c0048",
     "c0049",
     "c0050"
@@ -14,16 +9,16 @@
   "waiting": [],
   "runs": [
     {
-      "cardId": "c0044",
+      "cardId": "c0047",
       "phase": "running",
       "activity": {
-        "name": "Read",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/electron/main.ts"
+        "name": "Bash",
+        "arg": "git add src .gello/epics/e09-os-likeness/c0047-file-explorer-system-window.md .gello/.companion && git status --porcelain"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-08T23:31:59",
+  "updated": "2026-08-09T00:32:40",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -41,6 +36,11 @@
     "c0039",
     "c0040",
     "c0043",
-    "c0044"
+    "c0044",
+    "c0045",
+    "c0046",
+    "c0041",
+    "c0042",
+    "c0047"
   ]
 }

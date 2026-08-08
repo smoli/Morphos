@@ -34,6 +34,21 @@ async function press(wrapper: VueWrapper, key: string): Promise<void> {
 }
 
 describe('LauncherOverlay', () => {
+  it('meldet eine getippte Ansicht der Schale eigens (kein App-Öffnen)', async () => {
+    const wrapper = mount(LauncherOverlay, {
+      props: { apps, systems: [{ id: 'explorer', name: 'Dateien', icon: '📁' }] },
+      attachTo: document.body,
+    });
+
+    await type(wrapper, 'dateien');
+    await press(wrapper, 'Enter');
+
+    expect(wrapper.emitted('system')).toEqual([['explorer']]);
+    expect(wrapper.emitted('open')).toBeUndefined();
+    wrapper.unmount();
+  });
+
+
   it('setzt den Schreibstrich beim Öffnen in das Suchfeld', () => {
     const wrapper = mountOverlay();
     expect(document.activeElement).toBe(wrapper.get('.lp-input').element);

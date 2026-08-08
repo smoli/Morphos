@@ -5,7 +5,8 @@ import { useDesktopStore } from '@/stores/desktop';
 import { useAgentsStore } from '@/stores/agents';
 import { useAppWindow } from '@/stores/app';
 import { useSetAppIcon } from '@/composables/useSetAppIcon';
-import WindowFrame from '@/components/WindowFrame.vue';
+import AppWindow from '@/components/AppWindow.vue';
+import SystemWindow from '@/components/SystemWindow.vue';
 import ChatDock from '@/components/ChatDock.vue';
 import BusyDot from '@/components/BusyDot.vue';
 import AppIcon from '@/components/AppIcon.vue';
@@ -22,6 +23,7 @@ import {
   type ShortcutId,
 } from '@/core/shortcuts';
 import { canSwitch, cycleSelection, switcherOrder } from '@/core/switcher';
+import { EXPLORER_ID, SYSTEM_WINDOWS, systemWindow } from '@/core/system';
 import { wallpaperCss } from '@/core/wallpaper';
 import type { DesktopWindow } from '@/stores/desktop';
 import {
@@ -53,6 +55,17 @@ const activeWindow = computed(() =>
   desktop.windows.find((w) => w.instanceId === desktop.activeId) ?? null,
 );
 
+// Das aktive Fenster, sofern es eine App zeigt: Ziel der globalen Promptleiste.
+// Vor einem System-Fenster (Explorer) entsteht ein Wunsch als neue App.
+const activeAppWindow = computed(() =>
+  desktop.windows.find((w) => w.instanceId === desktop.activeAppId) ?? null,
+);
+
+/** Womit ein Fenster gezeichnet wird — eine erzeugte App oder eine Ansicht der Schale. */
+function surfaceFor(w: DesktopWindow) {
+  return w.kind === 'system' ? SystemWindow : AppWindow;
+}
+
 // Dock: im Fenster-Modus die minimierten Fenster; im Einzel-Modus auf dem
 // Desktop alle laufenden Apps (auch Entwürfe ohne Kachel) zum Zurückwechseln.
 // Läuft dort eine App im Vollbild, verdeckt kein Dock ihre Fläche.
@@ -61,8 +74,8 @@ const dockWindows = computed(() => {
   return activeWindow.value ? [] : desktop.windows;
 });
 
-// Die globale Promptleiste ist an das aktive Fenster gebunden.
-const activeStore = computed(() => (desktop.activeId ? useAppWindow(desktop.activeId) : null));
+// Die globale Promptleiste ist an das aktive App-Fenster gebunden.
+const activeStore = computed(() => (desktop.activeAppId ? useAppWindow(desktop.activeAppId) : null));
 const chatMessages = computed(() => activeStore.value?.chat ?? []);
 const chatBusy = computed(() => activeStore.value?.busy ?? false);
 const chatPending = computed(() => activeStore.value?.pendingQuestion ?? null);
@@ -70,8 +83,8 @@ const chatActivity = computed(() => activeStore.value?.activity ?? []);
 const chatStartedAt = computed(() => activeStore.value?.runStartedAt ?? null);
 // Wie viele Wünsche für das aktive Fenster noch anstehen (sie laufen nacheinander).
 const chatQueued = computed(() =>
-  desktop.activeId
-    ? agents.queuedJobs.filter((j) => j.instanceId === desktop.activeId).length
+  desktop.activeAppId
+    ? agents.queuedJobs.filter((j) => j.instanceId === desktop.activeAppId).length
     : 0,
 );
 
@@ -85,14 +98,14 @@ function windowBusy(instanceId: string, appId: string | null): boolean {
 // App ihren Namen bereits in der Kopfzeile — dort genügt der Hinweis auf dem
 // Desktop.
 const chatContext = computed<string | null>(() => {
-  const w = activeWindow.value;
+  const w = activeAppWindow.value;
   if (singleMode.value) return w ? null : 'Neue App';
   return w ? w.title : 'Neue App';
 });
 // Das Icon separat: Es kann ein Bild sein und lässt sich dann nicht in den Text setzen.
 const chatContextIcon = computed<string | null>(() => {
   if (singleMode.value) return null;
-  return activeWindow.value?.icon ?? null;
+  return activeAppWindow.value?.icon ?? null;
 });
 
 // ---- Anordnung der Kacheln (frei abgelegt, sonst Raster — siehe core/arrange) ----
@@ -215,6 +228,10 @@ function openApp(app: AppSummary): void {
 function newApp(): void {
   desktop.openDraft();
 }
+/** Eine Ansicht der Schale öffnen (Dateien) — sie gibt es jeweils nur einmal. */
+function openSystem(systemId: string): void {
+  desktop.openSystem(systemId);
+}
 async function removeApp(id: string, name: string): Promise<void> {
   if (!confirm(`App „${name}“ wirklich löschen?`)) return;
   const open = desktop.windows.find((w) => w.appId === id);
@@ -308,11 +325,21 @@ function pickFromSwitcher(instanceId: string | undefined): void {
 
 const searchOpen = ref(false);
 
+// Die Ansichten der Schale stehen im Startmenü neben den Apps.
+const systemItems = computed(() =>
+  SYSTEM_WINDOWS.map((s) => ({ id: s.id, name: s.title, icon: s.icon })),
+);
+
 /** Aus der Suche heraus öffnen: laufende Apps kommen nur nach vorn (openApp). */
 function openFromSearch(appId: string): void {
   searchOpen.value = false;
   const app = workspace.apps.find((a) => a.id === appId);
   if (app) desktop.openApp(app.id, { title: app.name, icon: app.icon });
+}
+
+function systemFromSearch(systemId: string): void {
+  searchOpen.value = false;
+  openSystem(systemId);
 }
 
 function newFromSearch(): void {
@@ -354,6 +381,14 @@ async function applyIcon(icon: string | null): Promise<void> {
             @click="searchOpen = true"
           >
             🔍 Suchen
+          </button>
+          <button
+            type="button"
+            class="tool files-btn"
+            :title="`${systemWindow(EXPLORER_ID)!.title} — der Datenordner dieses Verzeichnisses`"
+            @click="openSystem(EXPLORER_ID)"
+          >
+            {{ systemWindow(EXPLORER_ID)!.icon }} {{ systemWindow(EXPLORER_ID)!.title }}
           </button>
           <button
             v-if="workspace.hasIconLayout"
@@ -412,10 +447,22 @@ async function applyIcon(icon: string | null): Promise<void> {
       <!-- Fenster-Ebene. -->
       <div class="windows-layer">
         <template v-if="singleMode">
-          <WindowFrame v-if="activeWindow" :key="activeWindow.instanceId" :win="activeWindow" :single="true" />
+          <component
+            :is="surfaceFor(activeWindow)"
+            v-if="activeWindow"
+            :key="activeWindow.instanceId"
+            :win="activeWindow"
+            :single="true"
+          />
         </template>
         <template v-else>
-          <WindowFrame v-for="w in desktop.stacked" v-show="!w.minimized" :key="w.instanceId" :win="w" />
+          <component
+            :is="surfaceFor(w)"
+            v-for="w in desktop.stacked"
+            v-show="!w.minimized"
+            :key="w.instanceId"
+            :win="w"
+          />
         </template>
       </div>
 
@@ -423,8 +470,10 @@ async function applyIcon(icon: string | null): Promise<void> {
       <LauncherOverlay
         v-if="searchOpen"
         :apps="workspace.apps"
+        :systems="systemItems"
         @close="searchOpen = false"
         @open="openFromSearch"
+        @system="systemFromSearch"
         @new="newFromSearch"
       />
 

@@ -35,6 +35,19 @@ describe('launcher', () => {
     it('bietet „Neue App“ auch in einem leeren Verzeichnis an', () => {
       expect(names(launcherItems([]))).toEqual([NEW_APP_NAME]);
     });
+
+    it('führt die Ansichten der Schale hinter den Apps, vor „Neue App“', () => {
+      const items = launcherItems(apps, [{ id: 'explorer', name: 'Dateien', icon: '📁' }]);
+      expect(names(items)).toEqual([
+        'Rechner', 'Text Editor', 'Notizzettel', 'Übungsplan', 'Dateien', NEW_APP_NAME,
+      ]);
+      expect(items[4]).toEqual({ id: 'explorer', name: 'Dateien', icon: '📁', kind: 'system' });
+    });
+
+    it('findet eine Ansicht der Schale wie eine App', () => {
+      const items = launcherItems(apps, [{ id: 'explorer', name: 'Dateien', icon: '📁' }]);
+      expect(names(filterItems(items, 'datei'))).toEqual(['Dateien']);
+    });
   });
 
   describe('normalizeName', () => {

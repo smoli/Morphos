@@ -126,13 +126,14 @@ export const useAgentsStore = defineStore('agents', {
 
     /**
      * Nimmt eine Eingabe der globalen Promptleiste entgegen und richtet sie an
-     * das aktive Fenster. Ist keines offen, entsteht ein neuer Entwurf.
+     * das aktive App-Fenster. Ist keines offen — oder liegt eine Ansicht der
+     * Schale vorn, die keine Wünsche entgegennimmt —, entsteht ein neuer Entwurf.
      */
     submitToActive(text: string, attachments: Attachment[] = []): string | null {
       const ws = useWorkspaceStore();
       if (!ws.folder) return null;
       const desktop = useDesktopStore();
-      let id = desktop.activeId;
+      let id = desktop.activeAppId;
       if (!id) {
         id = desktop.openDraft();
         useAppWindow(id).newDraft(ws.folder);

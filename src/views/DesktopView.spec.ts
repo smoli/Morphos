@@ -4,6 +4,9 @@ import { createPinia, setActivePinia, type Pinia } from 'pinia';
 import { createRouter, createMemoryHistory, type Router } from 'vue-router';
 import DesktopView from './DesktopView.vue';
 import WindowFrame from '@/components/WindowFrame.vue';
+import AppWindow from '@/components/AppWindow.vue';
+import SystemWindow from '@/components/SystemWindow.vue';
+import ExplorerPanel from '@/components/ExplorerPanel.vue';
 import IconDialog from '@/components/IconDialog.vue';
 import LauncherOverlay from '@/components/LauncherOverlay.vue';
 import SwitcherOverlay from '@/components/SwitcherOverlay.vue';
@@ -14,6 +17,7 @@ import { useAgentsStore } from '@/stores/agents';
 import { useAppWindow } from '@/stores/app';
 import { setHost } from '@/services/host';
 import { columns, slotPos } from '@/core/arrange';
+import { EXPLORER_ID } from '@/core/system';
 import { DEFAULT_WALLPAPER, wallpaperCss } from '@/core/wallpaper';
 import type { AppData, AppSummary, MorphosHost } from '@/types';
 
@@ -873,6 +877,130 @@ describe('DesktopView', () => {
 
       expect(wrapper.findComponent(SwitcherOverlay).exists()).toBe(false);
       expect(desktop.focusedId).toBe(ids[0]); // der Rechner, ganz hinten
+    });
+  });
+
+  describe('Datei-Explorer (System-Fenster)', () => {
+    /** Öffnet den Explorer über den Knopf auf dem Desktop. */
+    async function openExplorer(wrapper: VueWrapper) {
+      await wrapper.get('.files-btn').trigger('click');
+      await flushPromises();
+    }
+
+    it('öffnet den Explorer als Fenster im Fenstermanager', async () => {
+      const { wrapper } = await mountView();
+      expect(wrapper.findComponent(SystemWindow).exists()).toBe(false);
+
+      await openExplorer(wrapper);
+
+      const desktop = useDesktopStore();
+      expect(desktop.windows).toHaveLength(1);
+      expect(desktop.windows[0]).toMatchObject({ kind: 'system', systemId: EXPLORER_ID, appId: null });
+      // Ein Fenster mit Rahmen, aber ohne erzeugte App darin.
+      const frame = wrapper.getComponent(SystemWindow);
+      expect(frame.findComponent(WindowFrame).exists()).toBe(true);
+      expect(frame.findComponent(ExplorerPanel).exists()).toBe(true);
+      expect(wrapper.findAllComponents(AppWindow)).toHaveLength(0);
+    });
+
+    it('holt beim erneuten Öffnen das bestehende Fenster nach vorn (nur eines)', async () => {
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      await openExplorer(wrapper);
+      const instanceId = desktop.windows[0].instanceId;
+
+      desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await flushPromises();
+      expect(desktop.focusedId).not.toBe(instanceId);
+
+      await openExplorer(wrapper);
+
+      expect(wrapper.findAllComponents(SystemWindow)).toHaveLength(1);
+      expect(desktop.windows).toHaveLength(2);
+      expect(desktop.focusedId).toBe(instanceId);
+    });
+
+    it('öffnet ihn auch aus der Suchleiste heraus', async () => {
+      const { wrapper } = await mountView();
+      await wrapper.get('.search-btn').trigger('click');
+      await flushPromises();
+      expect(wrapper.get('.lp-list').text()).toContain('Dateien');
+
+      await wrapper.get('.lp-input').setValue('dateien');
+      await wrapper.get('.lp-input').trigger('keydown', { key: 'Enter' });
+      await flushPromises();
+
+      expect(wrapper.findComponent(LauncherOverlay).exists()).toBe(false);
+      expect(useDesktopStore().windows[0].systemId).toBe(EXPLORER_ID);
+    });
+
+    it('legt sich minimiert ins Dock und kommt von dort zurück', async () => {
+      const { wrapper } = await mountView();
+      await openExplorer(wrapper);
+
+      await wrapper.get('.w-min').trigger('click');
+      await flushPromises();
+      expect(wrapper.get('.dock').text()).toContain('Dateien');
+
+      await wrapper.get('.dock-item').trigger('click');
+      await flushPromises();
+      expect(useDesktopStore().windows[0].minimized).toBe(false);
+    });
+
+    it('steht wie eine App im Fensterwechsler', async () => {
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      const app = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await openExplorer(wrapper);
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true }));
+      await flushPromises();
+
+      const overlay = wrapper.getComponent(SwitcherOverlay);
+      expect(overlay.props('windows').map((w: { title: string }) => w.title)).toEqual([
+        'Dateien',
+        'Rechner',
+      ]);
+
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Control' }));
+      await flushPromises();
+      expect(desktop.focusedId).toBe(app);
+    });
+
+    it('füllt im Einzel-Modus die Fläche und lässt sich verlassen', async () => {
+      useWorkspaceStore().uiMode = 'single';
+      const { wrapper } = await mountView();
+      await openExplorer(wrapper);
+
+      const frame = wrapper.getComponent(SystemWindow);
+      expect(frame.props('single')).toBe(true);
+      expect(frame.get('.window-frame').classes()).toContain('full');
+
+      await wrapper.get('.w-desktop').trigger('click');
+      await flushPromises();
+
+      // Zurück auf dem Desktop — das Fenster wartet im Dock.
+      expect(wrapper.findComponent(SystemWindow).exists()).toBe(false);
+      expect(wrapper.get('.dock').text()).toContain('Dateien');
+    });
+
+    it('nimmt keine Wünsche entgegen — die Promptleiste legt eine neue App an', async () => {
+      const { wrapper } = await mountView();
+      await openExplorer(wrapper);
+      const spy = vi.spyOn(useAgentsStore(), 'submitToActive').mockReturnValue('job-1');
+
+      expect(useDesktopStore().activeAppId).toBeNull();
+      expect(wrapper.get('.chat-context').text()).toContain('Neue App');
+
+      await wrapper.get('textarea').setValue('Ein Spiel');
+      await wrapper.get('textarea').trigger('keydown', { key: 'Enter' });
+      expect(spy).toHaveBeenCalledWith('Ein Spiel', []);
+    });
+
+    it('wird nicht in der Sitzung gemerkt (nur Apps kommen zurück)', async () => {
+      const { wrapper } = await mountView();
+      await openExplorer(wrapper);
+      expect(useWorkspaceStore().session).toEqual([]);
     });
   });
 

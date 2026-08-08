@@ -10,12 +10,15 @@
  * hinten — gesucht wird in aller Regel eine vorhandene App.
  */
 
-/** Wofür ein Eintrag steht: eine App des Verzeichnisses oder ein neuer Entwurf. */
-export type LauncherKind = 'app' | 'new';
+/**
+ * Wofür ein Eintrag steht: eine App des Verzeichnisses, eine Ansicht der Schale
+ * (etwa „Dateien“) oder ein neuer Entwurf.
+ */
+export type LauncherKind = 'app' | 'system' | 'new';
 
 /** Ein Eintrag der Trefferliste. */
 export interface LauncherItem {
-  /** App-Id — für „Neue App“ die Kennung NEW_APP_ID. */
+  /** App-Id bzw. Kennung der Schalen-Ansicht — für „Neue App“ NEW_APP_ID. */
   id: string;
   name: string;
   icon: string;
@@ -33,10 +36,17 @@ export const NEW_APP_ID = '__neue-app__';
 export const NEW_APP_NAME = 'Neue App';
 export const NEW_APP_ICON = '＋';
 
-/** Die Apps des Verzeichnisses als Einträge, mit „Neue App“ am Ende. */
-export function launcherItems(apps: readonly LauncherApp[]): LauncherItem[] {
+/**
+ * Die Apps des Verzeichnisses als Einträge, dahinter die Ansichten der Schale
+ * (Dateien) und ganz am Ende „Neue App“.
+ */
+export function launcherItems(
+  apps: readonly LauncherApp[],
+  systems: readonly LauncherApp[] = [],
+): LauncherItem[] {
   return [
     ...apps.map((a) => ({ id: a.id, name: a.name, icon: a.icon, kind: 'app' as const })),
+    ...systems.map((s) => ({ id: s.id, name: s.name, icon: s.icon, kind: 'system' as const })),
     { id: NEW_APP_ID, name: NEW_APP_NAME, icon: NEW_APP_ICON, kind: 'new' as const },
   ];
 }

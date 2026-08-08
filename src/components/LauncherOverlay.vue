@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import AppIcon from './AppIcon.vue';
-import { filterItems, launcherItems, nextIndex, type LauncherItem } from '@/core/launcher';
+import { filterItems, launcherItems, nextIndex, type LauncherApp, type LauncherItem } from '@/core/launcher';
 import type { AppSummary } from '@/types';
 
 /**
@@ -11,18 +11,27 @@ import type { AppSummary } from '@/types';
  *
  * Bedient wird alles über die Tastatur: tippen filtert, ↑/↓ wandern durch die
  * Treffer, die Eingabetaste öffnet den hervorgehobenen (eine laufende App holt
- * der Desktop dann nur in den Vordergrund), Escape schließt. „Neue App“ ist ein
- * Eintrag wie jeder andere (siehe core/launcher).
+ * der Desktop dann nur in den Vordergrund), Escape schließt. „Neue App“ und die
+ * Ansichten der Schale („Dateien“) sind Einträge wie jeder andere (siehe
+ * core/launcher).
  */
-const props = defineProps<{ apps: readonly AppSummary[] }>();
-const emit = defineEmits<{ close: []; open: [appId: string]; new: [] }>();
+const props = withDefaults(
+  defineProps<{ apps: readonly AppSummary[]; systems?: readonly LauncherApp[] }>(),
+  { systems: () => [] },
+);
+const emit = defineEmits<{
+  close: [];
+  open: [appId: string];
+  system: [systemId: string];
+  new: [];
+}>();
 
 const query = ref('');
 const index = ref(0);
 const input = ref<HTMLInputElement | null>(null);
 const list = ref<HTMLElement | null>(null);
 
-const items = computed(() => launcherItems(props.apps));
+const items = computed(() => launcherItems(props.apps, props.systems));
 const hits = computed(() => filterItems(items.value, query.value));
 
 // Ein neuer Suchtext (oder eine gelöschte App) fängt beim besten Treffer an.
@@ -46,6 +55,7 @@ async function scrollActiveIntoView(): Promise<void> {
 function choose(item: LauncherItem | undefined): void {
   if (!item) return;
   if (item.kind === 'new') emit('new');
+  else if (item.kind === 'system') emit('system', item.id);
   else emit('open', item.id);
 }
 

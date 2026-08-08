@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useDesktopStore } from './desktop';
 import { useWorkspaceStore } from './workspace';
+import { EXPLORER_ID, systemWindow } from '@/core/system';
 import type { AppSummary, SessionWindow } from '@/types';
 
 describe('useDesktopStore', () => {
@@ -136,6 +137,87 @@ describe('useDesktopStore', () => {
     expect(d.find(a)!.maximized).toBe(true);
     d.toggleMaximize(a);
     expect(d.find(a)!.maximized).toBe(false);
+  });
+
+  describe('System-Fenster (Ansichten der Schale)', () => {
+    it('öffnet den Datei-Explorer als Fenster ohne App', () => {
+      const d = useDesktopStore();
+      const id = d.openSystem(EXPLORER_ID);
+
+      expect(id).not.toBeNull();
+      const w = d.find(id!)!;
+      expect(w.kind).toBe('system');
+      expect(w.systemId).toBe(EXPLORER_ID);
+      expect(w.appId).toBeNull();
+      expect(w.title).toBe(systemWindow(EXPLORER_ID)!.title);
+      expect(w.icon).toBe(systemWindow(EXPLORER_ID)!.icon);
+    });
+
+    it('legt ein App-Fenster als solches an', () => {
+      const d = useDesktopStore();
+      const app = d.find(d.openApp('a', { title: 'A', icon: '🅰' }))!;
+      const draft = d.find(d.openDraft())!;
+      expect([app.kind, draft.kind]).toEqual(['app', 'app']);
+      expect([app.systemId, draft.systemId]).toEqual([null, null]);
+    });
+
+    it('holt beim zweiten Öffnen das bestehende Fenster nach vorn (nur eines)', () => {
+      const d = useDesktopStore();
+      const first = d.openSystem(EXPLORER_ID);
+      d.openApp('a', { title: 'A', icon: '🅰' });
+
+      const again = d.openSystem(EXPLORER_ID);
+
+      expect(again).toBe(first);
+      expect(d.windows).toHaveLength(2);
+      expect(d.focusedId).toBe(first);
+    });
+
+    it('öffnet keine unbekannte Ansicht', () => {
+      const d = useDesktopStore();
+      expect(d.openSystem('gibt-es-nicht')).toBeNull();
+      expect(d.windows).toEqual([]);
+    });
+
+    it('verhält sich wie jedes andere Fenster (Stapel, Minimieren, Maximieren, Schließen)', () => {
+      const d = useDesktopStore();
+      const sys = d.openSystem(EXPLORER_ID)!;
+      const app = d.openApp('a', { title: 'A', icon: '🅰' });
+      expect(d.focusedId).toBe(app);
+
+      d.focusWindow(sys);
+      expect(d.focusedId).toBe(sys);
+      expect(d.stacked.map((w) => w.instanceId)).toEqual([app, sys]);
+
+      d.minimizeWindow(sys);
+      expect(d.find(sys)!.minimized).toBe(true);
+      d.restoreWindow(sys);
+      expect(d.find(sys)!.minimized).toBe(false);
+
+      d.toggleMaximize(sys);
+      expect(d.find(sys)!.maximized).toBe(true);
+
+      d.closeWindow(sys);
+      expect(d.windows.map((w) => w.instanceId)).toEqual([app]);
+    });
+
+    it('nimmt keine Wünsche entgegen — die Promptleiste zielt auf App-Fenster', () => {
+      const d = useDesktopStore();
+      const app = d.openApp('a', { title: 'A', icon: '🅰' });
+      expect(d.activeAppId).toBe(app);
+
+      const sys = d.openSystem(EXPLORER_ID)!;
+      expect(d.activeId).toBe(sys);
+      expect(d.activeAppId).toBeNull();
+    });
+
+    it('wird nicht in der Sitzung gemerkt (es gibt nichts zu laden)', () => {
+      const ws = useWorkspaceStore();
+      ws.folder = '/apps';
+      const d = useDesktopStore();
+      d.openSystem(EXPLORER_ID);
+      expect(ws.session).toEqual([]);
+    });
   });
 
   describe('Einzel-Modus: zurück zum Desktop', () => {

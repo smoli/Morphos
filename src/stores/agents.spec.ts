@@ -6,6 +6,7 @@ import { useWorkspaceStore } from './workspace';
 import { useAppWindow } from './app';
 import { useNotificationsStore } from './notifications';
 import { MAX_RECENT_RUNS } from '@/core/queue';
+import { EXPLORER_ID } from '@/core/system';
 import { setHost } from '@/services/host';
 import type { AppData, GenerateResult, MorphosHost, SourceFile } from '@/types';
 
@@ -454,6 +455,22 @@ describe('useAgentsStore', () => {
       expect(desktop.windows).toHaveLength(2);
       expect(desktop.showingDesktop).toBe(false);
       expect(desktop.activeId).not.toBe(a);
+    });
+
+    it('legt vor einem System-Fenster (Explorer) einen neuen Entwurf an', async () => {
+      setHost(makeHost());
+      const agents = useAgentsStore();
+      const desktop = useDesktopStore();
+      const explorer = desktop.openSystem(EXPLORER_ID)!;
+
+      agents.submitToActive('Ein Rechner');
+      await flush();
+
+      // Der Explorer bleibt, was er ist — der Wunsch wird eine eigene App.
+      expect(desktop.find(explorer)!.kind).toBe('system');
+      expect(desktop.windows).toHaveLength(2);
+      expect(agents.jobs[0]?.instanceId ?? desktop.activeId).not.toBe(explorer);
+      expect(desktop.windows.filter((w) => w.appId !== null)).toHaveLength(1);
     });
 
     it('nimmt keinen leeren Wunsch an', async () => {
