@@ -6,8 +6,8 @@ created: 2026-08-08
 updated: 2026-08-08
 status-changed: 2026-08-08T07:03:08
 epic: e0001
-usage-tokens: 5724
-usage-cost: 0.963674
+usage-tokens: 51594
+usage-cost: 5.886407
 ---
 
 Die drei „offenen Fragen für die Planung“ aus der Discussion — bitte je eine Option ankreuzen (meine Empfehlung ist jeweils markiert). Danach baue ich durch.
