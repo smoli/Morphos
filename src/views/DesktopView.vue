@@ -11,6 +11,18 @@ import BusyDot from '@/components/BusyDot.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import IconDialog from '@/components/IconDialog.vue';
 import LauncherOverlay from '@/components/LauncherOverlay.vue';
+import SwitcherOverlay from '@/components/SwitcherOverlay.vue';
+import { useShellStore } from '@/stores/shell';
+import {
+  isSwitcherChord,
+  isSwitcherRelease,
+  isTypingTarget,
+  matchShortcut,
+  shortcutKeys,
+  type ShortcutId,
+} from '@/core/shortcuts';
+import { canSwitch, cycleSelection, switcherOrder } from '@/core/switcher';
+import type { DesktopWindow } from '@/stores/desktop';
 import {
   arrangeIcons,
   CELL_H,
@@ -29,6 +41,7 @@ import type { AppSummary, Attachment, IconPos } from '@/types';
 const workspace = useWorkspaceStore();
 const desktop = useDesktopStore();
 const agents = useAgentsStore();
+const shell = useShellStore();
 const setAppIcon = useSetAppIcon();
 
 const singleMode = computed(() => workspace.uiMode === 'single');
@@ -168,7 +181,9 @@ let observer: ResizeObserver | null = null;
 onMounted(async () => {
   measure();
   window.addEventListener('resize', measure);
-  window.addEventListener('keydown', onShortcut);
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+  window.addEventListener('blur', closeSwitcher);
   if (typeof ResizeObserver === 'function' && launcher.value) {
     observer = new ResizeObserver(measure);
     observer.observe(launcher.value);
@@ -182,7 +197,9 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   observer?.disconnect();
   window.removeEventListener('resize', measure);
-  window.removeEventListener('keydown', onShortcut);
+  window.removeEventListener('keydown', onKeyDown);
+  window.removeEventListener('keyup', onKeyUp);
+  window.removeEventListener('blur', closeSwitcher);
   window.removeEventListener('mousemove', onTileDrag);
   window.removeEventListener('mouseup', endTileDrag);
 });
@@ -204,16 +221,91 @@ async function removeApp(id: string, name: string): Promise<void> {
   await workspace.removeApp(id);
 }
 
+// ---- Tastatur: Kürzel und Fensterwechsler (siehe core/shortcuts, core/switcher) ----
+
+// Die Auswahl des Wechslers, eingefroren beim Öffnen; null heißt: zu.
+const switcherList = ref<DesktopWindow[]>([]);
+const switcherIndex = ref<number | null>(null);
+
+function onKeyDown(e: KeyboardEvent): void {
+  // Escape bricht den Wechsler ab — auch aus einem Eingabefeld heraus.
+  if (switcherIndex.value !== null && e.key === 'Escape') {
+    e.preventDefault();
+    closeSwitcher();
+    return;
+  }
+  // Wo getippt wird (Promptleiste, Suchfeld, laufende App), gilt kein Kürzel.
+  if (isTypingTarget(e.target) || isTypingTarget(document.activeElement)) return;
+
+  if (isSwitcherChord(e)) {
+    e.preventDefault();
+    stepSwitcher(e.shiftKey ? -1 : 1);
+    return;
+  }
+  const id = matchShortcut(e);
+  if (!id) return;
+  e.preventDefault();
+  runShortcut(id);
+}
+
+function onKeyUp(e: KeyboardEvent): void {
+  if (switcherIndex.value === null || !isSwitcherRelease(e)) return;
+  pickFromSwitcher(switcherList.value[switcherIndex.value]?.instanceId);
+}
+
+function runShortcut(id: ShortcutId): void {
+  const active = desktop.activeId;
+  switch (id) {
+    case 'launcher':
+      searchOpen.value = true;
+      break;
+    case 'new-app':
+      newApp();
+      break;
+    case 'settings':
+      shell.openSettings();
+      break;
+    case 'close-window':
+      if (active) desktop.closeWindow(active);
+      break;
+    case 'minimize-window':
+      if (active) desktop.minimizeWindow(active);
+      break;
+    case 'maximize-window':
+      if (active) desktop.toggleMaximize(active);
+      break;
+  }
+}
+
+/**
+ * Ein Tab bei gehaltener Strg/⌘-Taste: Beim ersten Mal öffnet sich die Auswahl
+ * beim aktuellen Fenster (0) und rückt sofort eine Stelle weiter — genau wie am
+ * Schreibtisch landet man damit beim zuletzt benutzten anderen Fenster.
+ */
+function stepSwitcher(delta: number): void {
+  if (switcherIndex.value === null) {
+    const list = switcherOrder(desktop.windows);
+    if (!canSwitch(list.length)) return;
+    switcherList.value = list;
+    switcherIndex.value = 0;
+  }
+  switcherIndex.value = cycleSelection(switcherIndex.value, delta, switcherList.value.length);
+}
+
+function closeSwitcher(): void {
+  switcherIndex.value = null;
+  switcherList.value = [];
+}
+
+/** Loslassen (oder Klick): das gewählte Fenster nach vorn holen. */
+function pickFromSwitcher(instanceId: string | undefined): void {
+  closeSwitcher();
+  if (instanceId) desktop.focusWindow(instanceId);
+}
+
 // ---- Startmenü: eine App tippend finden (siehe components/LauncherOverlay) ----
 
 const searchOpen = ref(false);
-
-/** Strg/⌘ + K öffnet die Suche — von überall auf dem Desktop aus. */
-function onShortcut(e: KeyboardEvent): void {
-  if (e.altKey || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'k') return;
-  e.preventDefault();
-  searchOpen.value = true;
-}
 
 /** Aus der Suche heraus öffnen: laufende Apps kommen nur nach vorn (openApp). */
 function openFromSearch(appId: string): void {
@@ -254,7 +346,7 @@ async function applyIcon(icon: string | null): Promise<void> {
           <button
             type="button"
             class="tool search-btn"
-            title="Apps suchen (Strg/⌘ + K)"
+            :title="`Apps suchen (${shortcutKeys('launcher')})`"
             @click="searchOpen = true"
           >
             🔍 Suchen
@@ -272,7 +364,12 @@ async function applyIcon(icon: string | null): Promise<void> {
 
         <div class="icons" :style="{ minHeight: surfaceHeight }">
           <div class="tile-wrap fixed" :style="tileStyle(newAppPos)">
-            <button type="button" class="tile new" @click="newApp">
+            <button
+              type="button"
+              class="tile new"
+              :title="`Neue App (${shortcutKeys('new-app')})`"
+              @click="newApp"
+            >
               <span class="icon">＋</span>
               <span class="name">Neue App</span>
             </button>
@@ -325,6 +422,14 @@ async function applyIcon(icon: string | null): Promise<void> {
         @close="searchOpen = false"
         @open="openFromSearch"
         @new="newFromSearch"
+      />
+
+      <!-- Fensterwechsler, solange Strg/⌘ + Tab gehalten wird. -->
+      <SwitcherOverlay
+        v-if="switcherIndex !== null"
+        :windows="switcherList"
+        :index="switcherIndex"
+        @pick="pickFromSwitcher"
       />
 
       <!-- Dock für minimierte bzw. (Einzel-Modus) laufende Fenster. -->

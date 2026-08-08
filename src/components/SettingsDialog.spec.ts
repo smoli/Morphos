@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { defineComponent, h, markRaw } from 'vue';
 import SettingsDialog from './SettingsDialog.vue';
 import { SETTINGS_SECTIONS } from './settings/sections';
+import { SHORTCUTS, SWITCHER_KEYS } from '@/core/shortcuts';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { setHost } from '@/services/host';
 import type { MorphosHost } from '@/types';
@@ -143,6 +144,19 @@ describe('SettingsDialog', () => {
     await flushPromises();
     expect(host.chooseFolder).toHaveBeenCalled();
     expect(useWorkspaceStore().accessRoot).toBe('/daten');
+  });
+
+  it('führt die Tastenkürzel des Desktops auf', async () => {
+    const wrapper = mount(SettingsDialog);
+    await openCategory(wrapper, 'Tastenkürzel');
+
+    const rows = wrapper.findAll('.keys li');
+    // Jedes Kürzel aus core/shortcuts plus der Fensterwechsler.
+    expect(rows).toHaveLength(SHORTCUTS.length + 1);
+    for (const s of SHORTCUTS) {
+      expect(rows.some((li) => li.text().includes(s.label) && li.get('kbd').text() === s.keys)).toBe(true);
+    }
+    expect(wrapper.get('.pane').text()).toContain(SWITCHER_KEYS);
   });
 
   it('schließt über das Kreuz und den Hintergrund', async () => {

@@ -6,8 +6,10 @@ import DesktopView from './DesktopView.vue';
 import WindowFrame from '@/components/WindowFrame.vue';
 import IconDialog from '@/components/IconDialog.vue';
 import LauncherOverlay from '@/components/LauncherOverlay.vue';
+import SwitcherOverlay from '@/components/SwitcherOverlay.vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useDesktopStore } from '@/stores/desktop';
+import { useShellStore } from '@/stores/shell';
 import { useAgentsStore } from '@/stores/agents';
 import { useAppWindow } from '@/stores/app';
 import { setHost } from '@/services/host';
@@ -70,11 +72,18 @@ describe('DesktopView', () => {
     useWorkspaceStore().folder = '/apps';
   });
 
-  async function mountView() {
+  /**
+   * `attach` hängt die Ansicht ins Dokument — nötig, wo eine Taste von einem
+   * Element aus bis zum Fenster steigen soll (Tastenkürzel).
+   */
+  async function mountView({ attach = false } = {}) {
     const router = makeRouter();
     router.push('/desktop');
     await router.isReady();
-    const wrapper = mount(DesktopView, { global: { plugins: [pinia, router] } });
+    const wrapper = mount(DesktopView, {
+      global: { plugins: [pinia, router] },
+      ...(attach ? { attachTo: document.body } : {}),
+    });
     await flushPromises();
     return { wrapper, router };
   }
@@ -598,6 +607,249 @@ describe('DesktopView', () => {
 
       expect(wrapper.findComponent(LauncherOverlay).exists()).toBe(false);
       expect(useDesktopStore().windows).toHaveLength(0);
+    });
+  });
+
+  describe('Tastenkürzel', () => {
+    /** Eine Tastenmeldung an das Fenster (wie vom Desktop aus getippt). */
+    async function press(key: string, mods: KeyboardEventInit = {}, type = 'keydown') {
+      window.dispatchEvent(new KeyboardEvent(type, { key, ...mods }));
+      await flushPromises();
+    }
+
+    /** Dieselbe Taste, aber auf einem Element gedrückt (sie steigt zum Fenster auf). */
+    async function pressOn(el: Element, key: string, mods: KeyboardEventInit = {}) {
+      el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...mods }));
+      await flushPromises();
+    }
+
+    it('legt mit Strg/⌘ + N eine neue App an', async () => {
+      const { wrapper } = await mountView();
+      await press('n', { ctrlKey: true });
+      const desktop = useDesktopStore();
+      expect(desktop.windows).toHaveLength(1);
+      expect(desktop.windows[0].appId).toBeNull();
+      expect(wrapper.findAllComponents(WindowFrame)).toHaveLength(1);
+    });
+
+    it('öffnet mit Strg/⌘ + , die Einstellungen', async () => {
+      await mountView();
+      await press(',', { metaKey: true });
+      expect(useShellStore().settingsOpen).toBe(true);
+    });
+
+    it('schließt das aktive Fenster mit Strg/⌘ + ⇧ + W', async () => {
+      await mountView();
+      const desktop = useDesktopStore();
+      desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await flushPromises();
+
+      await press('W', { ctrlKey: true, shiftKey: true });
+      expect(desktop.windows).toHaveLength(0);
+    });
+
+    it('minimiert und maximiert das aktive Fenster', async () => {
+      await mountView();
+      const desktop = useDesktopStore();
+      const instanceId = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await flushPromises();
+
+      await press('F', { metaKey: true, shiftKey: true });
+      expect(desktop.find(instanceId)!.maximized).toBe(true);
+      await press('F', { metaKey: true, shiftKey: true });
+      expect(desktop.find(instanceId)!.maximized).toBe(false);
+
+      await press('M', { metaKey: true, shiftKey: true });
+      expect(desktop.find(instanceId)!.minimized).toBe(true);
+    });
+
+    it('lässt ⌘/Strg + W und + M ohne Umschalttaste dem Wirtsfenster', async () => {
+      await mountView();
+      const desktop = useDesktopStore();
+      const instanceId = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await flushPromises();
+
+      await press('w', { metaKey: true });
+      await press('m', { metaKey: true });
+      expect(desktop.windows).toHaveLength(1);
+      expect(desktop.find(instanceId)!.minimized).toBe(false);
+    });
+
+    it('greift ohne offenes Fenster nicht ins Leere', async () => {
+      await mountView();
+      await press('W', { ctrlKey: true, shiftKey: true });
+      await press('M', { ctrlKey: true, shiftKey: true });
+      expect(useDesktopStore().windows).toHaveLength(0);
+    });
+
+    it('greift dieselbe Taste von der Fläche aus (Gegenprobe zum Tippen)', async () => {
+      const { wrapper } = await mountView({ attach: true });
+      await pressOn(wrapper.get('.tile.new').element, 'n', { ctrlKey: true });
+      expect(useDesktopStore().windows).toHaveLength(1);
+      wrapper.unmount();
+    });
+
+    it('rührt sich nicht, während in der Promptleiste getippt wird', async () => {
+      const { wrapper } = await mountView({ attach: true });
+      await pressOn(wrapper.get('textarea').element, 'n', { ctrlKey: true });
+      await pressOn(wrapper.get('textarea').element, 'k', { ctrlKey: true });
+      expect(useDesktopStore().windows).toHaveLength(0);
+      expect(wrapper.findComponent(LauncherOverlay).exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('rührt sich auch nicht, während das Startmenü Eingaben entgegennimmt', async () => {
+      const { wrapper } = await mountView({ attach: true });
+      await wrapper.get('.search-btn').trigger('click');
+      await flushPromises();
+
+      await pressOn(wrapper.get('.lp-input').element, 'n', { ctrlKey: true });
+      expect(useDesktopStore().windows).toHaveLength(0);
+      wrapper.unmount();
+    });
+  });
+
+  describe('Fensterwechsler (Strg/⌘ + Tab)', () => {
+    /** Zwei bzw. drei Fenster, zuletzt benutzt zuletzt geöffnet. */
+    async function withWindows(count: number) {
+      const desktop = useDesktopStore();
+      const ids = [desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' })];
+      if (count > 1) ids.push(desktop.openApp('editor-2', { title: 'Editor', icon: '📝' }));
+      if (count > 2) ids.push(desktop.openDraft());
+      await flushPromises();
+      return { desktop, ids };
+    }
+
+    /** Tab bei gehaltener Strg-Taste. */
+    async function tab(shiftKey = false) {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, shiftKey }));
+      await flushPromises();
+    }
+
+    /** Die Haltetaste loslassen — das gewählte Fenster wird aktiv. */
+    async function release(key = 'Control') {
+      window.dispatchEvent(new KeyboardEvent('keyup', { key }));
+      await flushPromises();
+    }
+
+    /** Der hervorgehobene Eintrag der Auswahl. */
+    function selected(wrapper: VueWrapper): string {
+      return wrapper.get('.sw-item.active .sw-name').text();
+    }
+
+    it('zeigt die offenen Fenster, zuletzt benutzt zuerst', async () => {
+      const { wrapper } = await mountView();
+      await withWindows(3);
+
+      await tab();
+
+      const overlay = wrapper.getComponent(SwitcherOverlay);
+      expect(overlay.props('windows').map((w: { title: string }) => w.title)).toEqual([
+        'Neue App',
+        'Editor',
+        'Rechner',
+      ]);
+      // Gewählt ist zunächst das Fenster hinter dem aktuellen.
+      expect(selected(wrapper)).toBe('Editor');
+    });
+
+    it('wechselt beim Loslassen zum gewählten Fenster', async () => {
+      const { wrapper } = await mountView();
+      const { desktop, ids } = await withWindows(2);
+
+      await tab();
+      await release();
+
+      expect(wrapper.findComponent(SwitcherOverlay).exists()).toBe(false);
+      expect(desktop.focusedId).toBe(ids[0]); // der Rechner war der vorletzte
+    });
+
+    it('wandert mit jedem weiteren Tab eine Stelle weiter', async () => {
+      const { wrapper } = await mountView();
+      const { desktop, ids } = await withWindows(3);
+
+      await tab();
+      expect(selected(wrapper)).toBe('Editor');
+      await tab();
+      expect(selected(wrapper)).toBe('Rechner');
+      // Am Ende geht es vorn weiter.
+      await tab();
+      expect(selected(wrapper)).toBe('Neue App');
+
+      await tab();
+      await release();
+      expect(desktop.focusedId).toBe(ids[1]); // Editor
+    });
+
+    it('wandert mit gehaltener Umschalttaste rückwärts', async () => {
+      const { wrapper } = await mountView();
+      await withWindows(3);
+
+      await tab(true);
+      expect(selected(wrapper)).toBe('Rechner');
+    });
+
+    it('holt ein minimiertes Fenster zurück', async () => {
+      await mountView();
+      const { desktop, ids } = await withWindows(2);
+      desktop.minimizeWindow(ids[0]);
+      await flushPromises();
+
+      await tab();
+      await release();
+
+      expect(desktop.focusedId).toBe(ids[0]);
+      expect(desktop.find(ids[0])!.minimized).toBe(false);
+    });
+
+    it('bricht mit Escape ab, ohne das Fenster zu wechseln', async () => {
+      const { wrapper } = await mountView();
+      const { desktop, ids } = await withWindows(2);
+
+      await tab();
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      await flushPromises();
+
+      expect(wrapper.findComponent(SwitcherOverlay).exists()).toBe(false);
+      await release();
+      expect(desktop.focusedId).toBe(ids[1]); // das zuletzt geöffnete blieb vorn
+    });
+
+    it('tut mit einem oder keinem Fenster nichts', async () => {
+      const { wrapper } = await mountView();
+      await tab();
+      expect(wrapper.findComponent(SwitcherOverlay).exists()).toBe(false);
+
+      const { desktop, ids } = await withWindows(1);
+      await tab();
+      expect(wrapper.findComponent(SwitcherOverlay).exists()).toBe(false);
+      await release();
+      expect(desktop.focusedId).toBe(ids[0]);
+    });
+
+    it('bleibt still, während in der Promptleiste getippt wird', async () => {
+      const { wrapper } = await mountView({ attach: true });
+      await withWindows(2);
+
+      wrapper
+        .get('textarea')
+        .element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true }));
+      await flushPromises();
+
+      expect(wrapper.findComponent(SwitcherOverlay).exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('wechselt auch zu einem angeklickten Fenster der Auswahl', async () => {
+      const { wrapper } = await mountView();
+      const { desktop, ids } = await withWindows(3);
+
+      await tab();
+      await wrapper.findAll('.sw-item')[2].trigger('click');
+      await flushPromises();
+
+      expect(wrapper.findComponent(SwitcherOverlay).exists()).toBe(false);
+      expect(desktop.focusedId).toBe(ids[0]); // der Rechner, ganz hinten
     });
   });
 
