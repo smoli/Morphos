@@ -7,13 +7,13 @@
       "cardId": "c0035",
       "phase": "running",
       "activity": {
-        "name": "Bash",
-        "arg": "npx vitest run 2>&1 | tail -6; npx vue-tsc --noEmit && echo \"TYPECHECK OK\""
+        "name": "mcp__gello__set_status",
+        "arg": "review"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-08T17:24:14",
+  "updated": "2026-08-08T17:25:18",
   "pickupDelay": 10,
   "owned": [
     "c0029",

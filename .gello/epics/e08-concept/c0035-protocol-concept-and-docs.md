@@ -1,10 +1,10 @@
 ---
 id: c0035
 title: Protocol concept and docs
-status: in-progress
+status: review
 created: 2026-08-08
 updated: 2026-08-08
-status-changed: 2026-08-08T17:08:02
+status-changed: 2026-08-08T17:25:18
 epic: e08
 ---
 
@@ -112,3 +112,4 @@ Implementation:
 - 2026-08-08 status → discuss (app)
 - 2026-08-08 status → ready (app)
 - 2026-08-08 status → in-progress (agent)
+- 2026-08-08 status → review (agent)
