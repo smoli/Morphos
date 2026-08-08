@@ -1,11 +1,12 @@
 ---
 id: c0033
 title: Provide system file dialogs
-status: discuss
+status: ready
 created: 2026-08-08
 updated: 2026-08-08
-status-changed: 2026-08-08T06:21:48
+status-changed: 2026-08-08T06:32:38
 epic: e0001
+order: 40
 ---
 
 ## What
@@ -76,3 +77,4 @@ Open questions for planning:
 ## Log
 
 - 2026-08-08 status → discuss (app)
+- 2026-08-08 status → ready (app)

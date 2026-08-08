@@ -1,12 +1,11 @@
 ---
 id: c0030
 title: Agent needs a busy state and a queue
-status: ready
+status: in-progress
 created: 2026-08-06
 updated: 2026-08-08
-status-changed: 2026-08-08T06:19:17
+status-changed: 2026-08-08T06:27:55
 epic: e07
-order: 20
 ---
 
 ## What
@@ -84,3 +83,4 @@ Open questions for planning:
 - 2026-08-07 status → discuss (app)
 - 2026-08-07 status → backlog (app)
 - 2026-08-08 status → ready (app)
+- 2026-08-08 status → in-progress (agent)
