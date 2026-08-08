@@ -1,0 +1,53 @@
+/*
+ * Gemeinsames Aussehen aller Einstellungs-Bereiche. Jeder Bereich bindet die
+ * Datei per `<style scoped src="./settings.css">` ein und bleibt dadurch für
+ * sich lauffähig — ein neuer Bereich braucht nur die Registrierung.
+ */
+.block h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.hint {
+  color: var(--muted);
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+.btn {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn:hover {
+  border-color: var(--accent);
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.seg button {
+  background: var(--panel-2);
+  border: 0;
+  border-left: 1px solid var(--border);
+  color: var(--muted);
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.seg button:first-child {
+  border-left: 0;
+}
+.seg button.active {
+  background: var(--accent);
+  color: #fff;
+}

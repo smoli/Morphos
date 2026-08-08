@@ -1,40 +1,29 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { useWorkspaceStore } from '@/stores/workspace';
-import { FS_OP_LABELS } from '@/core/permissions';
-import { MAX_AGENTS_LIMIT } from '@/core/queue';
-import type { FsOp, PermMode } from '@/types';
+/**
+ * Einstellungen als Schale: links die Kategorien, rechts der gewählte Bereich.
+ * Die Bereiche selbst kennt der Dialog nicht — er rendert, was in
+ * `settings/sections.ts` registriert ist (siehe dort für neue Kategorien).
+ */
+import { computed, ref, watch } from 'vue';
+import { SETTINGS_SECTIONS, type SettingsSection } from './settings/sections';
 
+const props = withDefaults(defineProps<{ sections?: readonly SettingsSection[] }>(), {
+  sections: () => SETTINGS_SECTIONS,
+});
 const emit = defineEmits<{ close: [] }>();
 
-const workspace = useWorkspaceStore();
+const activeId = ref(props.sections[0]?.id ?? '');
+const active = computed<SettingsSection | undefined>(
+  () => props.sections.find((s) => s.id === activeId.value) ?? props.sections[0],
+);
 
-const FS_OPS: FsOp[] = ['read', 'list', 'exists', 'stat', 'write', 'mkdir', 'delete'];
-const PERM_MODES: { mode: PermMode; label: string }[] = [
-  { mode: 'ask', label: 'Fragen' },
-  { mode: 'allow', label: 'Erlauben' },
-  { mode: 'deny', label: 'Ablehnen' },
-];
-
-const newLibPattern = ref('');
-
-// Deckel gleichzeitiger Agenten: 1 … MAX_AGENTS_LIMIT.
-const AGENT_COUNTS = Array.from({ length: MAX_AGENTS_LIMIT }, (_, i) => i + 1);
-
-function setMaxAgents(count: number): void {
-  workspace.setMaxAgents(count);
-}
-
-function setPerm(op: FsOp, mode: PermMode): void {
-  workspace.setPermission(op, mode);
-}
-function setAccessFolder(): void {
-  void workspace.setAccessFolder();
-}
-function addLibPattern(): void {
-  workspace.addLibPattern(newLibPattern.value);
-  newLibPattern.value = '';
-}
+// Fällt der offene Bereich weg (andere Registrierung), auf den ersten zurück.
+watch(
+  () => props.sections,
+  (sections) => {
+    if (!sections.some((s) => s.id === activeId.value)) activeId.value = sections[0]?.id ?? '';
+  },
+);
 </script>
 
 <template>
@@ -46,87 +35,25 @@ function addLibPattern(): void {
       </header>
 
       <div class="body">
-        <section class="block">
-          <h3>Agenten (gleichzeitige Läufe)</h3>
-          <p class="hint">
-            Wie viele Wünsche gleichzeitig bearbeitet werden dürfen. Alles darüber wartet in der
-            Reihenfolge des Eingangs — für eine App arbeitet ohnehin nie mehr als ein Agent.
-          </p>
-          <div class="agents-setting">
-            <span class="seg">
-              <button
-                v-for="n in AGENT_COUNTS"
-                :key="n"
-                type="button"
-                :class="{ active: workspace.maxAgents === n }"
-                @click="setMaxAgents(n)"
-              >
-                {{ n }}
-              </button>
-            </span>
-          </div>
-        </section>
+        <nav class="side" role="tablist" aria-label="Kategorien">
+          <button
+            v-for="section in props.sections"
+            :key="section.id"
+            type="button"
+            class="cat"
+            role="tab"
+            :class="{ active: section.id === active?.id }"
+            :aria-selected="section.id === active?.id"
+            @click="activeId = section.id"
+          >
+            <span class="cat-icon" aria-hidden="true">{{ section.icon }}</span>
+            <span class="cat-label">{{ section.label }}</span>
+          </button>
+        </nav>
 
-        <section class="block">
-          <h3>Datenordner der Apps</h3>
-          <p class="hint">
-            Gemeinsamer Ordner, in den die erzeugten Apps lesen und schreiben dürfen.
-          </p>
-          <div class="access">
-            <span v-if="workspace.accessRoot" class="path" :title="workspace.accessRoot">
-              📂 <code>{{ workspace.accessRoot }}</code>
-            </span>
-            <span v-else class="muted">Kein Datenordner festgelegt — Apps können nichts dauerhaft speichern.</span>
-            <button type="button" class="btn" @click="setAccessFolder">
-              {{ workspace.accessRoot ? 'Ändern …' : 'Festlegen …' }}
-            </button>
-          </div>
-        </section>
-
-        <section class="block">
-          <h3>Berechtigungen der Apps (Dateizugriff)</h3>
-          <p class="hint">
-            Lege je Funktion fest, ob eine App fragen muss, still darf oder abgelehnt wird.
-          </p>
-          <ul class="perms">
-            <li v-for="op in FS_OPS" :key="op">
-              <span class="op">{{ FS_OP_LABELS[op] }}</span>
-              <span class="seg">
-                <button
-                  v-for="m in PERM_MODES"
-                  :key="m.mode"
-                  type="button"
-                  :class="{ active: workspace.permissionFor(op) === m.mode }"
-                  @click="setPerm(op, m.mode)"
-                >
-                  {{ m.label }}
-                </button>
-              </span>
-            </li>
-          </ul>
-        </section>
-
-        <section class="block">
-          <h3>Bibliotheken (freigegebene Quellen)</h3>
-          <p class="hint">
-            Apps dürfen JavaScript-Bibliotheken nur von diesen Quellen einbinden — als Hostname
-            (<code>cdn.jsdelivr.net</code>) oder https-URL-Präfix (<code>https://unpkg.com/</code>).
-            Die Shell lädt sie einmalig, cacht sie und bettet sie offline ein.
-          </p>
-          <ul class="libs">
-            <li v-for="pattern in workspace.libWhitelist" :key="pattern" class="lib-row">
-              <code class="lib-pattern">{{ pattern }}</code>
-              <button type="button" class="lib-del" title="Freigabe entziehen" @click="workspace.removeLibPattern(pattern)">✕</button>
-            </li>
-          </ul>
-          <p v-if="workspace.libWhitelist.length === 0" class="muted">
-            Noch keine Quelle freigegeben — Apps können keine Bibliotheken nutzen.
-          </p>
-          <form class="lib-add" @submit.prevent="addLibPattern">
-            <input v-model="newLibPattern" type="text" placeholder="cdn.jsdelivr.net oder https://…" />
-            <button type="submit" :disabled="!newLibPattern.trim()">Freigeben</button>
-          </form>
-        </section>
+        <div class="pane" role="tabpanel" :aria-label="active?.label">
+          <component :is="active.component" v-if="active" :key="active.id" />
+        </div>
       </div>
     </div>
   </div>
@@ -145,8 +72,8 @@ function addLibPattern(): void {
   padding: 24px;
 }
 .dialog {
-  width: min(680px, 100%);
-  max-height: 86vh;
+  width: min(760px, 100%);
+  height: min(560px, 86vh);
   display: flex;
   flex-direction: column;
   background: var(--panel);
@@ -179,151 +106,53 @@ function addLibPattern(): void {
   color: #ffb3b3;
 }
 .body {
-  overflow-y: auto;
-  padding: 18px;
+  flex: 1;
+  display: grid;
+  grid-template-columns: 184px 1fr;
+  min-height: 0;
+}
+.side {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 2px;
+  padding: 12px 10px;
+  border-right: 1px solid var(--border);
+  background: var(--panel-2);
+  overflow-y: auto;
 }
-.block h3 {
-  margin: 0 0 6px;
-  font-size: 14px;
-}
-.hint {
-  color: var(--muted);
-  margin: 0 0 12px;
-  font-size: 13px;
-  line-height: 1.5;
-}
-.access {
+.cat {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.path {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-  font-size: 13px;
-}
-.muted {
+  gap: 9px;
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--muted);
-  font-size: 13px;
-}
-.btn {
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--text);
   border-radius: 9px;
-  padding: 7px 14px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.btn:hover {
-  border-color: var(--accent);
-}
-.agents-setting {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.perms {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.perms li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 7px 0;
-  border-top: 1px solid var(--border);
-}
-.op {
-  color: var(--muted);
-  font-size: 13px;
-}
-.seg {
-  display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-}
-.seg button {
-  background: var(--panel-2);
-  border: 0;
-  border-left: 1px solid var(--border);
-  color: var(--muted);
-  padding: 5px 10px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.seg button:first-child {
-  border-left: 0;
-}
-.seg button.active {
-  background: var(--accent);
-  color: #fff;
-}
-.libs {
-  list-style: none;
-  margin: 0 0 8px;
-  padding: 0;
-}
-.lib-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 0;
-  border-top: 1px solid var(--border);
-}
-.lib-pattern {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lib-del {
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  border-radius: 7px;
-  padding: 2px 8px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.lib-del:hover {
-  border-color: var(--danger);
-  color: #ffb3b3;
-}
-.lib-add {
-  display: flex;
-  gap: 8px;
-  padding-top: 8px;
-}
-.lib-add input {
-  flex: 1;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 8px;
   padding: 7px 10px;
   font-size: 13px;
-}
-.lib-add button {
-  background: var(--accent);
-  border: 0;
-  color: #fff;
-  border-radius: 8px;
-  padding: 7px 14px;
-  font-size: 13px;
+  text-align: left;
   cursor: pointer;
 }
-.lib-add button:disabled {
-  opacity: 0.5;
-  cursor: default;
+.cat:hover {
+  border-color: var(--border);
+  color: var(--text);
+}
+.cat.active {
+  background: var(--panel);
+  border-color: var(--border);
+  color: var(--text);
+}
+.cat-icon {
+  font-size: 14px;
+}
+.cat-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pane {
+  overflow-y: auto;
+  padding: 18px;
+  min-width: 0;
 }
 </style>
