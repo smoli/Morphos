@@ -24,27 +24,27 @@ protocol), stored **git-tracked** in the app folder, and openable as a
 
 ## Acceptance criteria
 
-- [ ] Each app has a root `concept.md` and `userdocumentation.md` in the app
+- [x] Each app has a root `concept.md` and `userdocumentation.md` in the app
       folder, **git-tracked** (they version with the app; a revert restores that
       version's docs) and **not** bundled into `index.html`.
-- [ ] Every generation that changes the app updates **both docs in the same LLM
+- [x] Every generation that changes the app updates **both docs in the same LLM
       call**, emitted via the existing FILE-block protocol.
-- [ ] The file protocol accepts **exactly** `concept.md` and
+- [x] The file protocol accepts **exactly** `concept.md` and
       `userdocumentation.md` at the root and still **rejects any other**
       non-`src/` path (no arbitrary root writes / traversal).
-- [ ] `concept.md` is included as **context in every prompt**; `SYSTEM_PROMPT`
+- [x] `concept.md` is included as **context in every prompt**; `SYSTEM_PROMPT`
       instructs the agent to keep the app consistent with it and to update it to
       reflect new intent.
-- [ ] The current `userdocumentation.md` is also passed as context so its updates
+- [x] The current `userdocumentation.md` is also passed as context so its updates
       are **incremental**, not rewritten blind; the agent maintains it as
       end-user how-to.
-- [ ] Both docs are read on app open (`loadAppFromDisk`) and available to the UI.
-- [ ] When an app window is open, the user can open a **read-only viewer** that
+- [x] Both docs are read on app open (`loadAppFromDisk`) and available to the UI.
+- [x] When an app window is open, the user can open a **read-only viewer** that
       renders each doc as markdown (reuse `core/markdown`, escape-first),
       reachable from the window title bar.
-- [ ] A new app's first generation **creates** both docs; a pure clarifying
+- [x] A new app's first generation **creates** both docs; a pure clarifying
       question (SAY, no changes) does **not** touch them.
-- [ ] Parsing/splitting (accepting the two doc paths, separating them from `src/`
+- [x] Parsing/splitting (accepting the two doc paths, separating them from `src/`
       files, excluding them from the bundle) and the doc-context injection are
       covered by **unit tests**; the prompt change is covered by the prompt spec.
 
