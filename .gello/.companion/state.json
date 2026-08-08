@@ -7,13 +7,13 @@
       "cardId": "c0035",
       "phase": "running",
       "activity": {
-        "name": "Read",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e08-concept/epic.md"
+        "name": "Write",
+        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/cards/c0036-editable-concept-md.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-08T17:08:12",
+  "updated": "2026-08-08T17:23:36",
   "pickupDelay": 10,
   "owned": [
     "c0029",
