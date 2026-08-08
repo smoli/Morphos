@@ -10,13 +10,13 @@
       "cardId": "c0032",
       "phase": "running",
       "activity": {
-        "name": "Read",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/src/components/ChatDock.vue"
+        "name": "Bash",
+        "arg": "sed -n 1,60p src/components/WindowFrame.spec.ts; echo ...; sed -n 320,370p src/stores/app.spec.ts"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-08T06:19:44",
+  "updated": "2026-08-08T06:21:38",
   "pickupDelay": 10,
   "owned": [
     "c0029",
