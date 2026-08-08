@@ -1,9 +1,11 @@
 {
   "status": "idle",
-  "ready": [],
+  "ready": [
+    "c0037"
+  ],
   "waiting": [],
   "runs": [],
-  "updated": "2026-08-08T17:25:31",
+  "updated": "2026-08-08T22:48:45",
   "pickupDelay": 10,
   "owned": [
     "c0029",
