@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useDesktopStore } from './desktop';
 import { useWorkspaceStore } from './workspace';
+import type { AppSummary, SessionWindow } from '@/types';
 
 describe('useDesktopStore', () => {
   beforeEach(() => setActivePinia(createPinia()));
@@ -187,4 +188,167 @@ describe('useDesktopStore', () => {
     });
   });
 
+  describe('Sitzung: merken und wiederherstellen', () => {
+    const apps: AppSummary[] = [
+      { id: 'rechner-1', name: 'Rechner', icon: '🧮', createdAt: 1, updatedAt: 5, versions: 3 },
+      { id: 'editor-2', name: 'Editor', icon: '📝', createdAt: 2, updatedAt: 9, versions: 1 },
+    ];
+
+    /** Ein geöffnetes Verzeichnis mit Apps und (optional) einer gemerkten Sitzung. */
+    function workspace(session?: SessionWindow[], appList: AppSummary[] = apps) {
+      const ws = useWorkspaceStore();
+      ws.folder = '/apps';
+      ws.apps = appList;
+      if (session) ws.sessions = { '/apps': session };
+      return ws;
+    }
+
+    function entry(over: Partial<SessionWindow> = {}): SessionWindow {
+      return { appId: 'rechner-1', x: 10, y: 20, w: 300, h: 240, minimized: false, maximized: false, ...over };
+    }
+
+    afterEach(() => vi.useRealTimers());
+
+    it('merkt ein geöffnetes Fenster mit seiner Geometrie', () => {
+      const ws = workspace();
+      const d = useDesktopStore();
+      const id = d.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      const w = d.find(id)!;
+
+      expect(ws.session).toEqual([
+        { appId: 'rechner-1', x: w.x, y: w.y, w: w.w, h: w.h, minimized: false, maximized: false },
+      ]);
+    });
+
+    it('merkt einen unbenannten Entwurf nicht', () => {
+      const ws = workspace();
+      useDesktopStore().openDraft();
+      expect(ws.session).toEqual([]);
+    });
+
+    it('merkt einen Entwurf, sobald er eine App geworden ist', () => {
+      const ws = workspace();
+      const d = useDesktopStore();
+      const id = d.openDraft();
+      d.setAppMeta(id, 'rechner-1', 'Rechner', '🧮');
+      expect(ws.session.map((s) => s.appId)).toEqual(['rechner-1']);
+    });
+
+    it('vergisst ein geschlossenes Fenster', () => {
+      const ws = workspace();
+      const d = useDesktopStore();
+      const a = d.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      d.openApp('editor-2', { title: 'Editor', icon: '📝' });
+
+      d.closeWindow(a);
+
+      expect(ws.session.map((s) => s.appId)).toEqual(['editor-2']);
+    });
+
+    it('merkt Minimieren und Maximieren', () => {
+      const ws = workspace();
+      const d = useDesktopStore();
+      const a = d.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+
+      d.minimizeWindow(a);
+      expect(ws.session[0].minimized).toBe(true);
+
+      d.toggleMaximize(a);
+      expect(ws.session[0].maximized).toBe(true);
+    });
+
+    it('merkt die Stapelreihenfolge nach dem Fokussieren', () => {
+      const ws = workspace();
+      const d = useDesktopStore();
+      const a = d.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      d.openApp('editor-2', { title: 'Editor', icon: '📝' });
+
+      d.focusWindow(a);
+
+      // Hinten → vorn: das zuletzt fokussierte Fenster steht am Ende.
+      expect(ws.session.map((s) => s.appId)).toEqual(['editor-2', 'rechner-1']);
+    });
+
+    it('schreibt Verschieben und Größenänderung erst nach kurzer Ruhe', () => {
+      vi.useFakeTimers();
+      const ws = workspace();
+      const d = useDesktopStore();
+      const a = d.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+
+      d.moveWindow(a, 111, 222);
+      d.resizeWindow(a, 400, 300);
+      // Noch steht der Stand von vor dem Ziehen — jeder Mausschritt soll nicht
+      // die Einstellungen schreiben.
+      expect(ws.session[0].x).not.toBe(111);
+
+      vi.runAllTimers();
+
+      expect(ws.session[0]).toMatchObject({ x: 111, y: 222, w: 400, h: 300 });
+    });
+
+    it('öffnet die gemerkten Fenster wieder — Geometrie, Zustand, Stapel', () => {
+      workspace([
+        entry({ appId: 'editor-2', x: 5, y: 6, w: 400, h: 300, minimized: true }),
+        entry({ appId: 'rechner-1', x: 10, y: 20, w: 300, h: 240, maximized: true }),
+      ]);
+      const d = useDesktopStore();
+
+      d.restoreSession();
+
+      expect(d.stacked.map((w) => w.appId)).toEqual(['editor-2', 'rechner-1']);
+      const [editor, rechner] = d.stacked;
+      expect(editor).toMatchObject({ title: 'Editor', icon: '📝', x: 5, y: 6, w: 400, h: 300, minimized: true });
+      expect(rechner).toMatchObject({ title: 'Rechner', x: 10, y: 20, w: 300, h: 240, maximized: true });
+      // Der Fokus landet auf dem zuletzt benutzten Fenster.
+      expect(d.focusedId).toBe(rechner.instanceId);
+    });
+
+    it('überspringt ein Fenster, dessen App es nicht mehr gibt', () => {
+      const ws = workspace([entry({ appId: 'geloescht-7' }), entry({ appId: 'rechner-1' })]);
+      const d = useDesktopStore();
+
+      d.restoreSession();
+
+      expect(d.windows.map((w) => w.appId)).toEqual(['rechner-1']);
+      // Die verschwundene App wird auch nicht weiter mitgeschleppt.
+      expect(ws.session.map((s) => s.appId)).toEqual(['rechner-1']);
+    });
+
+    it('öffnet ohne gemerkte Sitzung nichts (erster Start)', () => {
+      workspace();
+      const d = useDesktopStore();
+      d.restoreSession();
+      expect(d.windows).toEqual([]);
+    });
+
+    it('stellt je Verzeichnis nur einmal wieder her', () => {
+      workspace([entry()]);
+      const d = useDesktopStore();
+
+      d.restoreSession();
+      d.closeWindow(d.windows[0].instanceId);
+      d.restoreSession();
+
+      expect(d.windows).toEqual([]);
+    });
+
+    it('wartet, solange das Verzeichnis noch keine Apps gemeldet hat', () => {
+      const ws = workspace([entry()], []);
+      const d = useDesktopStore();
+
+      d.restoreSession();
+      expect(d.windows).toEqual([]);
+
+      // Sobald die Apps da sind, kommt die Sitzung zurück.
+      ws.apps = apps;
+      d.restoreSession();
+      expect(d.windows.map((w) => w.appId)).toEqual(['rechner-1']);
+    });
+
+    it('rührt ohne geöffnetes Verzeichnis nichts an', () => {
+      const d = useDesktopStore();
+      d.restoreSession();
+      expect(d.windows).toEqual([]);
+    });
+  });
 });

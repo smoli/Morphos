@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { useWorkspaceStore } from './workspace';
+import { restorableSession, serializeSession } from '@/core/session';
 
 /** Ein Fenster auf dem Desktop. Trägt nur Geometrie/Stapel — die App-Daten
  *  liegen im zugehörigen Instanz-Store (useAppWindow(instanceId)). */
@@ -24,6 +25,8 @@ interface DesktopState {
   nextZ: number;
   /** Einzel-Modus: Der Desktop (Launcher) liegt vor der laufenden App. */
   showingDesktop: boolean;
+  /** Verzeichnis, dessen Sitzung bereits wiederhergestellt wurde (einmal je Start). */
+  restoredFolder: string | null;
 }
 
 const MIN_W = 240;
@@ -31,6 +34,14 @@ const MIN_H = 160;
 const DEFAULT_W = 720;
 const DEFAULT_H = 520;
 const CASCADE = 28;
+
+/** Ruhezeit, bevor ein Ziehen/Größenändern in die Einstellungen wandert (ms). */
+const PERSIST_DELAY = 300;
+
+// Der laufende Aufschub (nicht serialisierbar → außerhalb des States).
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+// Während des Wiederherstellens schreibt kein Zwischenschritt die Sitzung.
+let restoring = false;
 
 /**
  * Registry der offenen App-Fenster: Öffnen/Schließen, Stapelreihenfolge (z),
@@ -43,6 +54,7 @@ export const useDesktopStore = defineStore('desktop', {
     seq: 0,
     nextZ: 1,
     showingDesktop: false,
+    restoredFolder: null,
   }),
 
   getters: {
@@ -109,6 +121,7 @@ export const useDesktopStore = defineStore('desktop', {
         minimized: false,
         maximized: false,
       });
+      this.persistSession();
       return instanceId;
     },
 
@@ -119,15 +132,19 @@ export const useDesktopStore = defineStore('desktop', {
       this.showingDesktop = false;
       w.minimized = false;
       w.z = this.nextZ += 1;
+      this.persistSession();
     },
 
     closeWindow(instanceId: string): void {
       this.windows = this.windows.filter((w) => w.instanceId !== instanceId);
+      this.persistSession();
     },
 
     minimizeWindow(instanceId: string): void {
       const w = this.find(instanceId);
-      if (w) w.minimized = true;
+      if (!w) return;
+      w.minimized = true;
+      this.persistSession();
     },
 
     restoreWindow(instanceId: string): void {
@@ -139,6 +156,7 @@ export const useDesktopStore = defineStore('desktop', {
       if (!w) return;
       w.x = Math.max(0, Math.round(x));
       w.y = Math.max(0, Math.round(y));
+      this.schedulePersistSession();
     },
 
     resizeWindow(instanceId: string, w: number, h: number): void {
@@ -146,6 +164,7 @@ export const useDesktopStore = defineStore('desktop', {
       if (!win) return;
       win.w = Math.max(MIN_W, Math.round(w));
       win.h = Math.max(MIN_H, Math.round(h));
+      this.schedulePersistSession();
     },
 
     /** Maximiert ein Fenster (füllt die Desktop-Fläche) bzw. stellt es wieder her. */
@@ -168,7 +187,68 @@ export const useDesktopStore = defineStore('desktop', {
       w.appId = appId;
       w.title = title;
       w.icon = icon;
+      // Jetzt gibt es etwas zu merken: Der Entwurf liegt auf der Platte.
+      this.persistSession();
     },
 
+    /** Merkt die offenen Fenster für den nächsten Start (siehe core/session). */
+    persistSession(): void {
+      if (restoring) return;
+      if (persistTimer) {
+        clearTimeout(persistTimer);
+        persistTimer = null;
+      }
+      useWorkspaceStore().saveSession(serializeSession(this.windows));
+    },
+
+    /**
+     * Dasselbe nach kurzer Ruhe: Ziehen und Größenändern melden jeden
+     * Mausschritt — gespeichert wird erst, wenn die Hand stillhält.
+     */
+    schedulePersistSession(): void {
+      if (restoring) return;
+      if (persistTimer) clearTimeout(persistTimer);
+      persistTimer = setTimeout(() => {
+        persistTimer = null;
+        this.persistSession();
+      }, PERSIST_DELAY);
+    },
+
+    /**
+     * Öffnet die gemerkte Sitzung des Verzeichnisses wieder: dieselben Fenster,
+     * an derselben Stelle, in derselben Reihenfolge — der Fokus landet auf dem
+     * zuletzt benutzten. Apps, die es nicht mehr gibt, bleiben weg; ohne
+     * gemerkte Sitzung erscheint schlicht der Launcher.
+     *
+     * Geschieht einmal je Verzeichnis und erst, wenn dessen Apps gelesen sind —
+     * vorher ließe sich nicht sagen, welche es noch gibt.
+     */
+    restoreSession(): void {
+      const workspace = useWorkspaceStore();
+      const folder = workspace.folder;
+      if (!folder || this.restoredFolder === folder || workspace.apps.length === 0) return;
+      this.restoredFolder = folder;
+
+      const known = new Map(workspace.apps.map((a) => [a.id, a]));
+      restoring = true;
+      try {
+        for (const saved of restorableSession(workspace.session, known.keys())) {
+          const app = known.get(saved.appId)!;
+          const instanceId = this.spawn(saved.appId, app.name, app.icon);
+          const w = this.find(instanceId)!;
+          w.x = saved.x;
+          w.y = saved.y;
+          w.w = Math.max(MIN_W, saved.w);
+          w.h = Math.max(MIN_H, saved.h);
+          w.maximized = saved.maximized;
+          w.minimized = saved.minimized;
+        }
+      } finally {
+        restoring = false;
+      }
+      // Einmal festhalten, was wirklich offen ist — verschwundene Apps sind
+      // damit auch aus der gemerkten Sitzung heraus.
+      this.persistSession();
+    },
   },
 });

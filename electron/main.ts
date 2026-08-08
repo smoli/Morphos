@@ -16,6 +16,7 @@ import { commitAll, countVersions, ensureRepo, listVersions, restoreTree } from 
 import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeAppState, writeChat } from '../src/core/appstore';
 import { validateIcon } from '../src/core/icon';
 import { runFs } from '../src/core/fsaccess';
+import { cleanSessions } from '../src/core/session';
 import { resolveLibs } from './libcache';
 import type { PromptAttachment, PromptContext } from '../src/core/prompt';
 import type {
@@ -69,7 +70,8 @@ function readSettings(): Settings {
     const uiMode = parsed.uiMode === 'single' ? 'single' : 'windows';
     const maxAgents = clampMaxAgents(parsed.maxAgents);
     const iconPositions = cleanIconPositions(parsed.iconPositions);
-    return { recentFolders: recent, accessRoots, permissions, libWhitelist, uiMode, maxAgents, iconPositions };
+    const sessions = cleanSessions(parsed.sessions);
+    return { recentFolders: recent, accessRoots, permissions, libWhitelist, uiMode, maxAgents, iconPositions, sessions };
   } catch {
     return {
       recentFolders: [],
@@ -79,6 +81,7 @@ function readSettings(): Settings {
       uiMode: 'windows',
       maxAgents: DEFAULT_MAX_AGENTS,
       iconPositions: {},
+      sessions: {},
     };
   }
 }
@@ -489,6 +492,7 @@ ipcMain.handle('morphos:saveSettings', async (_e, settings: Settings): Promise<S
       uiMode: settings?.uiMode === 'single' ? 'single' : 'windows',
       maxAgents: clampMaxAgents(settings?.maxAgents),
       iconPositions: cleanIconPositions(settings?.iconPositions),
+      sessions: cleanSessions(settings?.sessions),
     };
     fs.writeFileSync(settingsFile(), JSON.stringify(clean, null, 2), 'utf8');
     return { ok: true };

@@ -164,14 +164,17 @@ function tidy(): void {
 // wächst), darum beobachten wir sie, wo der Browser es anbietet.
 let observer: ResizeObserver | null = null;
 
-onMounted(() => {
+onMounted(async () => {
   measure();
   window.addEventListener('resize', measure);
   if (typeof ResizeObserver === 'function' && launcher.value) {
     observer = new ResizeObserver(measure);
     observer.observe(launcher.value);
   }
-  void workspace.refresh();
+  await workspace.refresh();
+  // Erst mit den gelesenen Apps lässt sich die Sitzung wiederherstellen: Nur
+  // Fenster, deren App es noch gibt, kommen zurück.
+  desktop.restoreSession();
 });
 
 onBeforeUnmount(() => {

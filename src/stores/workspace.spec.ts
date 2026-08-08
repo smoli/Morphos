@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useWorkspaceStore } from './workspace';
 import { setHost } from '@/services/host';
-import type { MorphosHost, AppSummary } from '@/types';
+import type { MorphosHost, AppSummary, Settings } from '@/types';
 
 const apps: AppSummary[] = [
   { id: 'a-1', name: 'A', icon: '🅰', createdAt: 1, updatedAt: 5, versions: 2 },
@@ -52,7 +52,7 @@ describe('useWorkspaceStore', () => {
     expect(ws.folder).toBe('/neu');
     expect(ws.recentFolders[0]).toBe('/neu');
     expect(ws.apps).toHaveLength(2);
-    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows', maxAgents: 2, iconPositions: {} });
+    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows', maxAgents: 2, iconPositions: {}, sessions: {} });
     expect(host.listApps).toHaveBeenCalledWith('/neu');
   });
 
@@ -383,6 +383,81 @@ describe('useWorkspaceStore', () => {
       await ws.removeApp('a-1');
 
       expect(ws.iconLayout).toEqual({ 'b-2': { x: 10, y: 10 } });
+    });
+  });
+
+  describe('Sitzung (offene Fenster)', () => {
+    const fenster = { appId: 'a-1', x: 10, y: 20, w: 300, h: 240, minimized: false, maximized: false };
+
+    it('lädt die gemerkte Sitzung des Workspace', async () => {
+      setHost(makeHost({
+        loadSettings: vi.fn(async () => ({
+          recentFolders: [],
+          accessRoots: {},
+          sessions: { '/apps': [fenster], '/andere': [{ ...fenster, appId: 'b-2' }] },
+        })),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.init();
+      expect(ws.session).toEqual([]); // noch kein Ordner geöffnet
+      await ws.openFolder('/apps');
+      expect(ws.session).toEqual([fenster]);
+    });
+
+    it('überliest eine beschädigte Sitzung', async () => {
+      setHost(makeHost({
+        // Beschädigte Einstellungen von der Platte — der Typ lügt hier absichtlich.
+        loadSettings: vi.fn(async () => ({ recentFolders: [], accessRoots: {}, sessions: 'kaputt' } as unknown as Settings)),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.init();
+      expect(ws.sessions).toEqual({});
+    });
+
+    it('merkt die Sitzung je Workspace und speichert sie', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      ws.sessions = { '/andere': [{ ...fenster, appId: 'x-9' }] };
+      await ws.openFolder('/apps');
+
+      ws.saveSession([fenster]);
+
+      expect(ws.session).toEqual([fenster]);
+      expect(host.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sessions: { '/andere': [{ ...fenster, appId: 'x-9' }], '/apps': [fenster] } }),
+      );
+    });
+
+    it('schreibt eine unveränderte Sitzung nicht noch einmal', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+      ws.saveSession([fenster]);
+      const writes = (host.saveSettings as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      ws.saveSession([{ ...fenster }]);
+
+      expect((host.saveSettings as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(writes);
+    });
+
+    it('vergisst eine leer gewordene Sitzung (alle Fenster zu)', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+      ws.saveSession([fenster]);
+
+      ws.saveSession([]);
+
+      expect(ws.sessions).toEqual({});
+    });
+
+    it('rührt ohne geöffneten Ordner nichts an', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      ws.saveSession([fenster]);
+      expect(ws.sessions).toEqual({});
     });
   });
 

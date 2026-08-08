@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia';
-import type { AppSummary, FsOp, FsPermissions, IconPos, PermDecision, PermMode, UiMode } from '@/types';
+import type { AppSummary, FsOp, FsPermissions, IconPos, PermDecision, PermMode, SessionWindow, UiMode } from '@/types';
 import { getHost } from '@/services/host';
 import { decideOutcome, effectivePermission } from '@/core/permissions';
 import { clampMaxAgents, DEFAULT_MAX_AGENTS } from '@/core/queue';
+import { cleanSessions, sameSession } from '@/core/session';
 
 interface PendingPermission {
   op: FsOp;
@@ -24,6 +25,8 @@ interface WorkspaceState {
   maxAgents: number;
   /** Frei abgelegte Kachel-Positionen, je Workspace-Pfad, je App-Id. */
   iconPositions: Record<string, Record<string, IconPos>>;
+  /** Die zuletzt offenen Fenster, je Workspace-Pfad (siehe core/session). */
+  sessions: Record<string, SessionWindow[]>;
   /** Aktuell zur Genehmigung anstehende Anfrage (für den Dialog). */
   pendingPermission: PendingPermission | null;
   apps: AppSummary[];
@@ -50,6 +53,7 @@ export const useWorkspaceStore = defineStore('workspace', {
     uiMode: 'windows',
     maxAgents: DEFAULT_MAX_AGENTS,
     iconPositions: {},
+    sessions: {},
     pendingPermission: null,
     apps: [],
     loading: false,
@@ -70,6 +74,8 @@ export const useWorkspaceStore = defineStore('workspace', {
     hasIconLayout(): boolean {
       return Object.keys(this.iconLayout).length > 0;
     },
+    /** Die gemerkte Sitzung des aktuellen Verzeichnisses (hinten → vorn). */
+    session: (s): SessionWindow[] => (s.folder ? s.sessions[s.folder] ?? [] : []),
   },
 
   actions: {
@@ -85,6 +91,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.maxAgents = clampMaxAgents(settings?.maxAgents);
         this.iconPositions =
           settings?.iconPositions && typeof settings.iconPositions === 'object' ? settings.iconPositions : {};
+        this.sessions = cleanSessions(settings?.sessions);
       } catch {
         this.recentFolders = [];
         this.accessRoots = {};
@@ -93,6 +100,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.uiMode = 'windows';
         this.maxAgents = DEFAULT_MAX_AGENTS;
         this.iconPositions = {};
+        this.sessions = {};
       }
     },
 
@@ -178,6 +186,25 @@ export const useWorkspaceStore = defineStore('workspace', {
       if (!current || !(appId in current)) return;
       const { [appId]: _weg, ...rest } = current;
       this.iconPositions = { ...this.iconPositions, [this.folder]: rest };
+      void this.persistSettings();
+    },
+
+    /**
+     * Merkt die offenen Fenster dieses Verzeichnisses für den nächsten Start.
+     * Eine leere Sitzung wird vergessen — der Desktop öffnet dann schlicht den
+     * Launcher.
+     */
+    saveSession(windows: SessionWindow[]): void {
+      if (!this.folder) return;
+      const current = this.sessions[this.folder];
+      if (windows.length === 0) {
+        if (!current) return;
+        const { [this.folder]: _weg, ...rest } = this.sessions;
+        this.sessions = rest;
+      } else {
+        if (current && sameSession(current, windows)) return;
+        this.sessions = { ...this.sessions, [this.folder]: windows };
+      }
       void this.persistSettings();
     },
 
@@ -298,6 +325,7 @@ export const useWorkspaceStore = defineStore('workspace', {
       const uiMode = this.uiMode;
       const maxAgents = this.maxAgents;
       const iconPositions = JSON.parse(JSON.stringify(this.iconPositions)) as Record<string, Record<string, IconPos>>;
+      const sessions = JSON.parse(JSON.stringify(this.sessions)) as Record<string, SessionWindow[]>;
       try {
         await getHost().saveSettings({
           recentFolders,
@@ -307,6 +335,7 @@ export const useWorkspaceStore = defineStore('workspace', {
           uiMode,
           maxAgents,
           iconPositions,
+          sessions,
         });
       } catch {
         /* nicht kritisch */

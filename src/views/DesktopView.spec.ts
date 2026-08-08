@@ -383,6 +383,31 @@ describe('DesktopView', () => {
     });
   });
 
+  describe('Sitzung beim Start', () => {
+    it('holt die zuletzt offenen Fenster zurück', async () => {
+      useWorkspaceStore().sessions = {
+        '/apps': [
+          { appId: 'editor-2', x: 30, y: 40, w: 500, h: 400, minimized: false, maximized: false },
+          { appId: 'rechner-1', x: 90, y: 120, w: 600, h: 480, minimized: false, maximized: false },
+        ],
+      };
+
+      const { wrapper } = await mountView();
+
+      const frames = wrapper.findAllComponents(WindowFrame);
+      expect(frames.map((f) => f.props('win').appId)).toEqual(['editor-2', 'rechner-1']);
+      expect(frames[1].props('win')).toMatchObject({ x: 90, y: 120, w: 600, h: 480 });
+      // Zuletzt benutzt heißt: wieder im Vordergrund.
+      expect(useDesktopStore().focusedId).toBe(frames[1].props('win').instanceId);
+    });
+
+    it('öffnet beim ersten Mal nur den Launcher', async () => {
+      const { wrapper } = await mountView();
+      expect(wrapper.findAllComponents(WindowFrame)).toHaveLength(0);
+      expect(wrapper.findAll('.tile')).toHaveLength(3);
+    });
+  });
+
   it('zeigt im Einzel-Modus nur das aktive Fenster (Vollbild)', async () => {
     const ws = useWorkspaceStore();
     ws.uiMode = 'single';

@@ -149,12 +149,31 @@ export interface Settings {
    * App-Id. Was hier fehlt, ordnet das Raster an (siehe core/arrange).
    */
   iconPositions?: Record<string, Record<string, IconPos>>;
+  /**
+   * Die zuletzt offenen App-Fenster je Workspace-Pfad, von hinten nach vorn.
+   * Beim nächsten Start kommt der Desktop damit zurück (siehe core/session).
+   */
+  sessions?: Record<string, SessionWindow[]>;
 }
 
 /** Position einer Desktop-Kachel in Bildpunkten, relativ zur Desktop-Fläche. */
 export interface IconPos {
   x: number;
   y: number;
+}
+
+/**
+ * Ein gemerktes App-Fenster einer Sitzung: welche App, wo und wie. Titel und
+ * Icon fehlen mit Absicht — sie kommen beim Öffnen aus dem Verzeichnis.
+ */
+export interface SessionWindow {
+  appId: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  minimized: boolean;
+  maximized: boolean;
 }
 
 /** Desktop-Modus: mehrere überlappende Fenster oder genau eine App im Vollbild. */
