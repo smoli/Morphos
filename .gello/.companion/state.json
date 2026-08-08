@@ -1,19 +1,9 @@
 {
-  "status": "running",
+  "status": "idle",
   "ready": [],
   "waiting": [],
-  "runs": [
-    {
-      "cardId": "c0035",
-      "phase": "running",
-      "activity": {
-        "name": "mcp__gello__set_status",
-        "arg": "review"
-      },
-      "model": "claude-opus-5"
-    }
-  ],
-  "updated": "2026-08-08T17:25:18",
+  "runs": [],
+  "updated": "2026-08-08T17:25:31",
   "pickupDelay": 10,
   "owned": [
     "c0029",
