@@ -81,16 +81,16 @@ describe('SettingsDialog', () => {
     const Extra = markRaw(
       defineComponent({
         name: 'ExtraSection',
-        render: () => h('p', { class: 'extra' }, 'Hintergrundbild wählen'),
+        render: () => h('p', { class: 'extra' }, 'Inhalt des Beispielbereichs'),
       }),
     );
     const wrapper = mount(SettingsDialog, {
-      props: { sections: [...SETTINGS_SECTIONS, { id: 'wallpaper', label: 'Hintergrund', icon: '🖼', component: Extra }] },
+      props: { sections: [...SETTINGS_SECTIONS, { id: 'beispiel', label: 'Beispiel', icon: '🧪', component: Extra }] },
     });
 
     expect(wrapper.findAll('.cat')).toHaveLength(SETTINGS_SECTIONS.length + 1);
-    await openCategory(wrapper, 'Hintergrund');
-    expect(wrapper.get('.pane .extra').text()).toBe('Hintergrundbild wählen');
+    await openCategory(wrapper, 'Beispiel');
+    expect(wrapper.get('.pane .extra').text()).toBe('Inhalt des Beispielbereichs');
   });
 
   it('stellt den Deckel gleichzeitiger Agenten ein (Vorgabe zwei)', async () => {

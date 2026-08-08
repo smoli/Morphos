@@ -17,6 +17,7 @@ import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeApp
 import { validateIcon } from '../src/core/icon';
 import { runFs } from '../src/core/fsaccess';
 import { cleanSessions } from '../src/core/session';
+import { cleanWallpapers } from '../src/core/wallpaper';
 import { resolveLibs } from './libcache';
 import type { PromptAttachment, PromptContext } from '../src/core/prompt';
 import type {
@@ -71,7 +72,8 @@ function readSettings(): Settings {
     const maxAgents = clampMaxAgents(parsed.maxAgents);
     const iconPositions = cleanIconPositions(parsed.iconPositions);
     const sessions = cleanSessions(parsed.sessions);
-    return { recentFolders: recent, accessRoots, permissions, libWhitelist, uiMode, maxAgents, iconPositions, sessions };
+    const wallpapers = cleanWallpapers(parsed.wallpapers);
+    return { recentFolders: recent, accessRoots, permissions, libWhitelist, uiMode, maxAgents, iconPositions, sessions, wallpapers };
   } catch {
     return {
       recentFolders: [],
@@ -82,6 +84,7 @@ function readSettings(): Settings {
       maxAgents: DEFAULT_MAX_AGENTS,
       iconPositions: {},
       sessions: {},
+      wallpapers: {},
     };
   }
 }
@@ -493,6 +496,7 @@ ipcMain.handle('morphos:saveSettings', async (_e, settings: Settings): Promise<S
       maxAgents: clampMaxAgents(settings?.maxAgents),
       iconPositions: cleanIconPositions(settings?.iconPositions),
       sessions: cleanSessions(settings?.sessions),
+      wallpapers: cleanWallpapers(settings?.wallpapers),
     };
     fs.writeFileSync(settingsFile(), JSON.stringify(clean, null, 2), 'utf8');
     return { ok: true };

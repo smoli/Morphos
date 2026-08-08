@@ -10,6 +10,7 @@ import DataFolderSection from './DataFolderSection.vue';
 import PermissionsSection from './PermissionsSection.vue';
 import LibrariesSection from './LibrariesSection.vue';
 import ShortcutsSection from './ShortcutsSection.vue';
+import WallpaperSection from './WallpaperSection.vue';
 
 export interface SettingsSection {
   /** Stabiler Schlüssel (auch für „zuletzt offener Bereich“ o. Ä.). */
@@ -27,5 +28,6 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { id: 'data', label: 'Datenordner', icon: '📂', component: DataFolderSection },
   { id: 'permissions', label: 'Berechtigungen', icon: '🔐', component: PermissionsSection },
   { id: 'libs', label: 'Bibliotheken', icon: '📦', component: LibrariesSection },
+  { id: 'wallpaper', label: 'Hintergrund', icon: '🖼', component: WallpaperSection },
   { id: 'shortcuts', label: 'Tastenkürzel', icon: '⌨️', component: ShortcutsSection },
 ];

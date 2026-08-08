@@ -14,6 +14,7 @@ import { useAgentsStore } from '@/stores/agents';
 import { useAppWindow } from '@/stores/app';
 import { setHost } from '@/services/host';
 import { columns, slotPos } from '@/core/arrange';
+import { DEFAULT_WALLPAPER, wallpaperCss } from '@/core/wallpaper';
 import type { AppData, AppSummary, MorphosHost } from '@/types';
 
 const apps: AppSummary[] = [
@@ -95,6 +96,28 @@ describe('DesktopView', () => {
     expect(wrapper.text()).toContain('Neue App');
     // 2 Apps + 1 Neu-Kachel
     expect(wrapper.findAll('.tile')).toHaveLength(3);
+  });
+
+  it('malt den Hintergrund des Verzeichnisses hinter Kacheln und Fenstern', async () => {
+    const { wrapper } = await mountView();
+    const ws = useWorkspaceStore();
+    const layer = () => wrapper.get('.wallpaper');
+    // Ohne eigenen Hintergrund die Vorgabe …
+    expect(layer().attributes('style')).toContain(wallpaperCss(DEFAULT_WALLPAPER));
+
+    ws.setWallpaper({ kind: 'color', color: '#123456' });
+    await flushPromises();
+
+    // … danach der gewählte (jsdom schreibt Farben als rgb) …
+    expect(layer().attributes('style')).toContain('rgb(18, 52, 86)');
+    // … und er liegt stets vor dem Launcher im Stapel, also dahinter.
+    const stage = wrapper.get('.stage').element;
+    expect(stage.firstElementChild).toBe(layer().element);
+    // Die Kacheln bleiben klickbar — der Hintergrund liegt nur darunter.
+    const tile = wrapper.findAll('.tile').find((t) => t.text().includes('Rechner'))!;
+    await tile.trigger('click');
+    await flushPromises();
+    expect(useDesktopStore().windows).toHaveLength(1);
   });
 
   it('öffnet eine App als Fenster per Klick auf ihre Kachel', async () => {

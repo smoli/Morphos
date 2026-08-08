@@ -1,9 +1,20 @@
 import { defineStore } from 'pinia';
-import type { AppSummary, FsOp, FsPermissions, IconPos, PermDecision, PermMode, SessionWindow, UiMode } from '@/types';
+import type {
+  AppSummary,
+  FsOp,
+  FsPermissions,
+  IconPos,
+  PermDecision,
+  PermMode,
+  SessionWindow,
+  UiMode,
+  Wallpaper,
+} from '@/types';
 import { getHost } from '@/services/host';
 import { decideOutcome, effectivePermission } from '@/core/permissions';
 import { clampMaxAgents, DEFAULT_MAX_AGENTS } from '@/core/queue';
 import { cleanSessions, sameSession } from '@/core/session';
+import { cleanWallpaper, cleanWallpapers, DEFAULT_WALLPAPER } from '@/core/wallpaper';
 
 interface PendingPermission {
   op: FsOp;
@@ -27,6 +38,8 @@ interface WorkspaceState {
   iconPositions: Record<string, Record<string, IconPos>>;
   /** Die zuletzt offenen Fenster, je Workspace-Pfad (siehe core/session). */
   sessions: Record<string, SessionWindow[]>;
+  /** Der Hintergrund der Desktop-Fläche, je Workspace-Pfad (siehe core/wallpaper). */
+  wallpapers: Record<string, Wallpaper>;
   /** Aktuell zur Genehmigung anstehende Anfrage (für den Dialog). */
   pendingPermission: PendingPermission | null;
   apps: AppSummary[];
@@ -54,6 +67,7 @@ export const useWorkspaceStore = defineStore('workspace', {
     maxAgents: DEFAULT_MAX_AGENTS,
     iconPositions: {},
     sessions: {},
+    wallpapers: {},
     pendingPermission: null,
     apps: [],
     loading: false,
@@ -76,6 +90,10 @@ export const useWorkspaceStore = defineStore('workspace', {
     },
     /** Die gemerkte Sitzung des aktuellen Verzeichnisses (hinten → vorn). */
     session: (s): SessionWindow[] => (s.folder ? s.sessions[s.folder] ?? [] : []),
+    /** Der Hintergrund des aktuellen Verzeichnisses — ohne eigenen die Vorgabe. */
+    wallpaper: (s): Wallpaper => (s.folder ? s.wallpapers[s.folder] ?? DEFAULT_WALLPAPER : DEFAULT_WALLPAPER),
+    /** Hat der Anwender hier einen eigenen Hintergrund gewählt? */
+    hasWallpaper: (s): boolean => (s.folder ? s.wallpapers[s.folder] !== undefined : false),
   },
 
   actions: {
@@ -92,6 +110,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.iconPositions =
           settings?.iconPositions && typeof settings.iconPositions === 'object' ? settings.iconPositions : {};
         this.sessions = cleanSessions(settings?.sessions);
+        this.wallpapers = cleanWallpapers(settings?.wallpapers);
       } catch {
         this.recentFolders = [];
         this.accessRoots = {};
@@ -101,6 +120,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.maxAgents = DEFAULT_MAX_AGENTS;
         this.iconPositions = {};
         this.sessions = {};
+        this.wallpapers = {};
       }
     },
 
@@ -186,6 +206,28 @@ export const useWorkspaceStore = defineStore('workspace', {
       if (!current || !(appId in current)) return;
       const { [appId]: _weg, ...rest } = current;
       this.iconPositions = { ...this.iconPositions, [this.folder]: rest };
+      void this.persistSettings();
+    },
+
+    /**
+     * Legt den Hintergrund dieses Verzeichnisses fest. Geprüft wird hier, nicht
+     * erst beim Malen: Was `cleanWallpaper` nicht annimmt, wird nicht gemerkt
+     * (liefert false — die Oberfläche zeigt dann ihren Hinweis).
+     */
+    setWallpaper(wallpaper: Wallpaper): boolean {
+      if (!this.folder) return false;
+      const clean = cleanWallpaper(wallpaper);
+      if (!clean) return false;
+      this.wallpapers = { ...this.wallpapers, [this.folder]: clean };
+      void this.persistSettings();
+      return true;
+    },
+
+    /** Zurück zur Vorgabe: Dieses Verzeichnis hat dann keinen eigenen Hintergrund mehr. */
+    resetWallpaper(): void {
+      if (!this.folder || !this.wallpapers[this.folder]) return;
+      const { [this.folder]: _weg, ...rest } = this.wallpapers;
+      this.wallpapers = rest;
       void this.persistSettings();
     },
 
@@ -326,6 +368,7 @@ export const useWorkspaceStore = defineStore('workspace', {
       const maxAgents = this.maxAgents;
       const iconPositions = JSON.parse(JSON.stringify(this.iconPositions)) as Record<string, Record<string, IconPos>>;
       const sessions = JSON.parse(JSON.stringify(this.sessions)) as Record<string, SessionWindow[]>;
+      const wallpapers = JSON.parse(JSON.stringify(this.wallpapers)) as Record<string, Wallpaper>;
       try {
         await getHost().saveSettings({
           recentFolders,
@@ -336,6 +379,7 @@ export const useWorkspaceStore = defineStore('workspace', {
           maxAgents,
           iconPositions,
           sessions,
+          wallpapers,
         });
       } catch {
         /* nicht kritisch */

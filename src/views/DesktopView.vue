@@ -22,6 +22,7 @@ import {
   type ShortcutId,
 } from '@/core/shortcuts';
 import { canSwitch, cycleSelection, switcherOrder } from '@/core/switcher';
+import { wallpaperCss } from '@/core/wallpaper';
 import type { DesktopWindow } from '@/stores/desktop';
 import {
   arrangeIcons,
@@ -339,6 +340,9 @@ async function applyIcon(icon: string | null): Promise<void> {
 <template>
   <div class="desktop">
     <div class="stage">
+      <!-- Der Hintergrund: liegt unter allem und nimmt keine Klicks an. -->
+      <div class="wallpaper" :style="{ background: wallpaperCss(workspace.wallpaper) }" aria-hidden="true"></div>
+
       <!-- Launcher: Icons der Apps (liegt hinter den Fenstern). Jede Kachel
            liegt dort, wo der Anwender sie abgelegt hat — sonst im Raster. -->
       <div ref="launcher" class="launcher">
@@ -485,6 +489,12 @@ async function applyIcon(icon: string | null): Promise<void> {
 .stage {
   position: relative;
   overflow: hidden;
+}
+/* Der gewählte Hintergrund — hinter Kacheln und Fenstern, ohne sie zu stören. */
+.wallpaper {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 .launcher {
   position: absolute;

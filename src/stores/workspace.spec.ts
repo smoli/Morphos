@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useWorkspaceStore } from './workspace';
 import { setHost } from '@/services/host';
+import { DEFAULT_WALLPAPER } from '@/core/wallpaper';
 import type { MorphosHost, AppSummary, Settings } from '@/types';
 
 const apps: AppSummary[] = [
@@ -52,7 +53,7 @@ describe('useWorkspaceStore', () => {
     expect(ws.folder).toBe('/neu');
     expect(ws.recentFolders[0]).toBe('/neu');
     expect(ws.apps).toHaveLength(2);
-    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows', maxAgents: 2, iconPositions: {}, sessions: {} });
+    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows', maxAgents: 2, iconPositions: {}, sessions: {}, wallpapers: {} });
     expect(host.listApps).toHaveBeenCalledWith('/neu');
   });
 
@@ -383,6 +384,103 @@ describe('useWorkspaceStore', () => {
       await ws.removeApp('a-1');
 
       expect(ws.iconLayout).toEqual({ 'b-2': { x: 10, y: 10 } });
+    });
+  });
+
+  describe('Hintergrund (Wallpaper)', () => {
+    const blau = { kind: 'color' as const, color: '#123456' };
+
+    it('lädt den gemerkten Hintergrund des Workspace', async () => {
+      setHost(makeHost({
+        loadSettings: vi.fn(async () => ({
+          recentFolders: [],
+          accessRoots: {},
+          wallpapers: { '/apps': blau, '/andere': { kind: 'color' as const, color: '#abcdef' } },
+        })),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.init();
+      expect(ws.wallpaper).toEqual(DEFAULT_WALLPAPER); // noch kein Ordner geöffnet
+      await ws.openFolder('/apps');
+      expect(ws.wallpaper).toEqual(blau);
+      expect(ws.hasWallpaper).toBe(true);
+    });
+
+    it('gilt die Vorgabe, solange keiner gewählt ist', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+      expect(ws.wallpaper).toEqual(DEFAULT_WALLPAPER);
+      expect(ws.hasWallpaper).toBe(false);
+    });
+
+    it('merkt einen gewählten Hintergrund je Workspace und speichert ihn', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(ws.setWallpaper({ kind: 'gradient', from: '#000', to: '#FFF', angle: 400 })).toBe(true);
+
+      // Beim Merken schon eingetütet: ausgeschriebene Farben, Winkel im Kreis.
+      expect(ws.wallpaper).toEqual({ kind: 'gradient', from: '#000000', to: '#ffffff', angle: 40 });
+      expect(host.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          wallpapers: { '/apps': { kind: 'gradient', from: '#000000', to: '#ffffff', angle: 40 } },
+        }),
+      );
+    });
+
+    it('nimmt keinen unbrauchbaren Hintergrund an', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+      const calls = (host.saveSettings as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      expect(ws.setWallpaper({ kind: 'color', color: 'blau' } as never)).toBe(false);
+
+      expect(ws.hasWallpaper).toBe(false);
+      expect((host.saveSettings as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(calls);
+    });
+
+    it('rührt ohne geöffneten Ordner nichts an', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      expect(ws.setWallpaper(blau)).toBe(false);
+      expect(ws.wallpapers).toEqual({});
+    });
+
+    it('setzt nur den aktuellen Workspace auf die Vorgabe zurück', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      ws.wallpapers = { '/andere': { kind: 'color', color: '#abcdef' } };
+      await ws.openFolder('/apps');
+      ws.setWallpaper(blau);
+
+      ws.resetWallpaper();
+
+      expect(ws.wallpaper).toEqual(DEFAULT_WALLPAPER);
+      expect(ws.hasWallpaper).toBe(false);
+      expect(ws.wallpapers).toEqual({ '/andere': { kind: 'color', color: '#abcdef' } });
+      expect(host.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ wallpapers: { '/andere': { kind: 'color', color: '#abcdef' } } }),
+      );
+    });
+
+    it('überlebt beschädigte Einstellungen (dann gilt die Vorgabe)', async () => {
+      setHost(makeHost({
+        loadSettings: vi.fn(async () => ({
+          recentFolders: [],
+          accessRoots: {},
+          wallpapers: { '/apps': { kind: 'image', image: 'https://example.com/x.png' } } as never,
+        })),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.init();
+      await ws.openFolder('/apps');
+      expect(ws.wallpaper).toEqual(DEFAULT_WALLPAPER);
     });
   });
 

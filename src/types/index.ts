@@ -154,7 +154,22 @@ export interface Settings {
    * Beim nächsten Start kommt der Desktop damit zurück (siehe core/session).
    */
   sessions?: Record<string, SessionWindow[]>;
+  /**
+   * Der Hintergrund der Desktop-Fläche je Workspace-Pfad. Was hier fehlt,
+   * bekommt die Vorgabe (siehe core/wallpaper).
+   */
+  wallpapers?: Record<string, Wallpaper>;
 }
+
+/**
+ * Der Hintergrund der Desktop-Fläche: eine Farbe, ein Verlauf zwischen zwei
+ * Farben (Neigung in Grad) oder ein Bild als data:-URI (mitgespeichert, damit
+ * es ohne die Quelldatei wieder da ist). Siehe core/wallpaper.
+ */
+export type Wallpaper =
+  | { kind: 'color'; color: string }
+  | { kind: 'gradient'; from: string; to: string; angle: number }
+  | { kind: 'image'; image: string };
 
 /** Position einer Desktop-Kachel in Bildpunkten, relativ zur Desktop-Fläche. */
 export interface IconPos {
