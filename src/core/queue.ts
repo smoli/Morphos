@@ -14,6 +14,12 @@ export const DEFAULT_MAX_AGENTS = 2;
 /** Obergrenze der Einstellung (ein sinnvoller Riegel, kein technisches Limit). */
 export const MAX_AGENTS_LIMIT = 8;
 
+/**
+ * Wie viele erledigte Läufe die Warteschlange als „zuletzt gelaufen“ behält —
+ * genug für einen Eindruck der Aktivität, ohne eine Chronik zu führen.
+ */
+export const MAX_RECENT_RUNS = 10;
+
 /** Zustand eines Auftrags: er wartet auf einen Platz oder er arbeitet. */
 export type JobState = 'queued' | 'running';
 

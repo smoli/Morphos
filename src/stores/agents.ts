@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import type { Attachment } from '@/types';
 import type { JobState } from '@/core/queue';
-import { isAppBusy, startableJobs } from '@/core/queue';
+import { isAppBusy, MAX_RECENT_RUNS, startableJobs } from '@/core/queue';
 import { DEFAULT_NAME } from '@/core/app';
 import { useAppWindow } from './app';
 import { useDesktopStore } from './desktop';
@@ -29,8 +29,25 @@ export interface AgentJob {
   cancelled: boolean;
 }
 
+/**
+ * Ein erledigter Lauf, kurz vorgemerkt: Was ist zuletzt gelaufen und wie ist es
+ * ausgegangen (siehe Telemetrie in den Einstellungen)? Abgebrochene Läufe
+ * stehen hier nicht — sie sind keine Nachricht wert.
+ */
+export interface RecentRun {
+  jobId: string;
+  label: string;
+  prompt: string;
+  ok: boolean;
+  error?: string;
+  /** Zeitpunkt des Endes in Millisekunden. */
+  time: number;
+}
+
 interface AgentsState {
   jobs: AgentJob[];
+  /** Die jüngsten erledigten Läufe, neuester zuerst (höchstens MAX_RECENT_RUNS). */
+  recent: RecentRun[];
 }
 
 type AppStore = ReturnType<typeof useAppWindow>;
@@ -57,6 +74,7 @@ const runningStores = new Map<string, AppStore>();
 export const useAgentsStore = defineStore('agents', {
   state: (): AgentsState => ({
     jobs: [],
+    recent: [],
   }),
 
   getters: {
@@ -182,9 +200,10 @@ export const useAgentsStore = defineStore('agents', {
     },
 
     /**
-     * Sagt der Schale Bescheid, wie der Lauf ausgegangen ist. Die Meldung gehört
-     * dem Meldungsstapel, nicht dem Fenster — sie kommt auch an, wenn das
-     * auslösende Fenster längst zu ist. Ein Abbruch ist keine Nachricht wert.
+     * Sagt der Schale Bescheid, wie der Lauf ausgegangen ist, und merkt ihn als
+     * zuletzt gelaufen vor. Die Meldung gehört dem Meldungsstapel, nicht dem
+     * Fenster — sie kommt auch an, wenn das auslösende Fenster längst zu ist.
+     * Ein Abbruch ist keine Nachricht wert.
      */
     announce(job: AgentJob, store: AppStore): void {
       if (job.cancelled) return;
@@ -192,6 +211,16 @@ export const useAgentsStore = defineStore('agents', {
       const label = store.name || job.label;
       if (store.error) notes.error(`${label}: ${store.error}`);
       else notes.success(`„${label}“ ist fertig.`);
+
+      const run: RecentRun = {
+        jobId: job.jobId,
+        label,
+        prompt: job.prompt,
+        ok: !store.error,
+        ...(store.error ? { error: store.error } : {}),
+        time: Date.now(),
+      };
+      this.recent = [run, ...this.recent].slice(0, MAX_RECENT_RUNS);
     },
 
     /**

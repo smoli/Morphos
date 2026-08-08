@@ -27,6 +27,14 @@ function makeHost(over: Partial<MorphosHost> = {}): MorphosHost {
     listVersions: vi.fn(async () => []),
     revertApp: vi.fn(async () => ({ ok: true })),
     fs: vi.fn(async () => ({ ok: true as const, result: null })),
+    diskUsage: vi.fn(async () => ({
+      ok: true as const,
+      usage: {
+        apps: [{ id: 'rechner', name: 'Rechner', icon: '🧮', bytes: 2 * 1024 * 1024 }],
+        appsBytes: 2 * 1024 * 1024,
+        data: { path: '/daten', bytes: 1024 },
+      },
+    })),
     ...over,
   };
 }
@@ -157,6 +165,20 @@ describe('SettingsDialog', () => {
       expect(rows.some((li) => li.text().includes(s.label) && li.get('kbd').text() === s.keys)).toBe(true);
     }
     expect(wrapper.get('.pane').text()).toContain(SWITCHER_KEYS);
+  });
+
+  it('zeigt Agenten-Aktivität und Platzbedarf in der Telemetrie', async () => {
+    const host = makeHost();
+    setHost(host);
+    const wrapper = mount(SettingsDialog);
+    await openCategory(wrapper, 'Telemetrie');
+    await flushPromises();
+
+    expect(wrapper.get('.pane .stat-running .stat-value').text()).toBe('0');
+    // Gerechnet wird im Hauptprozess — die Oberfläche fragt nur nach.
+    expect(host.diskUsage).toHaveBeenCalledWith('/apps');
+    expect(wrapper.get('.pane .usage li').text()).toContain('2,0 MB');
+    expect(wrapper.get('.pane .total-data').text()).toContain('/daten');
   });
 
   it('schließt über das Kreuz und den Hintergrund', async () => {

@@ -16,6 +16,7 @@ import { commitAll, countVersions, ensureRepo, listVersions, restoreTree } from 
 import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeAppState, writeChat } from '../src/core/appstore';
 import { validateIcon } from '../src/core/icon';
 import { runFs } from '../src/core/fsaccess';
+import { collectDiskUsage } from '../src/core/diskusage';
 import { cleanSessions } from '../src/core/session';
 import { cleanWallpapers } from '../src/core/wallpaper';
 import { resolveLibs } from './libcache';
@@ -28,6 +29,7 @@ import type {
   AppSummary,
   Attachment,
   ChatMessage,
+  DiskUsageResult,
   FolderResult,
   FsRequest,
   FsResponse,
@@ -511,6 +513,25 @@ ipcMain.handle('morphos:fs', async (_e, root: string, req: FsRequest): Promise<F
   if (!root || typeof root !== 'string') return { ok: false, error: 'Kein Datenordner festgelegt.' };
   if (!isApprovedRoot(root)) return { ok: false, error: 'Dieser Datenordner ist nicht freigegeben.' };
   return runFs(root, req);
+});
+
+/**
+ * Platzbedarf eines Arbeitsverzeichnisses (Telemetrie). Gemessen wird allein
+ * hier im Hauptprozess und allein innerhalb der App-Ordner und des zugehörigen
+ * Datenordners — beides muss in den gespeicherten Einstellungen stehen, ein
+ * beliebiger Pfad aus dem Renderer wird nicht vermessen (Defense in depth).
+ */
+ipcMain.handle('morphos:diskUsage', async (_e, folder: string): Promise<DiskUsageResult> => {
+  if (!folder || typeof folder !== 'string') return { ok: false, error: 'Kein Arbeitsverzeichnis geöffnet.' };
+  const settings = readSettings();
+  if (!settings.recentFolders.includes(folder)) {
+    return { ok: false, error: 'Dieses Arbeitsverzeichnis ist nicht bekannt.' };
+  }
+  try {
+    return { ok: true, usage: await collectDiskUsage(folder, settings.accessRoots[folder] ?? null) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 });
 
 ipcMain.handle('morphos:listApps', async (_e, folder: string): Promise<AppSummary[]> => {

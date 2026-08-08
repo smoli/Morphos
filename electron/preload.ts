@@ -6,6 +6,7 @@ import type {
   AppSummary,
   Attachment,
   ChatMessage,
+  DiskUsageResult,
   FolderResult,
   FsRequest,
   FsResponse,
@@ -71,6 +72,9 @@ contextBridge.exposeInMainWorld('morphos', {
     ipcRenderer.invoke('morphos:revertApp', folder, id, sha),
 
   fs: (root: string, req: FsRequest): Promise<FsResponse> => ipcRenderer.invoke('morphos:fs', root, req),
+
+  // Platzbedarf der Apps und des Datenordners — gerechnet wird im Hauptprozess.
+  diskUsage: (folder: string): Promise<DiskUsageResult> => ipcRenderer.invoke('morphos:diskUsage', folder),
 
   // Steuerung des rahmenlosen Programmfensters.
   minimizeWindow: (): Promise<void> => ipcRenderer.invoke('window:minimize'),

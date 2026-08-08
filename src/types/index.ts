@@ -256,6 +256,30 @@ export type DialogResponse =
   | { ok: true; result: string | null }
   | { ok: false; error: string };
 
+/** Platzbedarf einer App: ihr Ordner im Arbeitsverzeichnis, in Bytes. */
+export interface AppUsage {
+  id: string;
+  name: string;
+  icon: string;
+  bytes: number;
+}
+
+/**
+ * Platzbedarf eines Arbeitsverzeichnisses: je App ihr Ordner (größte zuerst),
+ * deren Summe und — sofern festgelegt — der Datenordner. Gerechnet wird im
+ * Hauptprozess (siehe core/diskusage).
+ */
+export interface DiskUsage {
+  apps: AppUsage[];
+  appsBytes: number;
+  data: { path: string; bytes: number } | null;
+}
+
+/** Antwort auf die Platzbedarfs-Anfrage. */
+export type DiskUsageResult =
+  | { ok: true; usage: DiskUsage }
+  | { ok: false; error: string };
+
 /** Ergebnis eines Speichervorgangs. */
 export interface SaveResult {
   ok: boolean;
@@ -367,6 +391,14 @@ export interface MorphosHost {
    * im Hauptprozess strikt auf diesen Ordner eingegrenzt.
    */
   fs(root: string, req: FsRequest): Promise<FsResponse>;
+
+  /**
+   * Ermittelt den Platzbedarf eines Arbeitsverzeichnisses: je App ihr Ordner
+   * und der zugehörige Datenordner. Gerechnet wird im Hauptprozess — der
+   * Renderer läuft nie selbst über das Dateisystem. Optional: im
+   * Renderer-Test fehlt die Anbindung.
+   */
+  diskUsage?(folder: string): Promise<DiskUsageResult>;
 
   // ---- Steuerung des rahmenlosen Electron-Fensters (optional; im Renderer/Test
   //      fehlt die Anbindung — die Titelleiste ruft daher defensiv mit ?. auf) ----

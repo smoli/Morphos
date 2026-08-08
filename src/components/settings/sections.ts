@@ -10,6 +10,7 @@ import DataFolderSection from './DataFolderSection.vue';
 import PermissionsSection from './PermissionsSection.vue';
 import LibrariesSection from './LibrariesSection.vue';
 import ShortcutsSection from './ShortcutsSection.vue';
+import TelemetrySection from './TelemetrySection.vue';
 import WallpaperSection from './WallpaperSection.vue';
 
 export interface SettingsSection {
@@ -30,4 +31,5 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { id: 'libs', label: 'Bibliotheken', icon: '📦', component: LibrariesSection },
   { id: 'wallpaper', label: 'Hintergrund', icon: '🖼', component: WallpaperSection },
   { id: 'shortcuts', label: 'Tastenkürzel', icon: '⌨️', component: ShortcutsSection },
+  { id: 'telemetry', label: 'Telemetrie', icon: '📊', component: TelemetrySection },
 ];

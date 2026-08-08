@@ -5,6 +5,7 @@ import { useDesktopStore } from './desktop';
 import { useWorkspaceStore } from './workspace';
 import { useAppWindow } from './app';
 import { useNotificationsStore } from './notifications';
+import { MAX_RECENT_RUNS } from '@/core/queue';
 import { setHost } from '@/services/host';
 import type { AppData, GenerateResult, MorphosHost, SourceFile } from '@/types';
 
@@ -560,6 +561,60 @@ describe('useAgentsStore', () => {
       await slow.release(0, { ok: false, error: 'Abgebrochen' });
 
       expect(notes.toasts).toEqual([]);
+    });
+
+    it('merkt einen fertigen Lauf als zuletzt gelaufen (für die Telemetrie)', async () => {
+      setHost(makeHost());
+      const agents = useAgentsStore();
+      const a = openWindow('a-1', 'Rechner');
+
+      agents.submit(a, 'eins');
+      await flush();
+
+      expect(agents.count).toBe(0);
+      expect(agents.recent).toHaveLength(1);
+      expect(agents.recent[0]).toMatchObject({ label: 'Rechner', prompt: 'eins', ok: true });
+      expect(agents.recent[0].time).toBeGreaterThan(0);
+    });
+
+    it('merkt einen Fehlschlag samt Meldung', async () => {
+      setHost(makeHost({
+        generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: false, error: 'CLI nicht gefunden' })),
+      }));
+      const agents = useAgentsStore();
+      const a = openWindow('a-1', 'Rechner');
+
+      agents.submit(a, 'eins');
+      await flush();
+
+      expect(agents.recent[0]).toMatchObject({ ok: false, error: 'CLI nicht gefunden' });
+    });
+
+    it('merkt einen abgebrochenen Lauf nicht', async () => {
+      const slow = makeSlowHost({ cancelAgent: vi.fn(async () => true) });
+      setHost(slow.host);
+      const agents = useAgentsStore();
+      const a = openWindow('a-1', 'Rechner');
+
+      const job = agents.submit(a, 'eins')!;
+      await flush();
+      agents.cancel(job);
+      await slow.release(0, { ok: false, error: 'Abgebrochen' });
+
+      expect(agents.recent).toEqual([]);
+    });
+
+    it('behält nur die jüngsten Läufe, neuester zuerst', async () => {
+      setHost(makeHost());
+      const agents = useAgentsStore();
+      for (let i = 0; i < MAX_RECENT_RUNS + 3; i += 1) {
+        agents.submit(openWindow(`a-${i}`, `App ${i}`), `wunsch ${i}`);
+        await flush();
+      }
+
+      expect(agents.recent).toHaveLength(MAX_RECENT_RUNS);
+      expect(agents.recent[0].prompt).toBe(`wunsch ${MAX_RECENT_RUNS + 2}`);
+      expect(agents.recent[MAX_RECENT_RUNS - 1].prompt).toBe('wunsch 3');
     });
 
     it('verwirft nach einem Fehlschlag den Auftrag und lässt den Fehler im Fenster stehen', async () => {
