@@ -1,9 +1,16 @@
 {
-  "status": "idle",
-  "ready": [],
+  "status": "running",
+  "ready": [
+    "c0035"
+  ],
   "waiting": [],
-  "runs": [],
-  "updated": "2026-08-08T17:07:31",
+  "runs": [
+    {
+      "cardId": "c0035",
+      "phase": "running"
+    }
+  ],
+  "updated": "2026-08-08T17:07:55",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -15,6 +22,7 @@
     "c0033",
     "i0002",
     "i0003",
-    "c0034"
+    "c0034",
+    "c0035"
   ]
 }
