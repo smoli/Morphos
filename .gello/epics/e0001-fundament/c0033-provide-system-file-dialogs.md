@@ -39,31 +39,31 @@ rolling its own picker.
 
 ## Acceptance criteria
 
-- [ ] `window.morphosFS` exposes `openFile()`, `saveFile()` and
+- [x] `window.morphosFS` exposes `openFile()`, `saveFile()` and
       `pickDirectory()`; each resolves to a path **relative to the data folder**,
       or `null` if the user cancels.
-- [ ] The picker is rendered by the **Morphos shell** (trusted renderer), not
+- [x] The picker is rendered by the **Morphos shell** (trusted renderer), not
       inside the app iframe, and shows only the data folder and its subfolders —
       it cannot navigate above the data root.
-- [ ] `saveFile` lets the user choose a target folder within the data folder and
+- [x] `saveFile` lets the user choose a target folder within the data folder and
       type a filename (pre-filled from an optional suggested name) and **confirms
       before overwriting** an existing file.
-- [ ] Returned paths are relative, `/`-separated, and confined to the data
+- [x] Returned paths are relative, `/`-separated, and confined to the data
       folder; the app uses the existing `readFile`/`writeFile` with them.
-- [ ] Reading/writing a dialog-chosen path **still goes through the per-function
+- [x] Reading/writing a dialog-chosen path **still goes through the per-function
       permissions** (open→read, save→write); opening the picker itself adds no
       extra prompt.
-- [ ] If no data folder is configured, the dialog calls **reject with a catchable
+- [x] If no data folder is configured, the dialog calls **reject with a catchable
       error** (consistent with the rest of `morphosFS`).
-- [ ] Only one picker is shown at a time per app; the call is modal and returns a
+- [x] Only one picker is shown at a time per app; the call is modal and returns a
       single result.
-- [ ] `SYSTEM_PROMPT` documents `openFile`/`saveFile`/`pickDirectory` and
+- [x] `SYSTEM_PROMPT` documents `openFile`/`saveFile`/`pickDirectory` and
       instructs the agent to use them for user file selection instead of building
       its own file browser.
-- [ ] The dialog request/response travels over the existing `postMessage` bridge
+- [x] The dialog request/response travels over the existing `postMessage` bridge
       with the same source-checking as fs requests (an app only receives
       responses to its own requests).
-- [ ] Bridge/logic (request validation, path confinement, cancel) is covered by
+- [x] Bridge/logic (request validation, path confinement, cancel) is covered by
       unit tests; the prompt change is covered by the prompt spec.
 
 ## Discussion
