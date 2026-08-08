@@ -38,6 +38,13 @@ let closeWatcher: ReturnType<typeof setInterval> | null = null;
 
 const popped = computed(() => portalTarget.value !== null);
 const teleportTarget = computed<HTMLElement | string>(() => portalTarget.value ?? 'body');
+// Chromium macht Knoten, die in einem geschlossenen Fenster lagen, unbrauchbar:
+// zurückgeschoben hängen sie zwar wieder im Dokument, ihre Ereignis-Handler
+// feuern aber nie mehr — die Eingabe nähme nach dem Zurückholen nichts mehr an.
+// Der Schlüssel wechselt darum mit dem Ort: Vue baut die Oberfläche jedes Mal
+// frisch auf, statt dieselben Knoten hin- und herzuschieben. Der Zustand (Text,
+// Anhänge) lebt in diesem Setup und übersteht den Neuaufbau.
+const placeKey = computed(() => (popped.value ? 'windowed' : 'docked'));
 
 // Das Eingabefeld wächst mit dem Inhalt (bis zu 6 Zeilen).
 const rows = computed(() => Math.min(6, Math.max(1, text.value.split('\n').length)));
@@ -199,7 +206,7 @@ function fmt(ts: number): string {
       <button type="button" class="dock-back" @click="dockBack">Zurückholen</button>
     </div>
 
-    <Teleport :to="teleportTarget" :disabled="!popped">
+    <Teleport :key="placeKey" :to="teleportTarget" :disabled="!popped">
       <div class="chat-ui" :class="popped ? 'windowed' : 'docked'">
         <div v-if="popped || open" ref="panel" class="chat-panel" :class="{ overlay: !popped }">
           <p v-if="messages.length === 0" class="empty">Noch kein Dialog — beschreibe unten, was die App können soll.</p>

@@ -400,5 +400,95 @@ describe('ChatDock', () => {
       expect(wrapper.find('textarea').exists()).toBe(true);
       openSpy.mockRestore();
     });
+
+    // Chromium macht Knoten, die in einem geschlossenen Fenster lagen, unbrauchbar:
+    // sie hängen zwar wieder im Dokument, ihre Ereignis-Handler feuern aber nie
+    // mehr. Zurückgeschoben wären v-model und Enter tot — die Eingabe nähme nichts
+    // mehr an. Der Chat wird darum bei jedem Wechsel neu aufgebaut.
+    it('baut die Oberfläche beim Auslagern und Zurückholen neu auf (statt Knoten zu verschieben)', async () => {
+      const child = makeChildWindow();
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue(child as unknown as Window);
+      const wrapper = mountDock({ messages });
+
+      const docked = wrapper.get('textarea').element;
+
+      await wrapper.get('.popout').trigger('click');
+      const windowed = child.document.querySelector('textarea');
+      expect(windowed).toBeTruthy();
+      expect(windowed).not.toBe(docked);
+
+      await wrapper.get('.dock-back').trigger('click');
+      const redocked = wrapper.get('textarea').element;
+      expect(redocked).not.toBe(windowed);
+      expect(redocked.ownerDocument).toBe(document);
+
+      openSpy.mockRestore();
+    });
+
+    it('nimmt nach dem Zurückholen wieder Eingaben an und sendet sie', async () => {
+      const child = makeChildWindow();
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue(child as unknown as Window);
+      const wrapper = mountDock({ messages });
+
+      await wrapper.get('.popout').trigger('click');
+      await wrapper.get('.dock-back').trigger('click');
+
+      const input = wrapper.get('textarea');
+      await input.setValue('Mach den Knopf grün');
+      expect(wrapper.get('.send').attributes('disabled')).toBeUndefined();
+
+      await input.trigger('keydown', { key: 'Enter' });
+      expect(wrapper.emitted('submit')![0]).toEqual(['Mach den Knopf grün', []]);
+      openSpy.mockRestore();
+    });
+
+    it('nimmt auch nach dem Schließen des Fensters wieder Eingaben an', async () => {
+      vi.useFakeTimers();
+      const child = makeChildWindow();
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue(child as unknown as Window);
+      const wrapper = mountDock({ messages });
+
+      await wrapper.get('.popout').trigger('click');
+      const windowed = child.document.querySelector('textarea');
+
+      (child as unknown as { closed: boolean }).closed = true;
+      vi.advanceTimersByTime(1000);
+      await wrapper.vm.$nextTick();
+
+      const redocked = wrapper.get('textarea');
+      expect(redocked.element).not.toBe(windowed);
+
+      await redocked.setValue('Weiter geht’s');
+      expect(wrapper.get('.send').attributes('disabled')).toBeUndefined();
+
+      vi.useRealTimers();
+      openSpy.mockRestore();
+    });
+
+    // Der übertragene Text darf beim Wechsel nicht verloren gehen.
+    it('behält Eingabetext und Anhänge über den Fensterwechsel hinweg', async () => {
+      setHost(makeHost({
+        chooseAttachment: vi.fn(async () => ({
+          ok: true,
+          attachment: { path: '/tmp/shot.png', name: 'shot.png', kind: 'image' as const },
+        })),
+      }));
+      const child = makeChildWindow();
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue(child as unknown as Window);
+      const wrapper = mountDock({ messages });
+
+      await wrapper.get('.attach').trigger('click');
+      await flushPromises();
+      await wrapper.get('textarea').setValue('Halb getippt');
+
+      await wrapper.get('.popout').trigger('click');
+      expect((child.document.querySelector('textarea') as HTMLTextAreaElement).value).toBe('Halb getippt');
+      expect(child.document.body.textContent).toContain('shot.png');
+
+      await wrapper.get('.dock-back').trigger('click');
+      expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('Halb getippt');
+      expect(wrapper.text()).toContain('shot.png');
+      openSpy.mockRestore();
+    });
   });
 });
