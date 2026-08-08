@@ -20,12 +20,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "npx vitest run src/core/toasts.spec.ts src/stores/notifications.spec.ts 2>&1 | tail -25"
+        "arg": "git status --short && git log --oneline -6"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-08T23:18:43",
+  "updated": "2026-08-08T23:20:30",
   "pickupDelay": 10,
   "owned": [
     "c0029",
