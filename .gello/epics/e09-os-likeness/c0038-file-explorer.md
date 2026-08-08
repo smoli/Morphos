@@ -6,7 +6,21 @@ created: 2026-08-08
 updated: 2026-08-08
 status-changed: 2026-08-08T22:51:33
 epic: e09
+depends: [c0047, c0048, c0049, c0050]
 ---
+
+## Breakdown
+
+Umbrella card — the work is split into four dependent sub-cards (see the e09
+breakdown). This card is "done" when all four are:
+
+1. **c0047** — system window in the desktop manager *(root)*
+2. **c0048** — browse + live watch *(← c0047)*
+3. **c0049** — content previews *(← c0048)*
+4. **c0050** — file management + waste bin *(← c0048)*
+
+The acceptance criteria below are the overall definition of done, split across
+those cards.
 
 ## What
 
