@@ -1,10 +1,10 @@
 ---
 id: c0032
 title: "Show agent busy messages in „spinner\""
-status: review
+status: done
 created: 2026-08-07
 updated: 2026-08-08
-status-changed: 2026-08-08T06:27:12
+status-changed: 2026-08-08T07:37:30
 epic: e0004
 usage-tokens: 30308
 usage-cost: 4.908549
@@ -47,3 +47,4 @@ damit Chat und Warteanzeige dieselben Zeichen benutzen.
 - 2026-08-08 status → ready (app)
 - 2026-08-08 status → in-progress (agent)
 - 2026-08-08 status → review (agent)
+- 2026-08-08 status → done (app)
