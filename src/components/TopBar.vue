@@ -3,6 +3,7 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { getHost } from '@/services/host';
+import AgentsIndicator from './AgentsIndicator.vue';
 import type { UiMode } from '@/types';
 
 const emit = defineEmits<{ 'open-settings': [] }>();
@@ -86,6 +87,7 @@ function closeWindow(): void {
             ▢ Einzeln
           </button>
         </div>
+        <AgentsIndicator />
         <button type="button" class="icon-btn settings" title="Einstellungen" @click="emit('open-settings')">⚙</button>
         <RouterLink to="/" class="link">Ordner wechseln</RouterLink>
       </template>

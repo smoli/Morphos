@@ -51,7 +51,7 @@ describe('useWorkspaceStore', () => {
     expect(ws.folder).toBe('/neu');
     expect(ws.recentFolders[0]).toBe('/neu');
     expect(ws.apps).toHaveLength(2);
-    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows' });
+    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows', maxAgents: 2 });
     expect(host.listApps).toHaveBeenCalledWith('/neu');
   });
 
@@ -250,6 +250,26 @@ describe('useWorkspaceStore', () => {
     ws.setUiMode('windows');
     expect(ws.uiMode).toBe('windows');
     expect(host.saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({ uiMode: 'windows' }));
+  });
+
+  it('lädt und setzt den Deckel gleichzeitiger Agenten (persistiert, mit Vorgabe)', async () => {
+    const host = makeHost({
+      loadSettings: vi.fn(async () => ({ recentFolders: [], accessRoots: {} })),
+    });
+    setHost(host);
+    const ws = useWorkspaceStore();
+    await ws.init();
+    expect(ws.maxAgents).toBe(2); // Vorgabe, wenn nichts gespeichert ist
+
+    ws.setMaxAgents(4);
+    expect(ws.maxAgents).toBe(4);
+    expect(host.saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({ maxAgents: 4 }));
+
+    // Unsinnige Werte werden in den erlaubten Bereich gezogen.
+    ws.setMaxAgents(0);
+    expect(ws.maxAgents).toBe(1);
+    ws.setMaxAgents(99);
+    expect(ws.maxAgents).toBe(8);
   });
 
   it('verlässt das Verzeichnis über closeFolder', async () => {

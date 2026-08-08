@@ -64,16 +64,26 @@ describe('ChatDock', () => {
     expect(wrapper.emitted('submit')).toBeFalsy();
   });
 
-  it('sendet nicht, solange die Generierung läuft oder das Feld leer ist', async () => {
-    const wrapper = mountDock({ busy: true });
-    const input = wrapper.get('textarea');
-    await input.setValue('etwas');
-    await input.trigger('keydown', { key: 'Enter' });
-    expect(wrapper.emitted('submit')).toBeFalsy();
-
+  it('sendet nicht, wenn das Feld leer ist', async () => {
     const idle = mountDock();
     await idle.get('textarea').trigger('keydown', { key: 'Enter' });
     expect(idle.emitted('submit')).toBeFalsy();
+  });
+
+  it('nimmt auch während eines laufenden Agenten einen Wunsch an (er reiht sich ein)', async () => {
+    const wrapper = mountDock({ busy: true });
+    const input = wrapper.get('textarea');
+    await input.setValue('und noch das hier');
+    // Der Senden-Knopf bleibt nutzbar, obwohl ein Lauf arbeitet.
+    expect(wrapper.get('.send').attributes('disabled')).toBeUndefined();
+
+    await input.trigger('keydown', { key: 'Enter' });
+    expect(wrapper.emitted('submit')![0]).toEqual(['und noch das hier', []]);
+  });
+
+  it('führt wartende Wünsche im Fortschritt mit auf', async () => {
+    const wrapper = await mountOpenDock({ busy: true, queued: 2 });
+    expect(wrapper.get('.activity').text()).toContain('2 weitere Wünsche warten.');
   });
 
   it('klappt den Chatverlauf über den Umschalter auf', async () => {

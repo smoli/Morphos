@@ -33,6 +33,10 @@ interface AppState {
   activity: AgentEvent[];
   /** Beginn des laufenden Laufs (ms) — Grundlage der angezeigten Laufzeit; sonst null. */
   runStartedAt: number | null;
+  /** Id des laufenden Laufs — mit ihr bricht der Hauptprozess ihn ab; sonst null. */
+  runId: string | null;
+  /** Der laufende Lauf wurde abgebrochen: sein Ergebnis wird verworfen. */
+  aborted: boolean;
   busy: boolean;
   error: string | null;
 }
@@ -61,6 +65,8 @@ export function useAppWindow(instanceId: string) {
     pendingQuestion: null,
     activity: [],
     runStartedAt: null,
+    runId: null,
+    aborted: false,
     busy: false,
     error: null,
   }),
@@ -109,6 +115,8 @@ export function useAppWindow(instanceId: string) {
         this.pendingQuestion = null;
         this.activity = [];
         this.runStartedAt = null;
+        this.runId = null;
+        this.aborted = false;
         this.busy = false;
         this.error = null;
         await this.loadVersions();
@@ -149,12 +157,16 @@ export function useAppWindow(instanceId: string) {
 
       this.error = null;
       this.busy = true;
+      this.aborted = false;
       this.activity = [];
       this.runStartedAt = Date.now();
       const runId = nextRunId();
+      this.runId = runId;
       const unsubscribe = getHost().onAgentEvent?.((id, event) => {
         if (id === runId) this.addActivity(event);
       });
+      // Marke für einen etwaigen Abbruch: alles ab hier gehört diesem Lauf.
+      const chatMark = this.chat.length;
       try {
         // Reine Werte übergeben (kein reaktiver Proxy) — Electron-IPC nutzt structured clone.
         const plainFiles = this.files.map((f) => ({ path: f.path, content: f.content }));
@@ -171,6 +183,13 @@ export function useAppWindow(instanceId: string) {
         this.pendingQuestion = null;
 
         const res = await getHost().generate(text, plainFiles, priorChat, plainAtts, runId);
+        // Abgebrochen: Das (Teil-)Ergebnis wird verworfen und der Wunsch aus dem
+        // Dialog genommen — die App bleibt, wie sie war, und der Abbruch selbst
+        // ist kein Fehler.
+        if (this.aborted) {
+          this.chat.splice(chatMark);
+          return;
+        }
         if (!res.ok) {
           this.error = res.error;
           return;
@@ -199,12 +218,29 @@ export function useAppWindow(instanceId: string) {
 
         await this.persistChat();
       } catch (err) {
-        this.error = err instanceof Error ? err.message : String(err);
+        if (this.aborted) this.chat.splice(chatMark);
+        else this.error = err instanceof Error ? err.message : String(err);
       } finally {
         unsubscribe?.();
         this.runStartedAt = null;
+        this.runId = null;
+        this.aborted = false;
         this.busy = false;
       }
+    },
+
+    /**
+     * Bricht den laufenden Lauf ab: Der Hauptprozess beendet den zugehörigen
+     * `claude`-Kindprozess, das Ergebnis wird verworfen. Ohne laufenden Lauf
+     * passiert nichts.
+     */
+    abortRun(): void {
+      if (!this.busy || this.aborted) return;
+      this.aborted = true;
+      if (!this.runId) return;
+      // Scheitert der Abbruch, endet der Lauf eben regulär — sein Ergebnis wird
+      // durch `aborted` ohnehin verworfen.
+      void Promise.resolve(getHost().cancelAgent?.(this.runId)).catch(() => {});
     },
 
     /** Springt zu einer früheren Version zurück (neuer Commit mit dem alten Stand). */

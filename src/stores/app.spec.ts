@@ -380,6 +380,66 @@ describe('useAppStore', () => {
     expect(store.busy).toBe(false);
   });
 
+  describe('Abbrechen eines Laufs', () => {
+    it('beendet den Kindprozess über die Lauf-Id und verwirft das Ergebnis', async () => {
+      const cancelAgent = vi.fn(async () => true);
+      let runIdDuringRun: string | null = null;
+      const host = makeHost({
+        cancelAgent,
+        generate: vi.fn(async (): Promise<GenerateResult> => {
+          runIdDuringRun = store.runId;
+          store.abortRun();
+          return { ok: true, files: FILES(DOC('neu')), html: DOC('neu') };
+        }),
+      });
+      setHost(host);
+      const store = useAppStore();
+      store.newDraft('/apps');
+
+      await store.generate('Ein Taschenrechner');
+
+      expect(runIdDuringRun).toBeTruthy();
+      expect(cancelAgent).toHaveBeenCalledWith(runIdDuringRun);
+      // Nichts übernommen, nichts gespeichert, kein Fehler — und wieder frei.
+      expect(store.currentHtml).toBe('');
+      expect(store.isDraft).toBe(true);
+      expect(host.saveApp).not.toHaveBeenCalled();
+      expect(store.error).toBeNull();
+      expect(store.busy).toBe(false);
+      expect(store.runId).toBeNull();
+      expect(store.aborted).toBe(false);
+    });
+
+    it('nimmt den abgebrochenen Wunsch wieder aus dem Dialog', async () => {
+      const host = makeHost({
+        cancelAgent: vi.fn(async () => true),
+        generate: vi.fn(async (): Promise<GenerateResult> => {
+          store.abortRun();
+          return { ok: false, error: 'Abgebrochen' };
+        }),
+      });
+      setHost(host);
+      const store = useAppStore();
+      store.newDraft('/apps');
+      store.chat.push({ role: 'user', text: 'früher', time: 1 });
+
+      await store.generate('doch nicht');
+
+      expect(store.chat.map((m) => m.text)).toEqual(['früher']);
+    });
+
+    it('bricht ohne laufenden Lauf nichts ab', () => {
+      const host = makeHost({ cancelAgent: vi.fn(async () => true) });
+      setHost(host);
+      const store = useAppStore();
+
+      store.abortRun();
+
+      expect(host.cancelAgent).not.toHaveBeenCalled();
+      expect(store.aborted).toBe(false);
+    });
+  });
+
   it('stellt über revertTo eine frühere Version wieder her und lädt neu', async () => {
     const restored: AppData = {
       id: 'app-1',

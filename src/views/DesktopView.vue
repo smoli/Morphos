@@ -2,13 +2,16 @@
 import { computed, onMounted } from 'vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useDesktopStore } from '@/stores/desktop';
+import { useAgentsStore } from '@/stores/agents';
 import { useAppWindow } from '@/stores/app';
 import WindowFrame from '@/components/WindowFrame.vue';
 import ChatDock from '@/components/ChatDock.vue';
+import BusyDot from '@/components/BusyDot.vue';
 import type { AppSummary, Attachment } from '@/types';
 
 const workspace = useWorkspaceStore();
 const desktop = useDesktopStore();
+const agents = useAgentsStore();
 
 const singleMode = computed(() => workspace.uiMode === 'single');
 
@@ -33,6 +36,17 @@ const chatBusy = computed(() => activeStore.value?.busy ?? false);
 const chatPending = computed(() => activeStore.value?.pendingQuestion ?? null);
 const chatActivity = computed(() => activeStore.value?.activity ?? []);
 const chatStartedAt = computed(() => activeStore.value?.runStartedAt ?? null);
+// Wie viele Wünsche für das aktive Fenster noch anstehen (sie laufen nacheinander).
+const chatQueued = computed(() =>
+  desktop.activeId
+    ? agents.queuedJobs.filter((j) => j.instanceId === desktop.activeId).length
+    : 0,
+);
+
+/** Arbeitet ein Agent für dieses Fenster (bzw. für die App, die es zeigt)? */
+function windowBusy(instanceId: string, appId: string | null): boolean {
+  return agents.isWindowBusy(instanceId, appId);
+}
 
 // Anzeigen, an welche App die Eingabe geht (Gewissheit für den Anwender). Ohne
 // aktives Fenster entsteht eine neue App. Im Einzel-Modus zeigt die laufende
@@ -62,7 +76,7 @@ async function removeApp(id: string, name: string): Promise<void> {
 }
 
 function onPrompt(text: string, attachments: Attachment[] = []): void {
-  void desktop.submitToActive(text, attachments);
+  agents.submitToActive(text, attachments);
 }
 </script>
 
@@ -82,6 +96,7 @@ function onPrompt(text: string, attachments: Attachment[] = []): void {
               <span class="name">{{ app.name }}</span>
               <span class="meta">{{ app.versions }} Version(en)</span>
             </button>
+            <BusyDot v-if="agents.isBusy(app.id)" class="tile-busy" />
             <button type="button" class="del" title="Löschen" @click.stop="removeApp(app.id, app.name)">🗑</button>
           </div>
         </div>
@@ -113,6 +128,7 @@ function onPrompt(text: string, attachments: Attachment[] = []): void {
         >
           <span>{{ w.icon }}</span>
           <span class="dock-name">{{ w.title }}</span>
+          <BusyDot v-if="windowBusy(w.instanceId, w.appId)" />
         </button>
       </div>
     </div>
@@ -127,6 +143,7 @@ function onPrompt(text: string, attachments: Attachment[] = []): void {
         :context-label="chatContext"
         :activity="chatActivity"
         :started-at="chatStartedAt"
+        :queued="chatQueued"
         @submit="onPrompt"
       />
     </footer>
@@ -202,6 +219,12 @@ function onPrompt(text: string, attachments: Attachment[] = []): void {
 .meta {
   font-size: 11px;
   color: var(--muted);
+}
+/* Arbeitsanzeige der Kachel — links oben, gegenüber dem Löschknopf. */
+.tile-busy {
+  position: absolute;
+  top: 10px;
+  left: 10px;
 }
 .del {
   position: absolute;

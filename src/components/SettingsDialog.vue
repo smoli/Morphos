@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { FS_OP_LABELS } from '@/core/permissions';
+import { MAX_AGENTS_LIMIT } from '@/core/queue';
 import type { FsOp, PermMode } from '@/types';
 
 const emit = defineEmits<{ close: [] }>();
@@ -16,6 +17,13 @@ const PERM_MODES: { mode: PermMode; label: string }[] = [
 ];
 
 const newLibPattern = ref('');
+
+// Deckel gleichzeitiger Agenten: 1 … MAX_AGENTS_LIMIT.
+const AGENT_COUNTS = Array.from({ length: MAX_AGENTS_LIMIT }, (_, i) => i + 1);
+
+function setMaxAgents(count: number): void {
+  workspace.setMaxAgents(count);
+}
 
 function setPerm(op: FsOp, mode: PermMode): void {
   workspace.setPermission(op, mode);
@@ -38,6 +46,27 @@ function addLibPattern(): void {
       </header>
 
       <div class="body">
+        <section class="block">
+          <h3>Agenten (gleichzeitige Läufe)</h3>
+          <p class="hint">
+            Wie viele Wünsche gleichzeitig bearbeitet werden dürfen. Alles darüber wartet in der
+            Reihenfolge des Eingangs — für eine App arbeitet ohnehin nie mehr als ein Agent.
+          </p>
+          <div class="agents-setting">
+            <span class="seg">
+              <button
+                v-for="n in AGENT_COUNTS"
+                :key="n"
+                type="button"
+                :class="{ active: workspace.maxAgents === n }"
+                @click="setMaxAgents(n)"
+              >
+                {{ n }}
+              </button>
+            </span>
+          </div>
+        </section>
+
         <section class="block">
           <h3>Datenordner der Apps</h3>
           <p class="hint">
@@ -194,6 +223,11 @@ function addLibPattern(): void {
 }
 .btn:hover {
   border-color: var(--accent);
+}
+.agents-setting {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .perms {
   list-style: none;

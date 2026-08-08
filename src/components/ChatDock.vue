@@ -17,6 +17,8 @@ const props = defineProps<{
   activity?: AgentEvent[];
   /** Beginn des laufenden Laufs (ms) — daraus wächst die angezeigte Laufzeit. */
   startedAt?: number | null;
+  /** Wie viele Wünsche für diese App noch warten (sie laufen nacheinander). */
+  queued?: number;
 }>();
 
 const emit = defineEmits<{ submit: [text: string, attachments: Attachment[]] }>();
@@ -132,9 +134,11 @@ function onKeydown(e: KeyboardEvent): void {
   send();
 }
 
+// Auch während ein Agent arbeitet, nimmt die Leiste Wünsche an — sie reihen
+// sich ein und laufen nacheinander (siehe stores/agents).
 function send(): void {
   const t = text.value.trim();
-  if (!t || props.busy) return;
+  if (!t) return;
   emit('submit', t, attachments.value.map((a) => ({ ...a })));
   text.value = '';
   attachments.value = [];
@@ -211,15 +215,23 @@ function fmt(ts: number): string {
             </div>
           </template>
 
-          <!-- Mitlaufender Fortschritt: was der Agent gerade tut. -->
-          <div v-if="busy" class="activity">
-            <div v-for="(step, i) in steps" :key="i" class="step">
-              <span class="step-icon">{{ step.icon }}</span>
-              <span class="step-label">{{ step.label }}</span>
-            </div>
-            <div class="step running">
-              <span class="step-icon">⏳</span>
-              <span class="step-label">{{ runningLabel }}</span>
+          <!-- Mitlaufender Fortschritt: was der Agent gerade tut — und was noch wartet. -->
+          <div v-if="busy || queued" class="activity">
+            <template v-if="busy">
+              <div v-for="(step, i) in steps" :key="i" class="step">
+                <span class="step-icon">{{ step.icon }}</span>
+                <span class="step-label">{{ step.label }}</span>
+              </div>
+              <div class="step running">
+                <span class="step-icon">⏳</span>
+                <span class="step-label">{{ runningLabel }}</span>
+              </div>
+            </template>
+            <div v-if="queued" class="step">
+              <span class="step-icon">⏸</span>
+              <span class="step-label">
+                {{ queued === 1 ? 'Ein weiterer Wunsch wartet.' : `${queued} weitere Wünsche warten.` }}
+              </span>
             </div>
           </div>
         </div>
@@ -256,19 +268,20 @@ function fmt(ts: number): string {
           >
             ⧉
           </button>
-          <button type="button" class="attach" title="Referenzdatei anhängen (Bild oder Text)" :disabled="busy" @click="attach">
+          <button type="button" class="attach" title="Referenzdatei anhängen (Bild oder Text)" @click="attach">
             📎
           </button>
           <textarea
             v-model="text"
             :rows="rows"
-            :disabled="busy"
-            placeholder="Was soll die App sein oder können? (Enter sendet, Shift+Enter neue Zeile, Bild einfügen mit Cmd/Ctrl+V)"
+            :placeholder="busy
+              ? 'Der Agent arbeitet — dein nächster Wunsch reiht sich ein.'
+              : 'Was soll die App sein oder können? (Enter sendet, Shift+Enter neue Zeile, Bild einfügen mit Cmd/Ctrl+V)'"
             @keydown="onKeydown"
             @paste="onPaste"
           ></textarea>
-          <button type="button" class="send" :disabled="busy || !text.trim()" @click="send">
-            {{ busy ? '…' : 'Senden' }}
+          <button type="button" class="send" :disabled="!text.trim()" @click="send">
+            {{ busy ? 'Einreihen' : 'Senden' }}
           </button>
         </div>
       </div>

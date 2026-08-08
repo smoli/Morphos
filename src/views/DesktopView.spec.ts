@@ -6,6 +6,7 @@ import DesktopView from './DesktopView.vue';
 import WindowFrame from '@/components/WindowFrame.vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useDesktopStore } from '@/stores/desktop';
+import { useAgentsStore } from '@/stores/agents';
 import { setHost } from '@/services/host';
 import type { AppSummary, MorphosHost } from '@/types';
 
@@ -115,10 +116,57 @@ describe('DesktopView', () => {
     expect(wrapper.find('.access-bar').exists()).toBe(false);
   });
 
+  describe('Arbeitsanzeige beschäftigter Apps', () => {
+    /** Ein laufender Auftrag, wie ihn die Warteschlange führt. */
+    function busyJob(appId: string, instanceId: string) {
+      useAgentsStore().jobs = [{
+        jobId: 'job-1',
+        appKey: appId,
+        state: 'running' as const,
+        instanceId,
+        appId,
+        label: 'Rechner',
+        prompt: 'Mach was',
+        attachments: [],
+        cancelled: false,
+      }];
+    }
+
+    it('markiert die Kachel einer App, für die ein Agent arbeitet', async () => {
+      const { wrapper } = await mountView();
+      expect(wrapper.find('.tile-busy').exists()).toBe(false);
+
+      busyJob('rechner-1', 'win-1');
+      await flushPromises();
+
+      const tiles = wrapper.findAll('.tile-wrap');
+      const rechner = tiles.find((t) => t.text().includes('Rechner'))!;
+      const editor = tiles.find((t) => t.text().includes('Editor'))!;
+      expect(rechner.find('.busy-dot').exists()).toBe(true);
+      expect(editor.find('.busy-dot').exists()).toBe(false);
+    });
+
+    it('markiert das Fenster einer beschäftigten App im Titel und im Dock', async () => {
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      const tile = wrapper.findAll('.tile').find((t) => t.text().includes('Rechner'))!;
+      await tile.trigger('click');
+      await flushPromises();
+      const instanceId = desktop.windows[0].instanceId;
+
+      busyJob('rechner-1', instanceId);
+      await flushPromises();
+      expect(wrapper.find('.w-busy').exists()).toBe(true);
+
+      await wrapper.get('.w-min').trigger('click');
+      await flushPromises();
+      expect(wrapper.get('.dock-item').find('.busy-dot').exists()).toBe(true);
+    });
+  });
+
   it('richtet die globale Promptleiste an das aktive Fenster (Entwurf, wenn keins offen)', async () => {
     const { wrapper } = await mountView();
-    const desktop = useDesktopStore();
-    const spy = vi.spyOn(desktop, 'submitToActive').mockResolvedValue();
+    const spy = vi.spyOn(useAgentsStore(), 'submitToActive').mockReturnValue('job-1');
 
     // ChatDock unten absenden.
     await wrapper.get('textarea').setValue('Ein Spiel');

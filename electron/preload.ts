@@ -36,6 +36,9 @@ contextBridge.exposeInMainWorld('morphos', {
     return () => ipcRenderer.removeListener('morphos:agentEvent', handler);
   },
 
+  // Bricht einen laufenden Agentenlauf ab (beendet seinen claude-Kindprozess).
+  cancelAgent: (runId: string): Promise<boolean> => ipcRenderer.invoke('morphos:cancelAgent', runId),
+
   chooseFolder: (): Promise<FolderResult> => ipcRenderer.invoke('morphos:chooseFolder'),
   chooseAttachment: (): Promise<{ ok: boolean; attachment?: Attachment; error?: string }> =>
     ipcRenderer.invoke('morphos:chooseAttachment'),

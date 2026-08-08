@@ -117,6 +117,11 @@ export interface Settings {
   libWhitelist?: string[];
   /** Darstellungsmodus des Desktops: überlappende Fenster oder eine App zur Zeit. */
   uiMode?: UiMode;
+  /**
+   * Wie viele Agentenläufe höchstens gleichzeitig arbeiten dürfen (global, weil
+   * es eine Claude-Anmeldung ist). Weitere Wünsche warten (siehe core/queue).
+   */
+  maxAgents?: number;
 }
 
 /** Desktop-Modus: mehrere überlappende Fenster oder genau eine App im Vollbild. */
@@ -206,6 +211,13 @@ export interface MorphosHost {
    * Optional: im Renderer-Test fehlt die Anbindung.
    */
   onAgentEvent?(cb: (runId: string, event: AgentEvent) => void): () => void;
+
+  /**
+   * Bricht einen laufenden Agentenlauf ab: Der Hauptprozess beendet den
+   * `claude`-Kindprozess zu dieser Lauf-Id. Liefert false, wenn kein solcher
+   * Lauf (mehr) bekannt ist. Optional: im Renderer-Test fehlt die Anbindung.
+   */
+  cancelAgent?(runId: string): Promise<boolean>;
 
   /** Öffnet den nativen Ordner-Auswahldialog. */
   chooseFolder(): Promise<FolderResult>;

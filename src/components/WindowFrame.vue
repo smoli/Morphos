@@ -3,11 +3,13 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useAppWindow } from '@/stores/app';
 import { useDesktopStore } from '@/stores/desktop';
 import { useWorkspaceStore } from '@/stores/workspace';
+import { useAgentsStore } from '@/stores/agents';
 import { agentBusyIcon, agentBusyLabel } from '@/core/agent';
 import { useElapsed } from '@/composables/useElapsed';
 import AppCanvas from './AppCanvas.vue';
 import WelcomeScreen from './WelcomeScreen.vue';
 import HistoryList from './HistoryList.vue';
+import BusyDot from './BusyDot.vue';
 import type { DesktopWindow } from '@/stores/desktop';
 import type { Attachment } from '@/types';
 
@@ -15,6 +17,7 @@ const props = defineProps<{ win: DesktopWindow; single?: boolean }>();
 
 const desktop = useDesktopStore();
 const workspace = useWorkspaceStore();
+const agents = useAgentsStore();
 const store = useAppWindow(props.win.instanceId);
 
 const showVersions = ref(false);
@@ -29,6 +32,20 @@ const full = computed(() => props.single || props.win.maximized);
 const busyIcon = computed(() => agentBusyIcon(store.activity));
 const busyLabel = computed(() => agentBusyLabel(store.activity));
 const elapsed = useElapsed(() => store.runStartedAt);
+
+// Arbeitet ein Agent für diese App? Das gilt auch für einen wartenden Wunsch und
+// für einen Lauf, der ohne sein (geschlossenes) Fenster weiterarbeitet.
+const agentBusy = computed(() => agents.isWindowBusy(props.win.instanceId, props.win.appId));
+// Wieviele Wünsche stehen für dieses Fenster noch an?
+const queuedHere = computed(
+  () => agents.queuedJobs.filter((j) => j.instanceId === props.win.instanceId).length,
+);
+// Ein Lauf für DIESE App, der nicht in diesem Fenster begonnen hat (das
+// ursprüngliche ist zugegangen): Die Anzeige hier wäre sonst stumm, obwohl sich
+// die App gleich ändert.
+const runningElsewhere = computed(
+  () => !store.busy && !!props.win.appId && agents.runningJobs.some((j) => j.appKey === props.win.appId),
+);
 
 onMounted(async () => {
   if (props.win.appId && workspace.folder) {
@@ -66,10 +83,10 @@ function backToDesktop(): void {
   desktop.showDesktop();
 }
 
-// Der WelcomeScreen eines leeren Entwurfsfensters generiert über die zentrale
-// Orchestrierung (wie die globale Promptleiste).
-async function onWelcomePick(text: string, attachments: Attachment[] = []): Promise<void> {
-  await desktop.runGenerate(props.win.instanceId, text, attachments);
+// Der WelcomeScreen eines leeren Entwurfsfensters reicht seinen Wunsch in die
+// zentrale Warteschlange (wie die globale Promptleiste).
+function onWelcomePick(text: string, attachments: Attachment[] = []): void {
+  agents.submit(props.win.instanceId, text, attachments);
 }
 
 async function onRevert(sha: string): Promise<void> {
@@ -138,6 +155,7 @@ function stopInteraction(): void {
       </button>
       <span class="w-icon" @mousedown.stop>{{ store.icon || win.icon }}</span>
       <span class="w-title" @mousedown.self="!full && startDrag($event)">{{ store.name || win.title }}</span>
+      <BusyDot v-if="agentBusy" class="w-busy" @mousedown.stop />
       <span class="w-actions">
         <button
           v-if="!store.isDraft"
@@ -174,14 +192,19 @@ function stopInteraction(): void {
       />
       <WelcomeScreen v-else @pick="onWelcomePick" />
 
-      <div v-if="store.busy" class="w-loading">
+      <div v-if="store.busy || runningElsewhere" class="w-loading">
         <div class="spinner"></div>
         <div>{{ store.hasApp ? 'Die Änderung wird umgesetzt …' : 'Die Anwendung wird entwickelt …' }}</div>
-        <div class="w-step" :title="busyLabel">
-          <span class="w-step-icon">{{ busyIcon }}</span>
-          <span class="w-step-label">{{ busyLabel }}</span>
+        <template v-if="store.busy">
+          <div class="w-step" :title="busyLabel">
+            <span class="w-step-icon">{{ busyIcon }}</span>
+            <span class="w-step-label">{{ busyLabel }}</span>
+          </div>
+          <div v-if="elapsed" class="w-elapsed">{{ elapsed }}</div>
+        </template>
+        <div v-if="queuedHere" class="w-queued">
+          {{ queuedHere === 1 ? 'Ein weiterer Wunsch wartet.' : `${queuedHere} weitere Wünsche warten.` }}
         </div>
-        <div v-if="elapsed" class="w-elapsed">{{ elapsed }}</div>
       </div>
 
       <div v-if="store.error" class="w-error">{{ store.error }}</div>
@@ -332,6 +355,14 @@ function stopInteraction(): void {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   opacity: 0.7;
+}
+.w-queued {
+  font-size: 12px;
+  opacity: 0.7;
+}
+/* Arbeitsanzeige neben dem Fenstertitel. */
+.w-busy {
+  margin-right: 2px;
 }
 .spinner {
   width: 40px;

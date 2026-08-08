@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import type { AppSummary, FsOp, FsPermissions, PermDecision, PermMode, UiMode } from '@/types';
 import { getHost } from '@/services/host';
 import { decideOutcome, effectivePermission } from '@/core/permissions';
+import { clampMaxAgents, DEFAULT_MAX_AGENTS } from '@/core/queue';
 
 interface PendingPermission {
   op: FsOp;
@@ -19,6 +20,8 @@ interface WorkspaceState {
   libWhitelist: string[];
   /** Desktop-Darstellung: überlappende Fenster oder eine App zur Zeit. */
   uiMode: UiMode;
+  /** Wie viele Agentenläufe gleichzeitig arbeiten dürfen (global). */
+  maxAgents: number;
   /** Aktuell zur Genehmigung anstehende Anfrage (für den Dialog). */
   pendingPermission: PendingPermission | null;
   apps: AppSummary[];
@@ -43,6 +46,7 @@ export const useWorkspaceStore = defineStore('workspace', {
     permissions: {},
     libWhitelist: [],
     uiMode: 'windows',
+    maxAgents: DEFAULT_MAX_AGENTS,
     pendingPermission: null,
     apps: [],
     loading: false,
@@ -69,12 +73,14 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.permissions = settings?.permissions && typeof settings.permissions === 'object' ? settings.permissions : {};
         this.libWhitelist = Array.isArray(settings?.libWhitelist) ? settings.libWhitelist : [];
         this.uiMode = settings?.uiMode === 'single' ? 'single' : 'windows';
+        this.maxAgents = clampMaxAgents(settings?.maxAgents);
       } catch {
         this.recentFolders = [];
         this.accessRoots = {};
         this.permissions = {};
         this.libWhitelist = [];
         this.uiMode = 'windows';
+        this.maxAgents = DEFAULT_MAX_AGENTS;
       }
     },
 
@@ -125,6 +131,12 @@ export const useWorkspaceStore = defineStore('workspace', {
     /** Schaltet den Desktop-Modus um (überlappende Fenster ⇄ eine App zur Zeit). */
     setUiMode(mode: UiMode): void {
       this.uiMode = mode;
+      void this.persistSettings();
+    },
+
+    /** Legt fest, wie viele Agentenläufe gleichzeitig arbeiten dürfen. */
+    setMaxAgents(count: number): void {
+      this.maxAgents = clampMaxAgents(count);
       void this.persistSettings();
     },
 
@@ -217,8 +229,9 @@ export const useWorkspaceStore = defineStore('workspace', {
       const permissions = JSON.parse(JSON.stringify(this.permissions)) as Record<string, FsPermissions>;
       const libWhitelist = [...this.libWhitelist];
       const uiMode = this.uiMode;
+      const maxAgents = this.maxAgents;
       try {
-        await getHost().saveSettings({ recentFolders, accessRoots, permissions, libWhitelist, uiMode });
+        await getHost().saveSettings({ recentFolders, accessRoots, permissions, libWhitelist, uiMode, maxAgents });
       } catch {
         /* nicht kritisch */
       }

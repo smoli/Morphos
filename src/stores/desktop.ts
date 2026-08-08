@@ -1,6 +1,4 @@
 import { defineStore } from 'pinia';
-import type { Attachment } from '@/types';
-import { useAppWindow } from './app';
 import { useWorkspaceStore } from './workspace';
 
 /** Ein Fenster auf dem Desktop. Trägt nur Geometrie/Stapel — die App-Daten
@@ -167,34 +165,5 @@ export const useDesktopStore = defineStore('desktop', {
       w.icon = icon;
     },
 
-    /**
-     * Führt eine Generierung für das Fenster `instanceId` aus und gleicht danach
-     * Titel/Icon (Entwurf → echte App) sowie die Desktop-Liste ab. Zentrale
-     * Stelle für die globale Promptleiste UND den WelcomeScreen eines Fensters.
-     */
-    async runGenerate(instanceId: string, text: string, attachments: Attachment[] = []): Promise<void> {
-      const app = useAppWindow(instanceId);
-      const wasDraft = app.isDraft;
-      await app.generate(text, attachments);
-      if (!app.isDraft && app.id) {
-        this.setAppMeta(instanceId, app.id, app.name, app.icon);
-        if (wasDraft) await useWorkspaceStore().refresh();
-      }
-    },
-
-    /**
-     * Nimmt eine Eingabe der globalen Promptleiste entgegen und richtet sie an
-     * das aktive Fenster. Ist keines offen, wird ein neuer Entwurf angelegt.
-     */
-    async submitToActive(text: string, attachments: Attachment[] = []): Promise<void> {
-      const ws = useWorkspaceStore();
-      if (!ws.folder) return;
-      let id = this.activeId;
-      if (!id) {
-        id = this.openDraft();
-        useAppWindow(id).newDraft(ws.folder);
-      }
-      await this.runGenerate(id, text, attachments);
-    },
   },
 });

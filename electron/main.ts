@@ -5,6 +5,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { AGENT_IDLE_TIMEOUT_MS, agentIdleTimeoutMessage, createAgentStream } from '../src/core/agent';
+import { clampMaxAgents, DEFAULT_MAX_AGENTS } from '../src/core/queue';
 import { buildPrompt, SYSTEM_PROMPT } from '../src/core/prompt';
 import { extractHtml } from '../src/core/html';
 import { applyChanges, isValidSourcePath, parseLLMOutput } from '../src/core/files';
@@ -61,9 +62,17 @@ function readSettings(): Settings {
       ? parsed.libWhitelist.filter((p) => typeof p === 'string')
       : [];
     const uiMode = parsed.uiMode === 'single' ? 'single' : 'windows';
-    return { recentFolders: recent, accessRoots, permissions, libWhitelist, uiMode };
+    const maxAgents = clampMaxAgents(parsed.maxAgents);
+    return { recentFolders: recent, accessRoots, permissions, libWhitelist, uiMode, maxAgents };
   } catch {
-    return { recentFolders: [], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows' };
+    return {
+      recentFolders: [],
+      accessRoots: {},
+      permissions: {},
+      libWhitelist: [],
+      uiMode: 'windows',
+      maxAgents: DEFAULT_MAX_AGENTS,
+    };
   }
 }
 
@@ -135,6 +144,13 @@ function preparePromptAttachments(attachments: Attachment[]): { atts: PromptAtta
 // ---- Claude CLI ----
 
 /**
+ * Die laufenden `claude`-Kindprozesse, nach Lauf-Id. Nur darüber lässt sich ein
+ * Lauf gezielt abbrechen (morphos:cancelAgent) — die Warteschlange im Renderer
+ * kennt nur die Id.
+ */
+const runningAgents = new Map<string, ReturnType<typeof spawn>>();
+
+/**
  * Ruft die Claude CLI im Strom-Modus auf (stream-json): Sie meldet laufend,
  * was sie tut — jedes Ereignis geht über `onEvent` an den Chat und setzt
  * zugleich das Ruhe-Zeitbudget zurück. Ein langer Lauf läuft dadurch nicht
@@ -144,6 +160,7 @@ function runClaude(
   prompt: string,
   extraArgs: string[] = [],
   onEvent: (event: AgentEvent) => void = () => {},
+  runId = '',
 ): Promise<AgentResult> {
   return new Promise((resolve) => {
     const args = [
@@ -156,6 +173,7 @@ function runClaude(
     ];
 
     const child = spawn('claude', args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    if (runId) runningAgents.set(runId, child);
 
     const stream = createAgentStream();
     let stderr = '';
@@ -168,6 +186,7 @@ function runClaude(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (runId) runningAgents.delete(runId);
       resolve(result);
     };
 
@@ -220,7 +239,8 @@ function runClaude(
  * aufrufen, Datei-Blöcke und Rückfrage lesen, Änderungen anwenden,
  * Bibliotheken auflösen (Whitelist + Cache) und zum Artefakt bündeln.
  * Eine reine Rückfrage kommt ohne files/html zurück — es wird nichts committet.
- * `onEvent` meldet den Fortschritt des Laufs an das aufrufende Fenster.
+ * `onEvent` meldet den Fortschritt des Laufs an das aufrufende Fenster,
+ * `runId` macht ihn abbrechbar.
  */
 async function generate(
   userRequest: string,
@@ -228,6 +248,7 @@ async function generate(
   chat: ChatMessage[],
   attachments: Attachment[],
   onEvent: (event: AgentEvent) => void = () => {},
+  runId = '',
 ): Promise<GenerateResult> {
   const whitelist = readSettings().libWhitelist ?? [];
 
@@ -240,7 +261,7 @@ async function generate(
     .filter((a) => a.kind === 'image' && a.path)
     .flatMap((a) => ['--allowedTools', `Read(${a.path})`]);
 
-  const res = await runClaude(buildPrompt(userRequest, current, whitelist, context), extraArgs, onEvent);
+  const res = await runClaude(buildPrompt(userRequest, current, whitelist, context), extraArgs, onEvent, runId);
   if (!res.ok) return res;
 
   const changes = parseLLMOutput(res.text);
@@ -333,7 +354,17 @@ ipcMain.handle('morphos:generate', async (
     if (sender.isDestroyed()) return;
     sender.send('morphos:agentEvent', runId, agentEvent);
   };
-  return generate(payload.prompt, current, chat, attachments, onEvent);
+  return generate(payload.prompt, current, chat, attachments, onEvent, runId);
+});
+
+// Abbruch eines laufenden Agenten: Der Kindprozess zu dieser Lauf-Id wird
+// beendet — sein (Teil-)Ergebnis verwirft die Warteschlange im Renderer.
+ipcMain.handle('morphos:cancelAgent', async (_e, runId: string): Promise<boolean> => {
+  const child = typeof runId === 'string' ? runningAgents.get(runId) : undefined;
+  if (!child) return false;
+  runningAgents.delete(runId);
+  child.kill();
+  return true;
 });
 
 ipcMain.handle('morphos:chooseAttachment', async (): Promise<{ ok: boolean; attachment?: Attachment; error?: string }> => {
@@ -410,6 +441,7 @@ ipcMain.handle('morphos:saveSettings', async (_e, settings: Settings): Promise<S
       permissions: settings?.permissions ?? {},
       libWhitelist: (settings?.libWhitelist ?? []).filter((p) => typeof p === 'string' && p.trim()).slice(0, 100),
       uiMode: settings?.uiMode === 'single' ? 'single' : 'windows',
+      maxAgents: clampMaxAgents(settings?.maxAgents),
     };
     fs.writeFileSync(settingsFile(), JSON.stringify(clean, null, 2), 'utf8');
     return { ok: true };

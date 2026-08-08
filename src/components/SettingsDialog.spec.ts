@@ -40,6 +40,19 @@ describe('SettingsDialog', () => {
     expect(wrapper.text()).toContain('Bibliotheken');
   });
 
+  it('stellt den Deckel gleichzeitiger Agenten ein (Vorgabe zwei)', async () => {
+    const wrapper = mount(SettingsDialog);
+    const ws = useWorkspaceStore();
+    expect(wrapper.text()).toContain('Agenten');
+    const buttons = wrapper.findAll('.agents-setting .seg button');
+    expect(buttons).toHaveLength(8);
+    expect(buttons.find((b) => b.classes().includes('active'))!.text()).toBe('2');
+
+    await buttons[3].trigger('click'); // „4“
+    expect(ws.maxAgents).toBe(4);
+    expect(wrapper.findAll('.agents-setting .seg button').find((b) => b.classes().includes('active'))!.text()).toBe('4');
+  });
+
   it('setzt eine Funktions-Berechtigung', async () => {
     const wrapper = mount(SettingsDialog);
     const ws = useWorkspaceStore();
