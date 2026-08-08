@@ -8,6 +8,8 @@ epic: e07
 created: 2026-08-08
 updated: 2026-08-08
 status-changed: 2026-08-08T07:47:21
+usage-tokens: 25523
+usage-cost: 2.693289
 ---
 
 but when leaving the app to desktop and going back in again, the chat progress, i.e. the last prompt and what the agent is doing is gone and the agent activity is not displayed in the spinner text
