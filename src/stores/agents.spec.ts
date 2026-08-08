@@ -4,6 +4,7 @@ import { useAgentsStore } from './agents';
 import { useDesktopStore } from './desktop';
 import { useWorkspaceStore } from './workspace';
 import { useAppWindow } from './app';
+import { useNotificationsStore } from './notifications';
 import { setHost } from '@/services/host';
 import type { AppData, GenerateResult, MorphosHost, SourceFile } from '@/types';
 
@@ -511,6 +512,54 @@ describe('useAgentsStore', () => {
       expect(slow.prompts).toEqual(['eins', 'zwei']);
       // Der Entwurf ist jetzt eine echte App — der wartende Wunsch zählt zu ihr.
       expect(agents.jobs[0].appKey).toMatch(/^rechner-/);
+    });
+
+    it('meldet einen fertigen Lauf in den Meldungsstapel', async () => {
+      setHost(makeHost());
+      const agents = useAgentsStore();
+      const notes = useNotificationsStore();
+      const a = openWindow('a-1', 'Rechner');
+
+      agents.submit(a, 'eins');
+      await flush();
+
+      expect(notes.toasts).toHaveLength(1);
+      expect(notes.toasts[0].kind).toBe('success');
+      expect(notes.toasts[0].text).toContain('Rechner');
+    });
+
+    it('meldet einen Fehlschlag, auch wenn sein Fenster längst zu ist', async () => {
+      const slow = makeSlowHost();
+      setHost(slow.host);
+      const agents = useAgentsStore();
+      const notes = useNotificationsStore();
+      const desktop = useDesktopStore();
+      const a = openWindow('a-1', 'Rechner');
+
+      agents.submit(a, 'eins');
+      await flush();
+      desktop.closeWindow(a);
+
+      await slow.release(0, { ok: false, error: 'CLI nicht gefunden' });
+
+      expect(notes.toasts).toHaveLength(1);
+      expect(notes.toasts[0].kind).toBe('error');
+      expect(notes.toasts[0].text).toContain('CLI nicht gefunden');
+    });
+
+    it('meldet einen abgebrochenen Lauf nicht', async () => {
+      const slow = makeSlowHost({ cancelAgent: vi.fn(async () => true) });
+      setHost(slow.host);
+      const agents = useAgentsStore();
+      const notes = useNotificationsStore();
+      const a = openWindow('a-1', 'Rechner');
+
+      const job = agents.submit(a, 'eins')!;
+      await flush();
+      agents.cancel(job);
+      await slow.release(0, { ok: false, error: 'Abgebrochen' });
+
+      expect(notes.toasts).toEqual([]);
     });
 
     it('verwirft nach einem Fehlschlag den Auftrag und lässt den Fehler im Fenster stehen', async () => {

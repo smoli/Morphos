@@ -6,6 +6,7 @@ import { DEFAULT_NAME } from '@/core/app';
 import { useAppWindow } from './app';
 import { useDesktopStore } from './desktop';
 import { useWorkspaceStore } from './workspace';
+import { useNotificationsStore } from './notifications';
 
 /** Ein Agentenauftrag: ein Wunsch an eine App, der läuft oder auf seinen Platz wartet. */
 export interface AgentJob {
@@ -171,12 +172,26 @@ export const useAgentsStore = defineStore('agents', {
         if (job.cancelled) return;
 
         await store.generate(job.prompt, job.attachments);
+        this.announce(job, store);
         await this.afterRun(job, store);
       } finally {
         runningStores.delete(jobId);
         this.finish(jobId);
         this.pump();
       }
+    },
+
+    /**
+     * Sagt der Schale Bescheid, wie der Lauf ausgegangen ist. Die Meldung gehört
+     * dem Meldungsstapel, nicht dem Fenster — sie kommt auch an, wenn das
+     * auslösende Fenster längst zu ist. Ein Abbruch ist keine Nachricht wert.
+     */
+    announce(job: AgentJob, store: AppStore): void {
+      if (job.cancelled) return;
+      const notes = useNotificationsStore();
+      const label = store.name || job.label;
+      if (store.error) notes.error(`${label}: ${store.error}`);
+      else notes.success(`„${label}“ ist fertig.`);
     },
 
     /**
