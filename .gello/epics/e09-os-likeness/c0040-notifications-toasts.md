@@ -1,11 +1,11 @@
 ---
 id: c0040
 title: Notifications / toasts
-status: review
+status: done
 epic: e09
 created: 2026-08-08
 updated: 2026-08-08
-status-changed: 2026-08-08T23:20:28
+status-changed: 2026-08-08T23:31:57
 usage-tokens: 18985
 usage-cost: 1.94572
 ---
@@ -55,3 +55,4 @@ don't each invent their own banner.
 - 2026-08-08 core/toasts + notifications-Store + ToastStack umgesetzt, in
   App.vue eingehängt, Agentenläufe melden hinein; 548 Tests grün, vue-tsc sauber
 - 2026-08-08 status → review (agent)
+- 2026-08-08 status → done (app)

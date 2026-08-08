@@ -1,12 +1,11 @@
 ---
 id: c0044
 title: Restore session on restart
-status: ready
+status: in-progress
 epic: e09
 created: 2026-08-08
 updated: 2026-08-08
-status-changed: 2026-08-08T23:11:49
-order: 60
+status-changed: 2026-08-08T23:31:15
 ---
 
 ## What
@@ -32,3 +31,4 @@ restarts, so the desktop comes back the way it was left.
 
 - 2026-08-08 created from the e09 epic breakdown
 - 2026-08-08 status → ready (app)
+- 2026-08-08 status → in-progress (agent)
