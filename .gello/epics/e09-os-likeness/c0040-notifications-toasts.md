@@ -6,6 +6,8 @@ epic: e09
 created: 2026-08-08
 updated: 2026-08-08
 status-changed: 2026-08-08T23:20:28
+usage-tokens: 18985
+usage-cost: 1.94572
 ---
 
 ## What
