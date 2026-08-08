@@ -1,10 +1,10 @@
 ---
 id: c0033
 title: Provide system file dialogs
-status: in-progress
+status: review
 created: 2026-08-08
 updated: 2026-08-08
-status-changed: 2026-08-08T06:50:49
+status-changed: 2026-08-08T07:03:08
 epic: e0001
 usage-tokens: 5724
 usage-cost: 0.963674
@@ -84,16 +84,39 @@ Decisions (interviewed 2026-08-08):
 - **All three dialogs in v1:** open, save (with overwrite confirm), pick
   directory.
 
-Open questions for planning:
+Planning questions, answered 2026-08-08 (see the checked block at the top):
 
-- File-type **filters** (extensions) for open/save — v1 or later?
-- Rendering: a dedicated modal like `PermissionDialog`, and multi-window
-  modality (tie the modal to the requesting window vs a global modal).
-- Should the picker allow **creating a new subfolder** from within save /
-  pick-directory?
+- **Extension filters in v1:** `openFile`/`saveFile` take `extensions: ['txt']`;
+  non-matching files are hidden (folders always stay visible), and `saveFile`
+  appends the first extension only when the user typed none at all.
+- **Modal per window,** not globally: the picker is rendered inside `AppCanvas`,
+  so it covers the app that asked for it and other windows stay usable. A second
+  concurrent call from the same app rejects with a catchable error.
+- **„Neuer Ordner“ in v1** for save / pick-directory: the button calls `mkdir`
+  through the trusted host path without a permission prompt — the user clicked it
+  themselves.
+
+## Notes
+
+- `src/core/dialog.ts` holds the pure logic: `normalizeRelPath` (confinement,
+  `/`-separators, `..` resolution), `parseDialogRequest` (everything the app
+  sends is untrusted), `visibleEntries`, `applyDefaultExtension`, and
+  `dispatchDialogRequest` as the counterpart to `dispatchFsRequest`.
+- The bridge reuses the existing envelope: a dialog request carries `dialog:` +
+  `options:` instead of `op:`/`path:`, so `AppCanvas`'s `event.source` check and
+  the response id routing stay exactly as they were. Dialogs deliberately are not
+  `FsOp`s — that keeps them out of the permission gate.
+- `FileDialog.vue` browses via `getHost().fs(...)` directly (trusted renderer,
+  no `authorize`); the app's later `readFile`/`writeFile` still passes the gate.
+- Picking the data root itself yields `''` (documented in the system prompt);
+  cancel yields `null`.
 
 ## Log
 
 - 2026-08-08 status → discuss (app)
 - 2026-08-08 status → ready (app)
 - 2026-08-08 status → in-progress (agent)
+- 2026-08-08 Rückfrage zu Filtern, Modalität und „Neuer Ordner“ beantwortet (1a, 2b, 3a)
+- 2026-08-08 umgesetzt: core/dialog.ts, FileDialog.vue, Brücke in AppCanvas, SYSTEM_PROMPT;
+  418 Tests grün, typecheck und build sauber
+- 2026-08-08 status → review (agent)

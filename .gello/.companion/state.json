@@ -9,13 +9,13 @@
       "cardId": "c0033",
       "phase": "running",
       "activity": {
-        "name": "Edit",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e0001-fundament/c0033-provide-system-file-dialogs.md"
+        "name": "Bash",
+        "arg": "git show --stat d532f1c | head -20"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-08T07:02:47",
+  "updated": "2026-08-08T07:03:16",
   "pickupDelay": 10,
   "owned": [
     "c0029",
