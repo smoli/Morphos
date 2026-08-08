@@ -18,6 +18,8 @@ interface AppState {
   id: string | null;
   name: string;
   icon: string;
+  /** Das Icon stammt vom Anwender — keine Generierung überschreibt es. */
+  iconCustom: boolean;
   createdAt: number;
   /** Der aktuelle Quelldatei-Satz der App (src/…). */
   files: SourceFile[];
@@ -57,6 +59,7 @@ export function useAppWindow(instanceId: string) {
     id: null,
     name: '',
     icon: '',
+    iconCustom: false,
     createdAt: 0,
     files: [],
     currentHtml: '',
@@ -108,6 +111,7 @@ export function useAppWindow(instanceId: string) {
         this.id = data.id;
         this.name = data.name;
         this.icon = data.icon;
+        this.iconCustom = data.iconCustom === true;
         this.createdAt = data.createdAt;
         this.files = data.files;
         this.currentHtml = data.html;
@@ -125,6 +129,21 @@ export function useAppWindow(instanceId: string) {
         this.error = err instanceof Error ? err.message : String(err);
         return false;
       }
+    },
+
+    /**
+     * Übernimmt das vom LLM im Artefakt hinterlegte Icon — es sei denn, der
+     * Anwender hat selbst eines gesetzt. Dessen Wahl gilt für immer.
+     */
+    applyGeneratedIcon(html: string): void {
+      if (this.iconCustom) return;
+      this.icon = extractIcon(html) || DEFAULT_ICON;
+    },
+
+    /** Übernimmt ein anderswo (auf der Platte) gesetztes Icon in den Fensterzustand. */
+    applyIcon(icon: string, custom: boolean): void {
+      this.icon = icon;
+      this.iconCustom = custom;
     },
 
     /**
@@ -202,7 +221,7 @@ export function useAppWindow(instanceId: string) {
           // Erste Version: Name und Icon aus dem Artefakt ableiten und Id/Ordner festlegen.
           if (this.id === null) {
             this.name = extractTitle(res.html) || DEFAULT_NAME;
-            this.icon = extractIcon(res.html) || DEFAULT_ICON;
+            this.applyGeneratedIcon(res.html);
             this.id = makeAppId(this.name);
             this.createdAt = Date.now();
           }
@@ -289,6 +308,7 @@ export function useAppWindow(instanceId: string) {
           id: this.id,
           name: this.name,
           icon: this.icon,
+          iconCustom: this.iconCustom,
           createdAt: this.createdAt,
           updatedAt: Date.now(),
           files: this.files,

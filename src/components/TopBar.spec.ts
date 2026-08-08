@@ -20,6 +20,7 @@ function makeHost(over: Partial<MorphosHost> = {}): MorphosHost {
     saveApp: vi.fn(async () => ({ ok: true })),
     saveChat: vi.fn(async () => ({ ok: true })),
     deleteApp: vi.fn(async () => ({ ok: true })),
+    setAppIcon: vi.fn(async (_f: string, _i: string, icon: string | null) => ({ ok: true, icon: icon ?? '🧩' })),
     listVersions: vi.fn(async () => []),
     revertApp: vi.fn(async () => ({ ok: true })),
     fs: vi.fn(async () => ({ ok: true as const, result: null })),

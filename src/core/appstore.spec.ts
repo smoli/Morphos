@@ -2,7 +2,17 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadAppFromDisk, readChat, readManifest, readSourceFiles, writeAppState, writeChat } from './appstore';
+import {
+  defaultIconOf,
+  loadAppFromDisk,
+  readChat,
+  readManifest,
+  readSourceFiles,
+  setManifestIcon,
+  touchManifest,
+  writeAppState,
+  writeChat,
+} from './appstore';
 import { commitAll, ensureRepo, listVersions, restoreVersion } from './gitstore';
 import type { AppMeta, ChatMessage, SourceFile } from '@/types';
 
@@ -40,6 +50,67 @@ describe('writeAppState / readSourceFiles', () => {
     expect(() =>
       writeAppState(dir, META, [{ path: 'src/../boese.js', content: 'x' }], 'html'),
     ).toThrow(/Pfad/);
+  });
+});
+
+describe('setManifestIcon', () => {
+  const ART = (icon: string): string =>
+    `<!DOCTYPE html><html><head><title>App</title><meta name="morphos:icon" content="${icon}"></head><body>x</body></html>`;
+
+  it('setzt ein Emoji und merkt es als Wahl des Anwenders vor', () => {
+    writeAppState(dir, META, [{ path: 'src/index.html', content: ART('🧮') }], ART('🧮'));
+
+    expect(setManifestIcon(dir, '🎯')).toBe('🎯');
+    const meta = readManifest(dir)!;
+    expect(meta.icon).toBe('🎯');
+    expect(meta.iconCustom).toBe(true);
+  });
+
+  it('setzt ein Bild als data:-URI', () => {
+    writeAppState(dir, META, [{ path: 'src/index.html', content: ART('🧮') }], ART('🧮'));
+    const uri = `data:image/png;base64,${Buffer.alloc(60, 7).toString('base64')}`;
+
+    expect(setManifestIcon(dir, uri)).toBe(uri);
+    expect(readManifest(dir)!.icon).toBe(uri);
+  });
+
+  it('stellt mit null die Vorgabe aus dem Artefakt wieder her', () => {
+    writeAppState(dir, META, [{ path: 'src/index.html', content: ART('🧮') }], ART('🧮'));
+    setManifestIcon(dir, '🎯');
+
+    expect(setManifestIcon(dir, null)).toBe('🧮');
+    const meta = readManifest(dir)!;
+    expect(meta.icon).toBe('🧮');
+    expect(meta.iconCustom).toBeFalsy();
+  });
+
+  it('fällt beim Zurücksetzen ohne Artefakt-Icon auf das Vorgabe-Emoji zurück', () => {
+    writeAppState(dir, META, [{ path: 'src/index.html', content: '<html>x</html>' }], '<html>x</html>');
+    expect(defaultIconOf(dir)).toBe('🧩');
+    expect(setManifestIcon(dir, null)).toBe('🧩');
+  });
+
+  it('rührt den Zeitstempel nicht an — die Kachelreihenfolge bleibt', () => {
+    writeAppState(dir, META, [{ path: 'src/index.html', content: ART('🧮') }], ART('🧮'));
+    setManifestIcon(dir, '🎯');
+    expect(readManifest(dir)!.updatedAt).toBe(META.updatedAt);
+  });
+
+  it('überlebt Speichern und Zeitstempel-Aktualisierung (Revert)', async () => {
+    writeAppState(dir, META, [{ path: 'src/index.html', content: ART('🧮') }], ART('🧮'));
+    setManifestIcon(dir, '🎯');
+
+    touchManifest(dir, 999);
+    expect(readManifest(dir)!.iconCustom).toBe(true);
+    expect(readManifest(dir)!.icon).toBe('🎯');
+
+    const app = await loadAppFromDisk(dir);
+    expect(app!.icon).toBe('🎯');
+    expect(app!.iconCustom).toBe(true);
+  });
+
+  it('wirft ohne Manifest', () => {
+    expect(() => setManifestIcon(dir, '🎯')).toThrow(/Manifest/);
   });
 });
 

@@ -9,6 +9,7 @@ import type {
   FsRequest,
   FsResponse,
   GenerateResult,
+  IconResult,
   SaveResult,
   Settings,
   SourceFile,
@@ -59,6 +60,8 @@ contextBridge.exposeInMainWorld('morphos', {
     ipcRenderer.invoke('morphos:saveApp', folder, app, message),
   deleteApp: (folder: string, id: string): Promise<SaveResult> =>
     ipcRenderer.invoke('morphos:deleteApp', folder, id),
+  setAppIcon: (folder: string, id: string, icon: string | null): Promise<IconResult> =>
+    ipcRenderer.invoke('morphos:setAppIcon', folder, id, icon),
 
   listVersions: (folder: string, id: string): Promise<VersionInfo[]> =>
     ipcRenderer.invoke('morphos:listVersions', folder, id),

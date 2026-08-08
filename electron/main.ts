@@ -12,7 +12,8 @@ import { applyChanges, isValidSourcePath, parseLLMOutput } from '../src/core/fil
 import { bundle, ENTRY_FILE } from '../src/core/bundle';
 import { extractLibs } from '../src/core/libs';
 import { commitAll, countVersions, ensureRepo, listVersions, restoreTree } from '../src/core/gitstore';
-import { loadAppFromDisk, readManifest, touchManifest, writeAppState, writeChat } from '../src/core/appstore';
+import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeAppState, writeChat } from '../src/core/appstore';
+import { validateIcon } from '../src/core/icon';
 import { runFs } from '../src/core/fsaccess';
 import { resolveLibs } from './libcache';
 import type { PromptAttachment, PromptContext } from '../src/core/prompt';
@@ -27,6 +28,7 @@ import type {
   FsRequest,
   FsResponse,
   GenerateResult,
+  IconResult,
   SaveResult,
   Settings,
   SourceFile,
@@ -476,6 +478,7 @@ ipcMain.handle('morphos:listApps', async (_e, folder: string): Promise<AppSummar
       id: meta.id ?? entry.name,
       name: meta.name ?? entry.name,
       icon: meta.icon ?? '🧩',
+      iconCustom: meta.iconCustom === true,
       createdAt: meta.createdAt ?? 0,
       updatedAt: meta.updatedAt ?? 0,
       versions,
@@ -503,6 +506,8 @@ ipcMain.handle('morphos:saveApp', async (_e, folder: string, appData: AppData, m
         id: appData.id,
         name: appData.name,
         icon: appData.icon,
+        // Ein selbst gesetztes Icon bleibt über jede Generierung hinweg erhalten.
+        ...(appData.iconCustom ? { iconCustom: true } : {}),
         createdAt: appData.createdAt,
         updatedAt: Date.now(),
       },
@@ -514,6 +519,27 @@ ipcMain.handle('morphos:saveApp', async (_e, folder: string, appData: AppData, m
     return { ok: true };
   } catch (err) {
     console.error('[morphos] saveApp fehlgeschlagen:', err);
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+// Icon einer App setzen (Emoji oder Bild) bzw. mit null auf die Vorgabe des LLM
+// zurücksetzen. Läuft allein über das Manifest — die App muss dafür nicht offen
+// sein. Das Icon wird HIER nochmals geprüft (der Renderer allein zählt nicht).
+ipcMain.handle('morphos:setAppIcon', async (_e, folder: string, id: string, icon: string | null): Promise<IconResult> => {
+  try {
+    let value: string | null = null;
+    if (icon !== null) {
+      const checked = validateIcon(typeof icon === 'string' ? icon : '');
+      if (!checked.ok) return { ok: false, error: checked.error };
+      value = checked.icon;
+    }
+    const dir = appDir(folder, id);
+    const effective = setManifestIcon(dir, value);
+    await ensureRepo(dir);
+    await commitAll(dir, value === null ? 'Icon zurückgesetzt' : 'Icon geändert');
+    return { ok: true, icon: effective };
+  } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 });

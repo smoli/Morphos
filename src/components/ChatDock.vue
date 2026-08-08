@@ -4,6 +4,7 @@ import { getHost } from '@/services/host';
 import { agentEventIcon, agentEventLabel } from '@/core/agent';
 import { useElapsed } from '@/composables/useElapsed';
 import { renderMarkdown } from '@/core/markdown';
+import AppIcon from './AppIcon.vue';
 import type { AgentEvent, Attachment, ChatMessage } from '@/types';
 
 const props = defineProps<{
@@ -13,6 +14,8 @@ const props = defineProps<{
   pendingQuestion: string | null;
   /** Name der App, an die die Eingabe geht (zeigt dem Anwender das Ziel an). */
   contextLabel?: string | null;
+  /** Ihr Icon — als eigener Wert, denn ein Bild-Icon passt in keinen Text. */
+  contextIcon?: string | null;
   /** Live-Fortschritt des laufenden Laufs (was der Agent gerade tut). */
   activity?: AgentEvent[];
   /** Beginn des laufenden Laufs (ms) — daraus wächst die angezeigte Laufzeit. */
@@ -245,6 +248,7 @@ function fmt(ts: number): string {
 
             <div v-if="contextLabel" class="chat-context" :title="`Deine Eingabe geht an: ${contextLabel}`">
           <span class="ctx-dot"></span>
+          <AppIcon v-if="contextIcon" class="ctx-icon" :icon="contextIcon" :size="14" />
           <span class="ctx-name">{{ contextLabel }}</span>
         </div>
 

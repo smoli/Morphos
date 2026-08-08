@@ -6,10 +6,13 @@ import { useWorkspaceStore } from '@/stores/workspace';
 import { useAgentsStore } from '@/stores/agents';
 import { agentBusyIcon, agentBusyLabel } from '@/core/agent';
 import { useElapsed } from '@/composables/useElapsed';
+import { useSetAppIcon } from '@/composables/useSetAppIcon';
 import AppCanvas from './AppCanvas.vue';
 import WelcomeScreen from './WelcomeScreen.vue';
 import HistoryList from './HistoryList.vue';
 import BusyDot from './BusyDot.vue';
+import AppIcon from './AppIcon.vue';
+import IconDialog from './IconDialog.vue';
 import type { DesktopWindow } from '@/stores/desktop';
 import type { Attachment } from '@/types';
 
@@ -19,8 +22,10 @@ const desktop = useDesktopStore();
 const workspace = useWorkspaceStore();
 const agents = useAgentsStore();
 const store = useAppWindow(props.win.instanceId);
+const setAppIcon = useSetAppIcon();
 
 const showVersions = ref(false);
+const showIcon = ref(false);
 const interacting = ref(false); // Ziehen/Größe ändern → Schutzschicht über den iframes
 
 // Vollflächig (kein Ziehen/Größe): im Einzel-Modus oder wenn maximiert.
@@ -102,6 +107,12 @@ async function onRevert(sha: string): Promise<void> {
   showVersions.value = false;
 }
 
+/** Neues Icon aus dem Dialog: auf die Platte, in die Kachel und in dieses Fenster. */
+async function onIcon(icon: string | null): Promise<void> {
+  if (!store.id) return;
+  if (await setAppIcon(store.id, icon)) showIcon.value = false;
+}
+
 // ---- Ziehen (Titelleiste) ----
 let dragDX = 0;
 let dragDY = 0;
@@ -161,7 +172,17 @@ function stopInteraction(): void {
       <button v-if="single" type="button" class="w-desktop" title="Zurück zum Desktop" @mousedown.stop @click="backToDesktop">
         ← Desktop
       </button>
-      <span class="w-icon" @mousedown.stop>{{ store.icon || win.icon }}</span>
+      <button
+        v-if="!store.isDraft"
+        type="button"
+        class="w-icon w-icon-btn"
+        title="Icon ändern"
+        @mousedown.stop
+        @click="showIcon = true"
+      >
+        <AppIcon :icon="store.icon || win.icon" :size="16" />
+      </button>
+      <AppIcon v-else class="w-icon" :icon="store.icon || win.icon" :size="16" @mousedown.stop />
       <span class="w-title" @mousedown.self="!full && startDrag($event)">{{ store.name || win.title }}</span>
       <BusyDot v-if="agentBusy" class="w-busy" @mousedown.stop />
       <span class="w-actions">
@@ -226,6 +247,15 @@ function stopInteraction(): void {
       </div>
     </div>
 
+    <IconDialog
+      v-if="showIcon"
+      :name="store.name || win.title"
+      :icon="store.icon || win.icon"
+      :custom="store.iconCustom"
+      @close="showIcon = false"
+      @apply="onIcon"
+    />
+
     <div v-if="!full" class="resize-handle" title="Größe ändern" @mousedown.stop="startResize"></div>
   </section>
 </template>
@@ -286,6 +316,19 @@ function stopInteraction(): void {
 }
 .w-icon {
   font-size: 16px;
+}
+/* Das Icon ist zugleich der Weg zum Icon-Dialog. */
+.w-icon-btn {
+  display: flex;
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 2px;
+  cursor: pointer;
+}
+.w-icon-btn:hover {
+  border-color: var(--border);
 }
 .w-title {
   flex: 1;

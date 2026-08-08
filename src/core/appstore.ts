@@ -4,6 +4,8 @@ import type { AppData, AppMeta, ChatMessage, LegacyHistoryEntry, SourceFile } fr
 import { isValidSourcePath } from './files';
 import { ENTRY_FILE } from './bundle';
 import { commitAll, ensureRepo } from './gitstore';
+import { DEFAULT_ICON } from './app';
+import { extractIcon } from './html';
 
 /**
  * Ablage einer App auf der Platte (nur Hauptprozess):
@@ -113,7 +115,47 @@ export function writeAppState(dir: string, meta: AppMeta, files: SourceFile[], h
 export function touchManifest(dir: string, updatedAt: number): void {
   const meta = readManifest(dir);
   if (!meta) return;
-  writeManifest(dir, { id: meta.id, name: meta.name, icon: meta.icon, createdAt: meta.createdAt, updatedAt });
+  writeManifest(dir, {
+    id: meta.id,
+    name: meta.name,
+    icon: meta.icon,
+    ...(meta.iconCustom ? { iconCustom: true } : {}),
+    createdAt: meta.createdAt,
+    updatedAt,
+  });
+}
+
+/**
+ * Das Vorgabe-Icon einer App: das Emoji, das das LLM im gebündelten Artefakt
+ * hinterlegt hat. Grundlage des Zurücksetzens einer eigenen Wahl.
+ */
+export function defaultIconOf(dir: string): string {
+  try {
+    return extractIcon(fs.readFileSync(path.join(dir, 'index.html'), 'utf8')) || DEFAULT_ICON;
+  } catch {
+    return DEFAULT_ICON;
+  }
+}
+
+/**
+ * Setzt das Icon im Manifest, ohne die App zu laden — `null` stellt die Vorgabe
+ * des LLM wieder her. Liefert das nun wirksame Icon. Der Zeitstempel bleibt
+ * unangetastet: Ein neues Icon ist keine inhaltliche Änderung und soll die
+ * Reihenfolge der Kacheln nicht durcheinanderbringen.
+ */
+export function setManifestIcon(dir: string, icon: string | null): string {
+  const meta = readManifest(dir);
+  if (!meta) throw new Error('Diese App hat kein Manifest (app.json).');
+  const effective = icon ?? defaultIconOf(dir);
+  writeManifest(dir, {
+    id: meta.id,
+    name: meta.name,
+    icon: effective,
+    ...(icon === null ? {} : { iconCustom: true }),
+    createdAt: meta.createdAt,
+    updatedAt: meta.updatedAt,
+  });
+  return effective;
 }
 
 /**
@@ -127,6 +169,7 @@ async function migrateLegacyApp(dir: string, legacy: ManifestOnDisk): Promise<vo
     id: legacy.id,
     name: legacy.name,
     icon: legacy.icon,
+    ...(legacy.iconCustom ? { iconCustom: true } : {}),
     createdAt: legacy.createdAt,
     updatedAt: legacy.updatedAt,
   };
@@ -173,6 +216,7 @@ export async function loadAppFromDisk(dir: string): Promise<AppData | null> {
     id: meta.id,
     name: meta.name,
     icon: meta.icon,
+    iconCustom: meta.iconCustom === true,
     createdAt: meta.createdAt ?? 0,
     updatedAt: meta.updatedAt ?? 0,
     files: readSourceFiles(dir),

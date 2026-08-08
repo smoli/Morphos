@@ -156,6 +156,11 @@ export const useDesktopStore = defineStore('desktop', {
       this.focusWindow(instanceId);
     },
 
+    /** Zieht ein geändertes Icon in allen Fenstern dieser App nach (Titelleiste, Dock). */
+    applyIcon(appId: string, icon: string): void {
+      for (const w of this.windows) if (w.appId === appId) w.icon = icon;
+    },
+
     /** Ein Entwurf wurde zur echten App: Id, Titel und Icon übernehmen. */
     setAppMeta(instanceId: string, appId: string, title: string, icon: string): void {
       const w = this.find(instanceId);

@@ -1,17 +1,21 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useDesktopStore } from '@/stores/desktop';
 import { useAgentsStore } from '@/stores/agents';
 import { useAppWindow } from '@/stores/app';
+import { useSetAppIcon } from '@/composables/useSetAppIcon';
 import WindowFrame from '@/components/WindowFrame.vue';
 import ChatDock from '@/components/ChatDock.vue';
 import BusyDot from '@/components/BusyDot.vue';
+import AppIcon from '@/components/AppIcon.vue';
+import IconDialog from '@/components/IconDialog.vue';
 import type { AppSummary, Attachment } from '@/types';
 
 const workspace = useWorkspaceStore();
 const desktop = useDesktopStore();
 const agents = useAgentsStore();
+const setAppIcon = useSetAppIcon();
 
 const singleMode = computed(() => workspace.uiMode === 'single');
 
@@ -55,7 +59,12 @@ function windowBusy(instanceId: string, appId: string | null): boolean {
 const chatContext = computed<string | null>(() => {
   const w = activeWindow.value;
   if (singleMode.value) return w ? null : 'Neue App';
-  return w ? `${w.icon} ${w.title}` : 'Neue App';
+  return w ? w.title : 'Neue App';
+});
+// Das Icon separat: Es kann ein Bild sein und lässt sich dann nicht in den Text setzen.
+const chatContextIcon = computed<string | null>(() => {
+  if (singleMode.value) return null;
+  return activeWindow.value?.icon ?? null;
 });
 
 onMounted(() => {
@@ -78,6 +87,18 @@ async function removeApp(id: string, name: string): Promise<void> {
 function onPrompt(text: string, attachments: Attachment[] = []): void {
   agents.submitToActive(text, attachments);
 }
+
+// ---- Icon einer App ändern (Dialog von der Kachel aus) ----
+const iconAppId = ref<string | null>(null);
+const iconApp = computed<AppSummary | null>(
+  () => workspace.apps.find((a) => a.id === iconAppId.value) ?? null,
+);
+
+async function applyIcon(icon: string | null): Promise<void> {
+  const id = iconAppId.value;
+  if (!id) return;
+  if (await setAppIcon(id, icon)) iconAppId.value = null;
+}
 </script>
 
 <template>
@@ -92,12 +113,15 @@ function onPrompt(text: string, attachments: Attachment[] = []): void {
           </button>
           <div v-for="app in workspace.apps" :key="app.id" class="tile-wrap">
             <button type="button" class="tile" @click="openApp(app)" :title="app.name">
-              <span class="icon">{{ app.icon }}</span>
+              <AppIcon class="icon" :icon="app.icon" :size="42" />
               <span class="name">{{ app.name }}</span>
               <span class="meta">{{ app.versions }} Version(en)</span>
             </button>
             <BusyDot v-if="agents.isBusy(app.id)" class="tile-busy" />
-            <button type="button" class="del" title="Löschen" @click.stop="removeApp(app.id, app.name)">🗑</button>
+            <span class="tile-actions">
+              <button type="button" class="act" title="Icon ändern" @click.stop="iconAppId = app.id">🎨</button>
+              <button type="button" class="act del" title="Löschen" @click.stop="removeApp(app.id, app.name)">🗑</button>
+            </span>
           </div>
         </div>
         <p v-if="!workspace.loading && workspace.apps.length === 0" class="hint">
@@ -126,7 +150,7 @@ function onPrompt(text: string, attachments: Attachment[] = []): void {
           :title="w.title"
           @click="desktop.restoreWindow(w.instanceId)"
         >
-          <span>{{ w.icon }}</span>
+          <AppIcon :icon="w.icon" :size="16" />
           <span class="dock-name">{{ w.title }}</span>
           <BusyDot v-if="windowBusy(w.instanceId, w.appId)" />
         </button>
@@ -141,12 +165,22 @@ function onPrompt(text: string, attachments: Attachment[] = []): void {
         :messages="chatMessages"
         :pending-question="chatPending"
         :context-label="chatContext"
+        :context-icon="chatContextIcon"
         :activity="chatActivity"
         :started-at="chatStartedAt"
         :queued="chatQueued"
         @submit="onPrompt"
       />
     </footer>
+
+    <IconDialog
+      v-if="iconApp"
+      :name="iconApp.name"
+      :icon="iconApp.icon"
+      :custom="iconApp.iconCustom"
+      @close="iconAppId = null"
+      @apply="applyIcon"
+    />
   </div>
 </template>
 
@@ -226,10 +260,20 @@ function onPrompt(text: string, attachments: Attachment[] = []): void {
   top: 10px;
   left: 10px;
 }
-.del {
+.tile-actions {
   position: absolute;
   top: 8px;
   right: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.tile-wrap:hover .tile-actions,
+.tile-actions:focus-within {
+  opacity: 1;
+}
+.act {
   background: rgba(15, 17, 21, 0.7);
   border: 1px solid var(--border);
   color: var(--muted);
@@ -237,11 +281,10 @@ function onPrompt(text: string, attachments: Attachment[] = []): void {
   padding: 3px 6px;
   font-size: 12px;
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s;
 }
-.tile-wrap:hover .del {
-  opacity: 1;
+.act:hover {
+  border-color: var(--accent);
+  color: var(--text);
 }
 .del:hover {
   border-color: var(--danger);

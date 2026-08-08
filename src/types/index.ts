@@ -80,7 +80,13 @@ export interface AppMeta {
   /** Zugleich der Name des Unterordners im Arbeitsverzeichnis. */
   id: string;
   name: string;
+  /** Emoji (Vorgabe des LLM) oder ein vom Anwender gewähltes Bild als data:-URI. */
   icon: string;
+  /**
+   * Der Anwender hat das Icon selbst gesetzt: Keine Generierung überschreibt es
+   * je wieder. Fehlt/false = das Icon stammt vom LLM.
+   */
+  iconCustom?: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -195,6 +201,13 @@ export interface SaveResult {
   error?: string;
 }
 
+/** Ergebnis einer Icon-Änderung: das nun wirksame Icon (bei Erfolg). */
+export interface IconResult {
+  ok: boolean;
+  icon?: string;
+  error?: string;
+}
+
 /** Ergebnis der Ordnerauswahl (nativer Dialog). */
 export interface FolderResult {
   ok: boolean;
@@ -270,6 +283,14 @@ export interface MorphosHost {
   saveApp(folder: string, app: AppData, message: string): Promise<SaveResult>;
   /** Löscht eine App samt ihres Unterordners. */
   deleteApp(folder: string, id: string): Promise<SaveResult>;
+
+  /**
+   * Setzt das Icon einer App im Manifest — Emoji oder Bild als data:-URI — und
+   * merkt es als Wahl des Anwenders vor. `null` setzt auf die Vorgabe zurück
+   * (das Emoji, das das LLM im Artefakt hinterlegt hat). Läuft ohne die App zu
+   * laden, gilt also auch für geschlossene Apps. Zurück kommt das wirksame Icon.
+   */
+  setAppIcon(folder: string, id: string, icon: string | null): Promise<IconResult>;
 
   /** Liefert die Git-Versionshistorie einer App, neueste zuerst. */
   listVersions(folder: string, id: string): Promise<VersionInfo[]>;

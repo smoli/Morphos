@@ -205,6 +205,31 @@ export const useWorkspaceStore = defineStore('workspace', {
       }
     },
 
+    /**
+     * Setzt das Icon einer App auf der Platte — `null` stellt die Vorgabe des
+     * LLM wieder her. Die Kachel wird sofort nachgezogen (kein erneutes
+     * Einlesen des Verzeichnisses). Liefert das wirksame Icon oder null bei
+     * einem Fehler.
+     */
+    async setAppIcon(id: string, icon: string | null): Promise<string | null> {
+      if (!this.folder) return null;
+      try {
+        const res = await getHost().setAppIcon(this.folder, id, icon);
+        if (!res.ok || !res.icon) {
+          this.error = res.error ?? 'Das Icon konnte nicht gesetzt werden.';
+          return null;
+        }
+        const effective = res.icon;
+        this.apps = this.apps.map((a) =>
+          a.id === id ? { ...a, icon: effective, iconCustom: icon !== null } : a,
+        );
+        return effective;
+      } catch (err) {
+        this.error = err instanceof Error ? err.message : String(err);
+        return null;
+      }
+    },
+
     /** Löscht eine App aus dem Verzeichnis. */
     async removeApp(id: string): Promise<void> {
       if (!this.folder) return;

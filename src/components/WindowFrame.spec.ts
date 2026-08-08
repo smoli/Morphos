@@ -3,6 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import WindowFrame from './WindowFrame.vue';
 import WelcomeScreen from './WelcomeScreen.vue';
+import IconDialog from './IconDialog.vue';
 import { useAppWindow } from '@/stores/app';
 import { useDesktopStore } from '@/stores/desktop';
 import { useWorkspaceStore } from '@/stores/workspace';
@@ -12,6 +13,8 @@ import type { AppData, GenerateResult, MorphosHost, SourceFile } from '@/types';
 const DOC = (body: string, title = 'App', icon = '🧩'): string =>
   `<!DOCTYPE html><html><head><title>${title}</title><meta name="morphos:icon" content="${icon}"></head><body>${body}</body></html>`;
 const FILES = (html: string): SourceFile[] => [{ path: 'src/index.html', content: html }];
+/** Ein (winziges) Bild-Icon, wie es der Icon-Dialog ablegt. */
+const IMAGE_ICON = `data:image/png;base64,${Buffer.alloc(60, 3).toString('base64')}`;
 
 function appData(over: Partial<AppData> = {}): AppData {
   return {
@@ -33,6 +36,7 @@ function makeHost(over: Partial<MorphosHost> = {}): MorphosHost {
     saveApp: vi.fn(async () => ({ ok: true })),
     saveChat: vi.fn(async () => ({ ok: true })),
     deleteApp: vi.fn(async () => ({ ok: true })),
+    setAppIcon: vi.fn(async (_f: string, _i: string, icon: string | null) => ({ ok: true, icon: icon ?? '🧩' })),
     listVersions: vi.fn(async () => [{ sha: 'v1', prompt: 'a', time: 1 }]),
     revertApp: vi.fn(async () => ({ ok: true })),
     fs: vi.fn(async () => ({ ok: true as const, result: null })),
@@ -249,6 +253,46 @@ describe('WindowFrame', () => {
 
       expect(loadApp).toHaveBeenCalledTimes(1);
       expect(again.get('.w-title').text()).toBe('Rechner');
+    });
+  });
+
+  describe('Icon aus der Titelleiste', () => {
+    it('öffnet über das Icon den Dialog und setzt das gewählte Icon', async () => {
+      const host = makeHost();
+      const { wrapper, desktop, win } = await mountFrameForApp(host);
+
+      await wrapper.get('.w-icon-btn').trigger('click');
+      const dialog = wrapper.getComponent(IconDialog);
+      expect(dialog.props('name')).toBe('Rechner');
+
+      dialog.vm.$emit('apply', '🎯');
+      await flushPromises();
+
+      expect(host.setAppIcon).toHaveBeenCalledWith('/apps', 'rechner-1', '🎯');
+      expect(wrapper.get('.w-icon').text()).toBe('🎯');
+      expect(desktop.find(win.instanceId)!.icon).toBe('🎯');
+      expect(wrapper.findComponent(IconDialog).exists()).toBe(false);
+    });
+
+    it('zeigt ein Bild-Icon in der Titelleiste als Bild', async () => {
+      const { wrapper } = await mountFrameForApp({
+        loadApp: vi.fn(async () => appData({ icon: IMAGE_ICON, iconCustom: true })),
+      });
+      expect(wrapper.get('.w-icon img').attributes('src')).toBe(IMAGE_ICON);
+    });
+
+    it('bietet einem Entwurf (noch ohne App) keinen Icon-Dialog an', async () => {
+      setActivePinia(createPinia());
+      setHost(makeHost());
+      useWorkspaceStore().folder = '/apps';
+      const desktop = useDesktopStore();
+      const id = desktop.openDraft();
+      const win = desktop.windows.find((w) => w.instanceId === id)!;
+      const wrapper = mount(WindowFrame, { props: { win } });
+      await flushPromises();
+
+      expect(wrapper.find('.w-icon-btn').exists()).toBe(false);
+      expect(wrapper.get('.w-icon').text()).toBe('🧩');
     });
   });
 

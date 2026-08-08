@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { mount, flushPromises } from '@vue/test-utils';
+import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia, type Pinia } from 'pinia';
 import { createRouter, createMemoryHistory, type Router } from 'vue-router';
 import DesktopView from './DesktopView.vue';
 import WindowFrame from '@/components/WindowFrame.vue';
+import IconDialog from '@/components/IconDialog.vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useDesktopStore } from '@/stores/desktop';
 import { useAgentsStore } from '@/stores/agents';
@@ -15,6 +16,9 @@ const apps: AppSummary[] = [
   { id: 'rechner-1', name: 'Rechner', icon: '🧮', createdAt: 1, updatedAt: 5, versions: 3 },
   { id: 'editor-2', name: 'Editor', icon: '📝', createdAt: 2, updatedAt: 9, versions: 1 },
 ];
+
+/** Ein (winziges) Bild-Icon, wie es der Icon-Dialog ablegt. */
+const IMAGE_ICON = `data:image/png;base64,${Buffer.alloc(60, 3).toString('base64')}`;
 
 const HTML = '<!DOCTYPE html><html><head><title>Rechner</title></head><body>calc</body></html>';
 const rechnerData: AppData = {
@@ -35,6 +39,7 @@ function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
     loadApp: vi.fn(async () => null),
     saveApp: vi.fn(async () => ({ ok: true })),
     deleteApp: vi.fn(async () => ({ ok: true })),
+    setAppIcon: vi.fn(async (_f: string, _i: string, icon: string | null) => ({ ok: true, icon: icon ?? '🧩' })),
     listVersions: vi.fn(async () => []),
     revertApp: vi.fn(async () => ({ ok: true })),
     fs: vi.fn(async () => ({ ok: true as const, result: null })),
@@ -188,6 +193,92 @@ describe('DesktopView', () => {
     desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
     await flushPromises();
     expect(wrapper.get('.chat-context').text()).toContain('Rechner');
+    expect(wrapper.get('.chat-context').text()).toContain('🧮');
+  });
+
+  describe('Icon einer App', () => {
+    /** Öffnet den Icon-Dialog über die Kachel der genannten App. */
+    async function openIconDialog(wrapper: VueWrapper) {
+      const tile = wrapper.findAll('.tile-wrap').find((t) => t.text().includes('Rechner'))!;
+      await tile.get('[title="Icon ändern"]').trigger('click');
+      await flushPromises();
+      return wrapper.getComponent(IconDialog);
+    }
+
+    it('zeigt ein Bild-Icon als Bild — auf der Kachel und an der Promptleiste', async () => {
+      setHost(makeHost({
+        listApps: vi.fn(async () => [{ ...apps[0], icon: IMAGE_ICON, iconCustom: true }, apps[1]]),
+      }));
+      const { wrapper } = await mountView();
+      useDesktopStore().openApp('rechner-1', { title: 'Rechner', icon: IMAGE_ICON });
+      await flushPromises();
+
+      const tile = wrapper.findAll('.tile-wrap').find((t) => t.text().includes('Rechner'))!;
+      expect(tile.get('.tile img').attributes('src')).toBe(IMAGE_ICON);
+      expect(wrapper.get('.chat-context img').attributes('src')).toBe(IMAGE_ICON);
+    });
+
+    it('setzt das Icon einer geschlossenen App und zieht die Kachel nach', async () => {
+      const host = makeHost();
+      setHost(host);
+      const { wrapper } = await mountView();
+
+      const dialog = await openIconDialog(wrapper);
+      dialog.vm.$emit('apply', '🎯');
+      await flushPromises();
+
+      expect(host.setAppIcon).toHaveBeenCalledWith('/apps', 'rechner-1', '🎯');
+      const tile = wrapper.findAll('.tile-wrap').find((t) => t.text().includes('Rechner'))!;
+      expect(tile.get('.tile').text()).toContain('🎯');
+      // Der Dialog schließt sich nach getaner Arbeit.
+      expect(wrapper.findComponent(IconDialog).exists()).toBe(false);
+    });
+
+    it('zieht bei offener App auch Fenster, Dock und Fensterzustand nach', async () => {
+      setHost(makeHost({ loadApp: vi.fn(async () => rechnerData) }));
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      const instanceId = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await flushPromises();
+
+      const dialog = await openIconDialog(wrapper);
+      dialog.vm.$emit('apply', '🎯');
+      await flushPromises();
+
+      expect(desktop.find(instanceId)!.icon).toBe('🎯');
+      expect(useAppWindow(instanceId).icon).toBe('🎯');
+      expect(useAppWindow(instanceId).iconCustom).toBe(true);
+      expect(wrapper.get('.w-icon').text()).toBe('🎯');
+    });
+
+    it('setzt auf die Vorgabe des Agenten zurück', async () => {
+      const host = makeHost({
+        listApps: vi.fn(async () => [{ ...apps[0], icon: '🎯', iconCustom: true }, apps[1]]),
+        setAppIcon: vi.fn(async () => ({ ok: true, icon: '🧮' })),
+      });
+      setHost(host);
+      const { wrapper } = await mountView();
+
+      const dialog = await openIconDialog(wrapper);
+      dialog.vm.$emit('apply', null);
+      await flushPromises();
+
+      expect(host.setAppIcon).toHaveBeenCalledWith('/apps', 'rechner-1', null);
+      const tile = wrapper.findAll('.tile-wrap').find((t) => t.text().includes('Rechner'))!;
+      expect(tile.get('.tile').text()).toContain('🧮');
+    });
+
+    it('lässt den Dialog bei einem Fehler offen und meldet ihn', async () => {
+      setHost(makeHost({ setAppIcon: vi.fn(async () => ({ ok: false, error: 'Das Bild ist zu groß.' })) }));
+      const { wrapper } = await mountView();
+
+      const dialog = await openIconDialog(wrapper);
+      dialog.vm.$emit('apply', '🎯');
+      await flushPromises();
+
+      expect(wrapper.findComponent(IconDialog).exists()).toBe(true);
+      expect(useWorkspaceStore().error).toBe('Das Bild ist zu groß.');
+    });
   });
 
   it('zeigt im Einzel-Modus nur das aktive Fenster (Vollbild)', async () => {

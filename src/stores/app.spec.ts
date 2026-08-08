@@ -27,6 +27,7 @@ function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
     saveApp: vi.fn(async () => ({ ok: true })),
     saveChat: vi.fn(async () => ({ ok: true })),
     deleteApp: vi.fn(async () => ({ ok: true })),
+    setAppIcon: vi.fn(async (_f: string, _i: string, icon: string | null) => ({ ok: true, icon: icon ?? '🧩' })),
     listVersions: vi.fn(async (): Promise<VersionInfo[]> => []),
     revertApp: vi.fn(async () => ({ ok: true })),
     fs: vi.fn(async () => ({ ok: true as const, result: null })),
@@ -543,6 +544,65 @@ describe('useAppStore', () => {
 
     expect(reopened.currentHtml).toContain('v3');
     expect(reopened.files).toHaveLength(1);
+  });
+
+  describe('eigenes Icon', () => {
+    it('übernimmt beim Öffnen, dass das Icon vom Anwender stammt', async () => {
+      const data: AppData = {
+        id: 'editor-abc12', name: 'Editor', icon: '🎯', iconCustom: true,
+        createdAt: 1, updatedAt: 2, files: FILES('<html>x</html>'), html: '<html>x</html>', chat: [],
+      };
+      setHost(makeHost({ loadApp: vi.fn(async () => data) }));
+      const store = useAppStore();
+
+      await store.open('/apps', 'editor-abc12');
+
+      expect(store.icon).toBe('🎯');
+      expect(store.iconCustom).toBe(true);
+    });
+
+    it('lässt eine Generierung das eigene Icon NICHT überschreiben', async () => {
+      const doc = DOC('calc', 'Rechner', '🧮');
+      setHost(makeHost({
+        generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(doc), html: doc })),
+      }));
+      const store = useAppStore();
+      store.newDraft('/apps');
+      store.applyIcon('🎯', true);
+
+      await store.generate('Ein Taschenrechner');
+
+      expect(store.icon).toBe('🎯');
+      expect(store.iconCustom).toBe(true);
+    });
+
+    it('nimmt das Icon des LLM, solange der Anwender keines gesetzt hat', async () => {
+      const doc = DOC('calc', 'Rechner', '🧮');
+      setHost(makeHost({
+        generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(doc), html: doc })),
+      }));
+      const store = useAppStore();
+      store.newDraft('/apps');
+
+      await store.generate('Ein Taschenrechner');
+
+      expect(store.icon).toBe('🧮');
+      expect(store.iconCustom).toBe(false);
+    });
+
+    it('schickt das Merkmal mit ins Manifest — es überlebt jede Generierung', async () => {
+      const host = makeHost();
+      setHost(host);
+      const store = useAppStore();
+      store.newDraft('/apps');
+      store.applyIcon('🎯', true);
+
+      await store.generate('Ein Taschenrechner');
+
+      const [, dataArg] = (host.saveApp as unknown as { mock: { calls: [string, AppData, string][] } }).mock.calls[0];
+      expect(dataArg.icon).toBe('🎯');
+      expect(dataArg.iconCustom).toBe(true);
+    });
   });
 
   it('meldet einen Fehler, wenn die App nicht geladen werden kann', async () => {

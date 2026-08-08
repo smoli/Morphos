@@ -22,6 +22,7 @@ function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
     loadApp: vi.fn(async () => null),
     saveApp: vi.fn(async () => ({ ok: true })),
     deleteApp: vi.fn(async () => ({ ok: true })),
+    setAppIcon: vi.fn(async (_f: string, _i: string, icon: string | null) => ({ ok: true, icon: icon ?? '🧩' })),
     listVersions: vi.fn(async () => []),
     revertApp: vi.fn(async () => ({ ok: true })),
     fs: vi.fn(async () => ({ ok: true as const, result: null })),
@@ -270,6 +271,50 @@ describe('useWorkspaceStore', () => {
     expect(ws.maxAgents).toBe(1);
     ws.setMaxAgents(99);
     expect(ws.maxAgents).toBe(8);
+  });
+
+  describe('setAppIcon', () => {
+    it('setzt das Icon auf der Platte und zieht die Kachel sofort nach', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      const icon = await ws.setAppIcon(apps[0].id, '🎯');
+
+      expect(icon).toBe('🎯');
+      expect(host.setAppIcon).toHaveBeenCalledWith('/apps', apps[0].id, '🎯');
+      expect(ws.apps[0].icon).toBe('🎯');
+      expect(ws.apps[0].iconCustom).toBe(true);
+      // Kein erneutes Einlesen des Verzeichnisses nötig.
+      expect(host.listApps).toHaveBeenCalledTimes(1);
+    });
+
+    it('merkt beim Zurücksetzen, dass das Icon wieder vom LLM stammt', async () => {
+      setHost(makeHost({
+        setAppIcon: vi.fn(async () => ({ ok: true, icon: '🧮' })),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+      await ws.setAppIcon(apps[0].id, '🎯');
+
+      expect(await ws.setAppIcon(apps[0].id, null)).toBe('🧮');
+      expect(ws.apps[0].icon).toBe('🧮');
+      expect(ws.apps[0].iconCustom).toBe(false);
+    });
+
+    it('meldet einen Fehler und lässt die Kachel unangetastet', async () => {
+      setHost(makeHost({
+        setAppIcon: vi.fn(async () => ({ ok: false, error: 'Das Bild ist zu groß.' })),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+      const vorher = ws.apps[0].icon;
+
+      expect(await ws.setAppIcon(apps[0].id, 'x')).toBeNull();
+      expect(ws.error).toBe('Das Bild ist zu groß.');
+      expect(ws.apps[0].icon).toBe(vorher);
+    });
   });
 
   it('verlässt das Verzeichnis über closeFolder', async () => {
