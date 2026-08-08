@@ -1,9 +1,27 @@
 {
-  "status": "idle",
-  "ready": [],
+  "status": "running",
+  "ready": [
+    "c0040",
+    "c0041",
+    "c0042",
+    "c0043",
+    "c0044",
+    "c0045",
+    "c0046"
+  ],
   "waiting": [],
-  "runs": [],
-  "updated": "2026-08-08T22:51:33",
+  "runs": [
+    {
+      "cardId": "c0039",
+      "phase": "running",
+      "activity": {
+        "name": "Bash",
+        "arg": "grep -ril \"einstellungen\" src --include=\"*.tsx\" --include=\"*.ts\" | head -20"
+      },
+      "model": "claude-opus-5"
+    }
+  ],
+  "updated": "2026-08-08T23:12:06",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -17,6 +35,7 @@
     "i0003",
     "c0034",
     "c0035",
-    "c0037"
+    "c0037",
+    "c0039"
   ]
 }
