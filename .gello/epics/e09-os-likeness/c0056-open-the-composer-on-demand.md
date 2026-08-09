@@ -1,11 +1,13 @@
 ---
 id: c0056
 title: Open the composer on demand
-status: review
+status: done
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T08:35:49
+status-changed: 2026-08-09T09:35:58
 epic: e09
+usage-tokens: 75403
+usage-cost: 17.681912
 ---
 
 ## What
@@ -105,3 +107,4 @@ Umsetzung (2026-08-09):
 - 2026-08-09 status → ready (shell build sequence root)
 - 2026-08-09 status → in-progress (agent)
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)

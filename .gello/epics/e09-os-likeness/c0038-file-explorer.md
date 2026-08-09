@@ -1,10 +1,10 @@
 ---
 id: c0038
 title: File-Explorer
-status: review
+status: done
 created: 2026-08-08
 updated: 2026-08-09
-status-changed: 2026-08-09T07:52:56
+status-changed: 2026-08-09T09:36:01
 epic: e09
 depends: [c0047, c0048, c0049, c0050]
 usage-tokens: 7374
@@ -163,3 +163,4 @@ criteria against what they built, not by writing new code:
 - 2026-08-09 c0047–c0050 all done; umbrella criteria verified against the code,
   full test suite (941) and typecheck green (agent)
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)

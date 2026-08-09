@@ -1,11 +1,13 @@
 ---
 id: c0055
 title: Make Desktop icons more desktop icon-like
-status: in-progress
+status: done
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T07:59:09
+status-changed: 2026-08-09T09:35:59
 epic: e09
+usage-tokens: 50946
+usage-cost: 6.353996
 ---
 
 ## What
@@ -89,4 +91,6 @@ Open questions for planning:
 - 2026-08-09 status → in-progress (agent)
 - 2026-08-09 rahmenlose Icons, Meta beim Überfahren, wiederverwendbares
   `ContextMenu` (+ `core/menu`), Lieblinge je Workspace (`core/favorites`) —
-  TDD; 973 Tests grün, `vue-tsc` sauber
+  TDD; 973 Tests grün, `vue-tsc` sauber — Commit 520b211
+- 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)

@@ -1,22 +1,19 @@
 {
   "status": "running",
-  "ready": [
-    "c0052",
-    "c0056"
-  ],
+  "ready": [],
   "waiting": [],
   "runs": [
     {
-      "cardId": "c0055",
+      "cardId": "c0052",
       "phase": "running",
       "activity": {
-        "name": "Read",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/src/core/arrange.ts"
+        "name": "Bash",
+        "arg": "grep -ril \"dock\" src --include=*.ts --include=*.tsx --include=*.svelte --include=*.vue 2>/dev/null | head -50"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T07:59:38",
+  "updated": "2026-08-09T09:36:18",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -45,6 +42,8 @@
     "c0050",
     "c0051",
     "c0038",
-    "c0055"
+    "c0055",
+    "c0056",
+    "c0052"
   ]
 }

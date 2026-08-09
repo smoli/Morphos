@@ -1,11 +1,11 @@
 ---
 id: c0046
 title: Keyboard shortcuts + app switcher
-status: review
+status: done
 epic: e09
 created: 2026-08-08
 updated: 2026-08-09
-status-changed: 2026-08-09T00:00:32
+status-changed: 2026-08-09T09:36:02
 usage-tokens: 48180
 usage-cost: 5.887724
 ---
@@ -61,3 +61,4 @@ open windows.
   desktop key dispatch, shell store for the settings dialog, settings cheat sheet
   — 700 tests green, typecheck clean
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)
