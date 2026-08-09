@@ -9,13 +9,13 @@
       "cardId": "c0052",
       "phase": "running",
       "activity": {
-        "name": "Edit",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/src/views/DesktopView.vue"
+        "name": "Bash",
+        "arg": "git add src/core/dock.ts src/core/dock.spec.ts src/views/DesktopView.vue src/views/DesktopView.spec.ts .gello/epics/e09-os-likeness/c0052-make-the-dock-osx-like.md .gello/.companion/state.json && git commit -q -F - <<'EOF'\nc0052: Ein Dock, kein Ablagefach für Minimiertes\n\nDas Dock am unteren Rand war bisher ein Ablagefach: Dort lag, was minimiert\nwurde, und sonst nichts. Jetzt ist es das, was man am Mac ein Dock nennt — ganz\nlinks das feste ＋, dahinter die Apps, die der Anwender dort behält, und\ndahinter, was gerade läuft. Jede App genau einmal: Wer behalten wird und läuft,\nrückt nicht ans Ende, sondern bekommt an seinem Platz den Laufpunkt.\n\nWer aufstellt, entscheidet core/dock — reine Logik, ohne Vue: Lieblinge in ihrer\nReihenfolge (die aus c0055, je Workspace gemerkt), dann die übrigen laufenden\nFenster in ihrer. Titel und Icon holt es aus dem Verzeichnis, denn dort stehen\nsie am frischesten; kennt es die App noch nicht (der Entwurf, der gerade erst zu\neiner wurde), nimmt es sie vom Fenster. Ein Liebling, den es nicht mehr gibt,\nfällt still weg — Gelöschtes bleibt manchmal in den Einstellungen zurück.\n\nDie offene Frage der Karte war das System-Fenster: Gehört der Datei-Explorer ins\nDock? Ja, solange er läuft — sonst wäre er minimiert nirgends mehr zu erreichen,\nund genau das soll das Dock ja leisten. Behalten lässt er sich nicht: Sein\nRechtsklick öffnet gar kein Menü, denn ein Liebling ist eine App des\nVerzeichnisses, und an der Schale wird nicht herumentwickelt. Dasselbe gilt für\nden frischen Entwurf, der noch keine App ist.\n\nDer Klick tut nur eines: hin. Das Fenster kommt nach vorn und, wenn es minimiert\nwartete, zurück; ein Liebling ohne Fenster wird geöffnet. Der zweite Klick\nminimiert bewusst nicht — das war so entschieden, und es ist auch geprüft, damit\nes niemand versehentlich wieder einbaut.\n\nDamit zieht auch das ＋ um (das war c0053, in diese Karte gefaltet): Es ist weder\nApp noch Fenster und stand als feste Kachel auf dem ersten Rasterplatz im Weg.\nJetzt steht es als eigener Knopf vor der Liste, durch einen Strich abgesetzt,\nund das Raster beginnt wieder oben links. Der Hinweis im leeren Verzeichnis\nzeigt entsprechend aufs Dock.\n\nDas Aussehen folgt dem Vorbild: eine schwebende Leiste, mittig, so breit wie ihr\nInhalt, hinterlegt und leicht durchscheinend. Nur Glyphen — der Name kommt als\nSprechblase beim Überfahren (und im Tooltip), sonst wäre eine Leiste voller\nKärtchen dort unten schnell breiter als der Schreibtisch. Unter dem Icon der\nLaufpunkt, oben rechts die Arbeitsanzeige eines Agenten. Im Einzel-Modus bleibt\nes beim Alten: Vor der Vollbild-App verdeckt kein Dock ihre Fläche.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nEOF\ngit log --oneline -1"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T09:39:09",
+  "updated": "2026-08-09T09:45:45",
   "pickupDelay": 10,
   "owned": [
     "c0029",

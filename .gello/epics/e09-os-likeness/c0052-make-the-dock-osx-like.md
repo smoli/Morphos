@@ -1,10 +1,10 @@
 ---
 id: c0052
 title: Make the dock OSX like
-status: in-progress
+status: review
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T09:36:09
+status-changed: 2026-08-09T09:45:02
 epic: e09
 depends: [c0055, c0056]
 ---
@@ -19,23 +19,50 @@ minimized-only dock; a minimized app is reachable from its dock item.
 
 ## Acceptance criteria
 
-- [ ] The dock shows, in order: the **＋ New-App** pin, then **favorites**, then
+- [x] The dock shows, in order: the **＋ New-App** pin, then **favorites**, then
       **running** apps not already pinned; an app that is both favorite and
       running appears **once** (with the running indicator).
-- [ ] The launcher grid **no longer** contains a ＋ New-App tile — the ＋ lives
+- [x] The launcher grid **no longer** contains a ＋ New-App tile — the ＋ lives
       only in the dock *(merged c0053)*.
-- [ ] A **running indicator** marks currently-open apps; a favorite that isn't
+- [x] A **running indicator** marks currently-open apps; a favorite that isn't
       running shows without it.
-- [ ] Clicking a dock item **focuses** the app's window, **restoring** it if
+- [x] Clicking a dock item **focuses** the app's window, **restoring** it if
       minimized; clicking ＋ starts a new app. **No** minimize-on-second-click.
-- [ ] Apps can be **pinned / unpinned** as favorites via the icon context menu
+- [x] Apps can be **pinned / unpinned** as favorites via the icon context menu
       (c0055, „Im Dock behalten“); favorites **persist per workspace** in Settings.
-- [ ] Each dock item shows the app's icon (emoji or image) and its name on
+- [x] Each dock item shows the app's icon (emoji or image) and its name on
       hover/tooltip.
-- [ ] The dock **replaces** the old minimized-only dock (minimized apps live here
+- [x] The dock **replaces** the old minimized-only dock (minimized apps live here
       now).
-- [ ] Dock composition (order, favorite/running/duplicate handling) is pure logic
+- [x] Dock composition (order, favorite/running/duplicate handling) is pure logic
       covered by unit tests; rendering + click by component tests.
+
+## Notes
+
+- **`src/core/dock.ts`** (neu) stellt die Plätze auf: Lieblinge in ihrer
+  Reihenfolge, dahinter die übrigen laufenden Fenster in ihrer; jede App genau
+  einmal. Titel und Icon kommen aus dem Verzeichnis (frischester Stand), sonst
+  vom Fenster. Gelöschte Apps, die noch in den Einstellungen stehen, fallen weg.
+  10 Unit-Tests in `src/core/dock.spec.ts`.
+- Das **＋** ist kein Listeneintrag — es ist weder App noch Fenster und steht als
+  fester Knopf (`.dock-item.new`) vor der Liste, abgesetzt durch einen Strich.
+- **Offene Frage „System-Fenster im Dock?“ entschieden:** Fenster ohne App (der
+  Datei-Explorer, ein frischer Entwurf) stehen als *laufende* Plätze mit im
+  Dock — sonst wäre ein minimiertes von ihnen nirgends mehr zu erreichen. Sie
+  lassen sich **nicht** behalten: Ihr Rechtsklick öffnet gar kein Menü, denn nur
+  eine App des Verzeichnisses kann ein Liebling sein.
+- **Favoriten-Scope: je Workspace** (wie `iconPositions`/`sessions`) — kam mit
+  c0055 (`core/favorites`, `stores/workspace`) schon so an und bleibt so.
+- Aussehen: schwebende Leiste unten mittig, nur Glyphen (48 px), Name als
+  Sprechblase beim Überfahren (plus `title`-Tooltip), Laufpunkt unter dem Icon,
+  Arbeitsanzeige (BusyDot) oben rechts. Im Einzel-Modus erscheint das Dock
+  weiterhin nur auf dem Desktop, nicht über der Vollbild-App.
+- Der Rasterplatz 0 ist frei geworden (`arrangeIcons` ohne `reserved`) — Kacheln
+  ohne gemerkte Position beginnen wieder oben links; der Hinweistext für ein
+  leeres Verzeichnis zeigt aufs Dock.
+- Geprüft: `npx vitest run` (1016 Tests grün) und `npx vue-tsc --noEmit`. Ein
+  Lauf in der echten Electron-App fand nicht statt (Ordnerauswahl ist ein
+  nativer Dialog) — belegt ist alles über die Komponententests.
 
 ## Discussion
 
@@ -70,3 +97,6 @@ Open questions for planning:
 - 2026-08-09 depends [c0055, c0056] + status → backlog (shell build sequence)
 - 2026-08-09 status → ready (app)
 - 2026-08-09 status → in-progress (agent)
+- 2026-08-09 core/dock.ts + Spec (rot → grün), Dock in DesktopView neu gebaut,
+  ＋ aus dem Raster ins Dock, System-Fenster-Frage entschieden (Notes)
+- 2026-08-09 status → review (agent)

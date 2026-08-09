@@ -99,6 +99,21 @@ describe('DesktopView', () => {
     return wrapper.findAll('.tile-wrap').find((t) => t.text().includes(name))!;
   }
 
+  /**
+   * Ein Platz im Dock. Er trägt nur die Glyphe — gesucht wird darum über den
+   * Namen im Tooltip (das feste ＋ nennt daneben sein Tastenkürzel).
+   */
+  function dockItem(wrapper: VueWrapper, name: string) {
+    return wrapper.findAll('.dock-item').find((d) => d.attributes('title') === name)!;
+  }
+
+  /** Die Namen im Dock, von links nach rechts — ohne das feste ＋. */
+  function dockNames(wrapper: VueWrapper): string[] {
+    return wrapper
+      .findAll('.dock-item:not(.new)')
+      .map((d) => d.attributes('title') ?? '');
+  }
+
   /** Rechtsklick auf die Kachel einer App — ihr Kontextmenü klappt auf. */
   async function openIconMenu(wrapper: VueWrapper, name: string) {
     await tileWrap(wrapper, name).get('.tile').trigger('contextmenu', { clientX: 200, clientY: 150 });
@@ -113,13 +128,14 @@ describe('DesktopView', () => {
     await flushPromises();
   }
 
-  it('zeigt eine Kachel je App plus „Neue App“', async () => {
+  it('zeigt eine Kachel je App — das ＋ steht im Dock, nicht mehr im Raster', async () => {
     const { wrapper } = await mountView();
     expect(wrapper.text()).toContain('Rechner');
     expect(wrapper.text()).toContain('Editor');
-    expect(wrapper.text()).toContain('Neue App');
-    // 2 Apps + 1 Neu-Kachel
-    expect(wrapper.findAll('.tile')).toHaveLength(3);
+    // Nur noch die Apps liegen auf der Fläche.
+    expect(wrapper.findAll('.tile')).toHaveLength(2);
+    expect(wrapper.find('.tile.new').exists()).toBe(false);
+    expect(wrapper.get('.dock-item.new').text()).toBe('＋');
   });
 
   it('malt den Hintergrund des Verzeichnisses hinter Kacheln und Fenstern', async () => {
@@ -158,7 +174,7 @@ describe('DesktopView', () => {
   it('öffnet ein Entwurfsfenster über „Neue App“', async () => {
     const { wrapper } = await mountView();
     const desktop = useDesktopStore();
-    await wrapper.get('.tile.new').trigger('click');
+    await wrapper.get('.dock-item.new').trigger('click');
     await flushPromises();
     expect(desktop.windows).toHaveLength(1);
     expect(desktop.windows[0].appId).toBeNull();
@@ -173,9 +189,9 @@ describe('DesktopView', () => {
 
     await wrapper.get('.w-min').trigger('click');
     await flushPromises();
-    expect(wrapper.find('.dock').exists()).toBe(true);
+    expect(dockNames(wrapper)).toEqual(['Rechner']);
 
-    await wrapper.get('.dock-item').trigger('click');
+    await dockItem(wrapper, 'Rechner').trigger('click');
     expect(desktop.windows[0].minimized).toBe(false);
   });
 
@@ -230,7 +246,7 @@ describe('DesktopView', () => {
 
       await wrapper.get('.w-min').trigger('click');
       await flushPromises();
-      expect(wrapper.get('.dock-item').find('.busy-dot').exists()).toBe(true);
+      expect(dockItem(wrapper, 'Rechner').find('.busy-dot').exists()).toBe(true);
     });
   });
 
@@ -285,7 +301,7 @@ describe('DesktopView', () => {
     it('öffnet eine neue App mit offenem Chat', async () => {
       const { wrapper } = await mountView();
 
-      await wrapper.get('.tile.new').trigger('click');
+      await wrapper.get('.dock-item.new').trigger('click');
       await flushPromises();
 
       const instanceId = useDesktopStore().windows[0].instanceId;
@@ -297,7 +313,7 @@ describe('DesktopView', () => {
       const { wrapper } = await mountView();
       const spy = vi.spyOn(useAgentsStore(), 'submit').mockReturnValue('job-1');
 
-      await wrapper.get('.tile.new').trigger('click');
+      await wrapper.get('.dock-item.new').trigger('click');
       await flushPromises();
       const instanceId = useDesktopStore().windows[0].instanceId;
 
@@ -494,7 +510,7 @@ describe('DesktopView', () => {
       desktop.minimizeWindow(instanceId);
       await flushPromises();
 
-      await wrapper.get('.dock-item').trigger('contextmenu', { clientX: 40, clientY: 700 });
+      await dockItem(wrapper, 'Rechner').trigger('contextmenu', { clientX: 40, clientY: 700 });
       await flushPromises();
 
       expect(wrapper.findAll('.ctx-item').map((i) => i.get('.ctx-label').text())).toEqual([
@@ -513,6 +529,173 @@ describe('DesktopView', () => {
 
       expect(wrapper.findComponent(ContextMenu).exists()).toBe(false);
       expect(useDesktopStore().windows).toHaveLength(0);
+    });
+  });
+
+  describe('Dock wie am Mac', () => {
+    /** Die Lieblinge dieses Verzeichnisses setzen (wie aus den Einstellungen gelesen). */
+    function keep(...ids: string[]) {
+      useWorkspaceStore().favorites = { '/apps': ids };
+    }
+
+    it('steht auch leer da — das ＋ ist immer dabei', async () => {
+      const { wrapper } = await mountView();
+      expect(wrapper.find('.dock-item.new').exists()).toBe(true);
+      expect(dockNames(wrapper)).toEqual([]);
+    });
+
+    it('reiht auf: erst die Lieblinge, dann das Laufende', async () => {
+      keep('editor-2');
+      const { wrapper } = await mountView();
+      useDesktopStore().openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await flushPromises();
+
+      // Das feste ＋ steht vor allem anderen.
+      expect(wrapper.findAll('.dock-item')[0].classes()).toContain('new');
+      expect(dockNames(wrapper)).toEqual(['Editor', 'Rechner']);
+    });
+
+    it('zeigt eine App, die läuft UND behalten wird, nur einmal', async () => {
+      keep('rechner-1', 'editor-2');
+      const { wrapper } = await mountView();
+      useDesktopStore().openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await flushPromises();
+
+      expect(dockNames(wrapper)).toEqual(['Rechner', 'Editor']);
+    });
+
+    it('markiert mit einem Laufpunkt, was gerade offen ist', async () => {
+      keep('editor-2');
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      const instanceId = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await flushPromises();
+
+      expect(dockItem(wrapper, 'Rechner').find('.dock-dot').exists()).toBe(true);
+      // Der Liebling, der nicht läuft, bleibt ohne.
+      expect(dockItem(wrapper, 'Editor').find('.dock-dot').exists()).toBe(false);
+
+      // Minimiert läuft die App weiter — der Punkt bleibt.
+      desktop.minimizeWindow(instanceId);
+      await flushPromises();
+      expect(dockItem(wrapper, 'Rechner').find('.dock-dot').exists()).toBe(true);
+
+      desktop.closeWindow(instanceId);
+      await flushPromises();
+      expect(dockNames(wrapper)).toEqual(['Editor']);
+    });
+
+    it('trägt Icon und Namen — den Namen als Tooltip, sichtbar beim Überfahren', async () => {
+      keep('rechner-1');
+      const { wrapper } = await mountView();
+      const item = dockItem(wrapper, 'Rechner');
+      expect(item.get('.dock-glyph').text()).toBe('🧮');
+      expect(item.get('.dock-name').text()).toBe('Rechner');
+    });
+
+    it('zeigt ein Bild-Icon auch im Dock als Bild', async () => {
+      setHost(makeHost({ listApps: vi.fn(async () => [{ ...apps[0], icon: IMAGE_ICON, iconCustom: true }, apps[1]]) }));
+      keep('rechner-1');
+      const { wrapper } = await mountView();
+      expect(dockItem(wrapper, 'Rechner').get('img').attributes('src')).toBe(IMAGE_ICON);
+    });
+
+    it('öffnet einen Liebling, der nicht läuft, per Klick', async () => {
+      keep('rechner-1');
+      const { wrapper } = await mountView();
+
+      await dockItem(wrapper, 'Rechner').trigger('click');
+      await flushPromises();
+
+      const desktop = useDesktopStore();
+      expect(desktop.windows.map((w) => w.appId)).toEqual(['rechner-1']);
+      expect(wrapper.findAllComponents(WindowFrame)).toHaveLength(1);
+    });
+
+    it('holt ein minimiertes Fenster zurück — und minimiert es beim zweiten Klick NICHT', async () => {
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      const instanceId = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      desktop.minimizeWindow(instanceId);
+      await flushPromises();
+
+      await dockItem(wrapper, 'Rechner').trigger('click');
+      await flushPromises();
+      expect(desktop.find(instanceId)!.minimized).toBe(false);
+
+      await dockItem(wrapper, 'Rechner').trigger('click');
+      await flushPromises();
+      expect(desktop.find(instanceId)!.minimized).toBe(false);
+      expect(desktop.focusedId).toBe(instanceId);
+      // Und es bleibt bei dem einen Fenster.
+      expect(desktop.windows).toHaveLength(1);
+    });
+
+    it('holt eine laufende App nach vorn, statt sie zweimal zu öffnen', async () => {
+      keep('rechner-1');
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      const instanceId = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });
+      await flushPromises();
+
+      await dockItem(wrapper, 'Rechner').trigger('click');
+      await flushPromises();
+
+      expect(desktop.windows).toHaveLength(2);
+      expect(desktop.focusedId).toBe(instanceId);
+    });
+
+    it('nimmt eine laufende App über ihr Dock-Menü dauerhaft ins Dock — und merkt es je Verzeichnis', async () => {
+      const host = makeHost();
+      setHost(host);
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      const instanceId = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await flushPromises();
+
+      await dockItem(wrapper, 'Rechner').trigger('contextmenu', { clientX: 40, clientY: 700 });
+      await pickMenu(wrapper, 'Im Dock behalten');
+
+      expect(useWorkspaceStore().favorites).toEqual({ '/apps': ['rechner-1'] });
+      expect(host.saveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ favorites: { '/apps': ['rechner-1'] } }),
+      );
+
+      // Geschlossen bleibt sie im Dock stehen.
+      desktop.closeWindow(instanceId);
+      await flushPromises();
+      expect(dockNames(wrapper)).toEqual(['Rechner']);
+
+      // Und wieder heraus.
+      await dockItem(wrapper, 'Rechner').trigger('contextmenu', { clientX: 40, clientY: 700 });
+      await pickMenu(wrapper, 'Aus dem Dock entfernen');
+      expect(dockNames(wrapper)).toEqual([]);
+    });
+
+    it('bietet an einem Fenster ohne App nichts zum Behalten an', async () => {
+      const { wrapper } = await mountView();
+      useDesktopStore().openSystem(EXPLORER_ID);
+      await flushPromises();
+
+      await dockItem(wrapper, 'Dateien').trigger('contextmenu', { clientX: 40, clientY: 700 });
+      await flushPromises();
+
+      expect(wrapper.findComponent(ContextMenu).exists()).toBe(false);
+    });
+
+    it('vergisst den Liebling einer gelöschten App', async () => {
+      keep('rechner-1');
+      const { wrapper } = await mountView();
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      setHost(makeHost({ listApps: vi.fn(async () => [apps[1]]) }));
+
+      await openIconMenu(wrapper, 'Rechner');
+      await pickMenu(wrapper, 'Löschen');
+
+      expect(useWorkspaceStore().favoriteIds).toEqual([]);
+      expect(dockNames(wrapper)).toEqual([]);
+      vi.restoreAllMocks();
     });
   });
 
@@ -539,12 +722,13 @@ describe('DesktopView', () => {
       await flushPromises();
     }
 
-    it('legt Apps ohne gemerkte Position ins Raster, hinter die Neu-Kachel', async () => {
+    it('legt Apps ohne gemerkte Position ins Raster — ab dem ersten Platz', async () => {
       const { wrapper } = await mountView();
       const rechner = tileOf(wrapper, 'Rechner');
       const editor = tileOf(wrapper, 'Editor');
-      expect({ x: rechner.x, y: rechner.y }).toEqual(slotPos(1, cols));
-      expect({ x: editor.x, y: editor.y }).toEqual(slotPos(2, cols));
+      // Seit das ＋ im Dock steht, ist auch der erste Rasterplatz frei.
+      expect({ x: rechner.x, y: rechner.y }).toEqual(slotPos(0, cols));
+      expect({ x: editor.x, y: editor.y }).toEqual(slotPos(1, cols));
     });
 
     it('stellt eine gemerkte Position wieder her', async () => {
@@ -554,7 +738,7 @@ describe('DesktopView', () => {
 
       expect(tileOf(wrapper, 'Rechner')).toMatchObject({ x: 300, y: 220 });
       // Der freie Platz im Raster bleibt für die übrigen Kacheln.
-      expect(tileOf(wrapper, 'Editor')).toMatchObject(slotPos(1, cols));
+      expect(tileOf(wrapper, 'Editor')).toMatchObject(slotPos(0, cols));
     });
 
     it('zieht eine Kachel an eine neue Stelle und merkt sie', async () => {
@@ -605,7 +789,7 @@ describe('DesktopView', () => {
       await flushPromises();
 
       expect(useWorkspaceStore().iconLayout).toEqual({});
-      expect(tileOf(wrapper, 'Rechner')).toMatchObject(slotPos(1, cols));
+      expect(tileOf(wrapper, 'Rechner')).toMatchObject(slotPos(0, cols));
     });
   });
 
@@ -630,7 +814,7 @@ describe('DesktopView', () => {
     it('öffnet beim ersten Mal nur den Launcher', async () => {
       const { wrapper } = await mountView();
       expect(wrapper.findAllComponents(WindowFrame)).toHaveLength(0);
-      expect(wrapper.findAll('.tile')).toHaveLength(3);
+      expect(wrapper.findAll('.tile')).toHaveLength(2);
     });
   });
 
@@ -663,7 +847,7 @@ describe('DesktopView', () => {
 
     // Keine App mehr im Vordergrund, der Launcher ist wieder frei.
     expect(wrapper.findAllComponents(WindowFrame)).toHaveLength(0);
-    expect(wrapper.findAll('.tile')).toHaveLength(3);
+    expect(wrapper.findAll('.tile')).toHaveLength(2);
   });
 
   it('listet im Einzel-Modus die offenen Apps auf dem Desktop im Dock', async () => {
@@ -677,9 +861,9 @@ describe('DesktopView', () => {
 
     await wrapper.get('.w-desktop').trigger('click');
     await flushPromises();
-    expect(wrapper.get('.dock').text()).toContain('Rechner');
+    expect(dockNames(wrapper)).toEqual(['Rechner']);
 
-    await wrapper.get('.dock-item').trigger('click');
+    await dockItem(wrapper, 'Rechner').trigger('click');
     await flushPromises();
     expect(wrapper.findAllComponents(WindowFrame)).toHaveLength(1);
   });
@@ -708,7 +892,7 @@ describe('DesktopView', () => {
     async function toDesktopAndBack(wrapper: Awaited<ReturnType<typeof mountView>>['wrapper']) {
       await wrapper.get('.w-desktop').trigger('click');
       await flushPromises();
-      await wrapper.get('.dock-item').trigger('click');
+      await dockItem(wrapper, 'Rechner').trigger('click');
       await flushPromises();
     }
 
@@ -900,7 +1084,7 @@ describe('DesktopView', () => {
 
     it('greift dieselbe Taste von der Fläche aus (Gegenprobe zum Tippen)', async () => {
       const { wrapper } = await mountView({ attach: true });
-      await pressOn(wrapper.get('.tile.new').element, 'n', { ctrlKey: true });
+      await pressOn(wrapper.get('.dock-item.new').element, 'n', { ctrlKey: true });
       expect(useDesktopStore().windows).toHaveLength(1);
       wrapper.unmount();
     });
@@ -908,7 +1092,7 @@ describe('DesktopView', () => {
     it('rührt sich nicht, während im Chat eines Fensters getippt wird', async () => {
       const { wrapper } = await mountView({ attach: true });
       // Ein Entwurfsfenster bringt seinen Chat offen mit.
-      await wrapper.get('.tile.new').trigger('click');
+      await wrapper.get('.dock-item.new').trigger('click');
       await flushPromises();
       const input = wrapper.get('.w-composer textarea').element;
 
@@ -1137,9 +1321,9 @@ describe('DesktopView', () => {
 
       await wrapper.get('.w-min').trigger('click');
       await flushPromises();
-      expect(wrapper.get('.dock').text()).toContain('Dateien');
+      expect(dockNames(wrapper)).toEqual(['Dateien']);
 
-      await wrapper.get('.dock-item').trigger('click');
+      await dockItem(wrapper, 'Dateien').trigger('click');
       await flushPromises();
       expect(useDesktopStore().windows[0].minimized).toBe(false);
     });
@@ -1178,7 +1362,7 @@ describe('DesktopView', () => {
 
       // Zurück auf dem Desktop — das Fenster wartet im Dock.
       expect(wrapper.findComponent(SystemWindow).exists()).toBe(false);
-      expect(wrapper.get('.dock').text()).toContain('Dateien');
+      expect(dockNames(wrapper)).toEqual(['Dateien']);
     });
 
     it('nimmt keine Wünsche entgegen — er trägt keinen Chat', async () => {

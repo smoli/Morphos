@@ -25,17 +25,16 @@ import {
 import { canSwitch, cycleSelection, switcherOrder } from '@/core/switcher';
 import { EXPLORER_ID, SYSTEM_WINDOWS, systemWindow } from '@/core/system';
 import { wallpaperCss } from '@/core/wallpaper';
+import { dockEntries, type DockEntry } from '@/core/dock';
 import type { MenuItem } from '@/core/menu';
 import type { DesktopWindow } from '@/stores/desktop';
 import {
   arrangeIcons,
   CELL_H,
   clampPos,
-  columns,
   DRAG_THRESHOLD,
   layoutHeight,
   PAD,
-  slotPos,
   TILE_H,
   TILE_W,
   type Bounds,
@@ -61,17 +60,32 @@ function surfaceFor(w: DesktopWindow) {
   return w.kind === 'system' ? SystemWindow : AppWindow;
 }
 
-// Dock: im Fenster-Modus die minimierten Fenster; im Einzel-Modus auf dem
-// Desktop alle laufenden Apps (auch Entwürfe ohne Kachel) zum Zurückwechseln.
-// Läuft dort eine App im Vollbild, verdeckt kein Dock ihre Fläche.
-const dockWindows = computed(() => {
-  if (!singleMode.value) return desktop.windows.filter((w) => w.minimized);
-  return activeWindow.value ? [] : desktop.windows;
-});
+// Das Dock: das feste ＋ und dahinter, was core/dock aufstellt — die behaltenen
+// Apps und die laufenden Fenster. Im Einzel-Modus verdeckt es die Vollbild-App
+// nicht: Dort erscheint es nur auf dem Desktop selbst.
+const dock = computed<DockEntry[]>(() =>
+  dockEntries(workspace.apps, desktop.windows, workspace.favoriteIds),
+);
+const dockVisible = computed(() => !singleMode.value || !activeWindow.value);
 
-/** Arbeitet ein Agent für dieses Fenster (bzw. für die App, die es zeigt)? */
-function windowBusy(instanceId: string, appId: string | null): boolean {
-  return agents.isWindowBusy(instanceId, appId);
+/** Arbeitet ein Agent für diesen Dock-Platz (für seine App oder sein Fenster)? */
+function dockBusy(entry: DockEntry): boolean {
+  if (entry.appId) return agents.isBusy(entry.appId);
+  return entry.instanceId ? agents.isWindowBusy(entry.instanceId, null) : false;
+}
+
+/**
+ * Klick auf einen Dock-Platz: Das Fenster kommt nach vorn (und zurück, wenn es
+ * minimiert wartet); eine behaltene App, die nicht läuft, wird geöffnet. Ein
+ * zweiter Klick minimiert bewusst NICHT — hier ist nur der Weg hin.
+ */
+function openDockEntry(entry: DockEntry): void {
+  if (entry.instanceId) {
+    desktop.focusWindow(entry.instanceId);
+    return;
+  }
+  const app = workspace.apps.find((a) => a.id === entry.appId);
+  if (app) launchApp(app);
 }
 
 /**
@@ -100,11 +114,11 @@ function measure(): void {
   bounds.value = el ? { w: el.clientWidth, h: el.clientHeight } : { w: 0, h: 0 };
 }
 
-// Der erste Rasterplatz gehört der festen „Neue App“-Kachel.
+// Die Fläche gehört ganz den Apps — das ＋ steht im Dock, kein Rasterplatz ist
+// mehr vergeben.
 const layout = computed(() =>
-  arrangeIcons(workspace.apps.map((a) => a.id), workspace.iconLayout, bounds.value, 1),
+  arrangeIcons(workspace.apps.map((a) => a.id), workspace.iconLayout, bounds.value),
 );
-const newAppPos = computed(() => slotPos(0, columns(bounds.value)));
 // Beim Ziehen folgt die Kachel der Maus, bevor die Position gemerkt ist.
 const positions = computed<Record<string, IconPos>>(() =>
   dragId.value && dragPos.value ? { ...layout.value, [dragId.value]: dragPos.value } : layout.value,
@@ -388,10 +402,13 @@ function openIconMenu(e: MouseEvent, app: AppSummary): void {
   };
 }
 
-/** Rechtsklick im Dock: dort geht es nur ums Behalten (Entwürfe haben keine App). */
-function openDockMenu(e: MouseEvent, w: DesktopWindow): void {
-  if (!w.appId) return;
-  menu.value = { x: e.clientX, y: e.clientY, appId: w.appId, items: [dockItem(w.appId)] };
+/**
+ * Rechtsklick im Dock: dort geht es nur ums Behalten. Ein Fenster ohne App —
+ * der Entwurf, der Datei-Explorer — hat nichts zu behalten und bekommt keines.
+ */
+function openDockMenu(e: MouseEvent, entry: DockEntry): void {
+  if (!entry.appId) return;
+  menu.value = { x: e.clientX, y: e.clientY, appId: entry.appId, items: [dockItem(entry.appId)] };
 }
 
 function onMenuPick(id: string): void {
@@ -455,17 +472,6 @@ function onMenuPick(id: string): void {
         </div>
 
         <div class="icons" :style="{ minHeight: surfaceHeight }">
-          <div class="tile-wrap fixed" :style="tileStyle(newAppPos)">
-            <button
-              type="button"
-              class="tile new"
-              :title="`Neue App (${shortcutKeys('new-app')})`"
-              @click="newApp"
-            >
-              <span class="icon">＋</span>
-              <span class="name">Neue App</span>
-            </button>
-          </div>
           <div
             v-for="app in workspace.apps"
             :key="app.id"
@@ -492,8 +498,8 @@ function onMenuPick(id: string): void {
             <BusyDot v-if="agents.isBusy(app.id)" class="tile-busy" />
           </div>
           <p v-if="!workspace.loading && workspace.apps.length === 0" class="hint" :style="{ top: hintTop }">
-            Noch keine Apps in diesem Verzeichnis. Öffne „Neue App“ — im Chat des neuen Fensters
-            beschreibst du dann, was deine erste App sein soll.
+            Noch keine Apps in diesem Verzeichnis. Klick auf das ＋ im Dock — im Chat des neuen
+            Fensters beschreibst du dann, was deine erste App sein soll.
           </p>
         </div>
       </div>
@@ -539,20 +545,31 @@ function onMenuPick(id: string): void {
         @pick="pickFromSwitcher"
       />
 
-      <!-- Dock für minimierte bzw. (Einzel-Modus) laufende Fenster. -->
-      <div v-if="dockWindows.length" class="dock">
+      <!-- Das Dock: ＋, die behaltenen Apps und was gerade läuft (core/dock). -->
+      <div v-if="dockVisible" class="dock">
         <button
-          v-for="w in dockWindows"
-          :key="w.instanceId"
+          type="button"
+          class="dock-item new"
+          :title="`Neue App (${shortcutKeys('new-app')})`"
+          @click="newApp"
+        >
+          <span class="dock-glyph">＋</span>
+        </button>
+        <span v-if="dock.length" class="dock-sep" aria-hidden="true"></span>
+        <button
+          v-for="entry in dock"
+          :key="entry.key"
           type="button"
           class="dock-item"
-          :title="w.title"
-          @click="desktop.restoreWindow(w.instanceId)"
-          @contextmenu.prevent="openDockMenu($event, w)"
+          :class="{ running: entry.running }"
+          :title="entry.title"
+          @click="openDockEntry(entry)"
+          @contextmenu.prevent="openDockMenu($event, entry)"
         >
-          <AppIcon :icon="w.icon" :size="16" />
-          <span class="dock-name">{{ w.title }}</span>
-          <BusyDot v-if="windowBusy(w.instanceId, w.appId)" />
+          <AppIcon class="dock-glyph" :icon="entry.icon" :size="34" />
+          <span class="dock-name">{{ entry.title }}</span>
+          <BusyDot v-if="dockBusy(entry)" class="dock-busy" />
+          <span v-if="entry.running" class="dock-dot" aria-hidden="true"></span>
         </button>
       </div>
     </div>
@@ -671,10 +688,6 @@ function onMenuPick(id: string): void {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
-.tile.new {
-  cursor: pointer;
-  color: var(--muted);
-}
 .icon {
   font-size: 48px;
   line-height: 1;
@@ -725,40 +738,107 @@ function onMenuPick(id: string): void {
   text-align: center;
   font-size: 14px;
 }
+/*
+ * Das Dock wie am Mac: eine schwebende Leiste am unteren Rand, mittig, so
+ * breit wie ihr Inhalt. Es trägt nur Glyphen — der Name kommt beim Überfahren.
+ */
 .dock {
   position: absolute;
   left: 50%;
   bottom: 14px;
   transform: translateX(-50%);
   display: flex;
-  gap: 8px;
-  padding: 6px;
-  background: rgba(20, 22, 28, 0.9);
+  align-items: flex-end;
+  gap: 6px;
+  padding: 6px 8px;
+  background: rgba(20, 22, 28, 0.72);
+  backdrop-filter: blur(14px);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   z-index: 10000;
-  max-width: 90%;
+  max-width: 92%;
   overflow-x: auto;
+  overflow-y: visible;
+}
+/* Das feste ＋ steht vor den Apps, abgesetzt durch einen Strich. */
+.dock-sep {
+  align-self: stretch;
+  width: 1px;
+  margin: 4px 2px;
+  background: var(--border);
+  flex: none;
 }
 .dock-item {
+  position: relative;
+  flex: none;
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
+  justify-content: center;
+  background: none;
+  border: none;
   color: var(--text);
-  border-radius: 10px;
-  padding: 6px 12px;
-  font-size: 13px;
+  border-radius: 12px;
+  padding: 0;
   cursor: pointer;
-  white-space: nowrap;
+  /* Wie am Mac wächst das Icon unter dem Zeiger — von unten her. */
+  transition: transform 0.12s ease;
+  transform-origin: bottom center;
 }
-.dock-item:hover {
-  border-color: var(--accent);
+.dock-item:hover,
+.dock-item:focus-visible {
+  transform: scale(1.18);
+  outline: none;
 }
+.dock-item.new .dock-glyph {
+  font-size: 30px;
+  line-height: 1;
+  color: var(--muted);
+}
+.dock-item.new:hover .dock-glyph {
+  color: var(--text);
+}
+/* Der Name schwebt beim Überfahren über dem Icon — sonst ist er nicht da. */
 .dock-name {
-  max-width: 140px;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  max-width: 180px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: rgba(10, 12, 16, 0.92);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
+}
+.dock-item:hover .dock-name,
+.dock-item:focus-visible .dock-name {
+  opacity: 1;
+}
+/* Der Laufpunkt: Diese App ist offen (auch, wenn sie minimiert wartet). */
+.dock-dot {
+  position: absolute;
+  bottom: 1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+/* Die Arbeitsanzeige sitzt oben rechts auf dem Icon. */
+.dock-busy {
+  position: absolute;
+  top: 2px;
+  right: 2px;
 }
 </style>
