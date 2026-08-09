@@ -1,13 +1,16 @@
 <script setup lang="ts">
 /**
- * Einstellungs-Bereich „Darstellung“: die Leiste am unteren Rand (das Dock).
- * Wie durchsichtig sie ist (c0060), wie dicht ihr Milchglas-Schleier (c0061) —
- * und ob sie sich aus dem Weg legt, bis der Zeiger den Rand erreicht (c0062).
- * Alles gilt je Arbeitsverzeichnis und wird sofort wirksam; die Vorschau zeigt
- * es über dem echten Hintergrund dieses Verzeichnisses.
+ * Einstellungs-Bereich „Darstellung“: die schwebende Leiste (das Dock). An
+ * welchem Rand sie steht (c0063), wie durchsichtig sie ist (c0060), wie dicht
+ * ihr Milchglas-Schleier (c0061) — und ob sie sich aus dem Weg legt, bis der
+ * Zeiger den Rand erreicht (c0062). Alles gilt je Arbeitsverzeichnis und wird
+ * sofort wirksam; die Vorschau zeigt es über dem echten Hintergrund dieses
+ * Verzeichnisses.
  */
 import { computed } from 'vue';
 import { useWorkspaceStore } from '@/stores/workspace';
+import { DOCK_EDGES } from '@/core/dock';
+import type { DockEdge } from '@/types';
 import {
   BLUR_STEP,
   DEFAULT_DOCK_BLUR,
@@ -29,6 +32,7 @@ const level = computed(() => workspace.dockTransparency);
 const percent = computed(() => transparencyPercent(level.value));
 const blur = computed(() => workspace.dockBlur);
 const autohide = computed(() => workspace.dockAutohide);
+const edge = computed(() => workspace.dockEdge);
 
 function onLevel(event: Event): void {
   workspace.setDockTransparency(Number((event.target as HTMLInputElement).value));
@@ -41,18 +45,26 @@ function onBlur(event: Event): void {
 function onAutohide(event: Event): void {
   workspace.setDockAutohide((event.target as HTMLInputElement).checked);
 }
+
+function onEdge(id: DockEdge): void {
+  workspace.setDockEdge(id);
+}
 </script>
 
 <template>
   <section class="block">
     <h3>Das Dock</h3>
     <p class="hint">
-      Wie stark der Hintergrund durch die Leiste am unteren Rand scheint, wie sehr sie ihn dabei
-      verwischt — und ob sie sich aus dem Weg legt, bis der Zeiger an den Rand kommt. Alles gilt
-      für dieses Arbeitsverzeichnis und bleibt über den Neustart erhalten.
+      An welchem Rand die Leiste steht, wie stark der Hintergrund durch sie scheint, wie sehr sie
+      ihn dabei verwischt — und ob sie sich aus dem Weg legt, bis der Zeiger an den Rand kommt.
+      Alles gilt für dieses Arbeitsverzeichnis und bleibt über den Neustart erhalten.
     </p>
 
-    <div class="preview" :style="{ background: wallpaperCss(workspace.wallpaper) }">
+    <div
+      class="preview"
+      :class="`edge-${edge}`"
+      :style="{ background: wallpaperCss(workspace.wallpaper) }"
+    >
       <div
         class="dock-preview"
         :class="{ away: autohide }"
@@ -60,6 +72,23 @@ function onAutohide(event: Event): void {
       >
         <span v-for="g in PREVIEW_GLYPHS" :key="g" class="glyph" aria-hidden="true">{{ g }}</span>
       </div>
+    </div>
+
+    <div class="row">
+      <span class="label">Wo das Dock steht</span>
+      <span class="seg edges" role="group" aria-label="Wo das Dock steht">
+        <button
+          v-for="e in DOCK_EDGES"
+          :key="e.id"
+          type="button"
+          class="edge"
+          :data-edge="e.id"
+          :class="{ active: edge === e.id }"
+          @click="onEdge(e.id)"
+        >
+          {{ e.label }}
+        </button>
+      </span>
     </div>
 
     <div class="row">
@@ -131,6 +160,34 @@ function onAutohide(event: Event): void {
   justify-content: center;
   padding: 10px;
 }
+/* Die Vorschau stellt die Leiste an denselben Rand wie der Desktop (c0063). */
+.preview.edge-top {
+  align-items: flex-start;
+}
+.preview.edge-left,
+.preview.edge-right {
+  align-items: center;
+}
+.preview.edge-left {
+  justify-content: flex-start;
+}
+.preview.edge-right {
+  justify-content: flex-end;
+}
+/*
+ * Hochkant stapeln sich die Glyphen — in den 96 px der Vorschau nur, wenn sie
+ * dabei etwas kleiner und enger stehen als quer.
+ */
+.preview.edge-left .dock-preview,
+.preview.edge-right .dock-preview {
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 6px;
+}
+.preview.edge-left .glyph,
+.preview.edge-right .glyph {
+  font-size: 13px;
+}
 /*
  * Dieselbe Leiste wie auf dem Desktop, nur kleiner (DesktopView: .dock). Farbe
  * und Schleier stehen oben als `background` und `--dock-blur` daran.
@@ -145,10 +202,19 @@ function onAutohide(event: Event): void {
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
   transition: transform 0.18s ease, opacity 0.18s ease;
 }
-/* Ausgeblendet: Die Leiste zieht sich unter den Rand — hier nur angedeutet. */
+/* Ausgeblendet: Die Leiste zieht sich über ihren Rand — hier nur angedeutet. */
 .dock-preview.away {
   transform: translateY(60%);
   opacity: 0.45;
+}
+.preview.edge-top .dock-preview.away {
+  transform: translateY(-60%);
+}
+.preview.edge-left .dock-preview.away {
+  transform: translateX(-60%);
+}
+.preview.edge-right .dock-preview.away {
+  transform: translateX(60%);
 }
 .glyph {
   font-size: 20px;
@@ -171,6 +237,10 @@ function onAutohide(event: Event): void {
 .end {
   font-size: 11px;
   color: var(--muted);
+}
+/* Die Aufschrift vor den vier Rändern — kein Reglerende, darum größer. */
+.label {
+  font-size: 13px;
 }
 .value,
 .blur-value {

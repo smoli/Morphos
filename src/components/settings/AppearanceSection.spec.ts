@@ -10,7 +10,7 @@ import {
   dockBackgroundCss,
   dockBlurCss,
 } from '@/core/transparency';
-import { DEFAULT_DOCK_AUTOHIDE } from '@/core/dock';
+import { DEFAULT_DOCK_AUTOHIDE, DEFAULT_DOCK_EDGE, DOCK_EDGES } from '@/core/dock';
 import type { MorphosHost } from '@/types';
 
 function makeHost(over: Partial<MorphosHost> = {}): MorphosHost {
@@ -195,5 +195,52 @@ describe('AppearanceSection', () => {
     await autohide(wrapper).setValue(true);
 
     expect(ws.dockAutohides).toEqual({});
+  });
+
+  /** Der Knopf für einen Rand (c0063). */
+  function edge(wrapper: ReturnType<typeof mount>, id: string) {
+    return wrapper.get(`button.edge[data-edge="${id}"]`);
+  }
+
+  it('bietet alle vier Ränder an und hebt die Vorgabe hervor', () => {
+    const wrapper = mount(AppearanceSection);
+    expect(wrapper.findAll('button.edge').map((b) => b.attributes('data-edge'))).toEqual(
+      DOCK_EDGES.map((e) => e.id),
+    );
+    expect(wrapper.findAll('button.edge').map((b) => b.text())).toEqual(DOCK_EDGES.map((e) => e.label));
+    expect(edge(wrapper, DEFAULT_DOCK_EDGE).classes()).toContain('active');
+  });
+
+  it('merkt den gewählten Rand im Workspace — und die Vorgabe gar nicht erst', async () => {
+    const wrapper = mount(AppearanceSection);
+    const ws = useWorkspaceStore();
+
+    await edge(wrapper, 'left').trigger('click');
+    expect(ws.dockEdge).toBe('left');
+    expect(edge(wrapper, 'left').classes()).toContain('active');
+
+    await edge(wrapper, DEFAULT_DOCK_EDGE).trigger('click');
+    expect(ws.dockEdge).toBe(DEFAULT_DOCK_EDGE);
+    expect(ws.dockEdges).toEqual({});
+  });
+
+  it('stellt die Leiste in der Vorschau an den gewählten Rand', async () => {
+    const wrapper = mount(AppearanceSection);
+    expect(wrapper.get('.preview').classes()).toContain(`edge-${DEFAULT_DOCK_EDGE}`);
+
+    await edge(wrapper, 'right').trigger('click');
+
+    expect(wrapper.get('.preview').classes()).toContain('edge-right');
+    expect(wrapper.get('.preview').classes()).not.toContain('edge-bottom');
+  });
+
+  it('rührt den Rand ohne geöffnetes Verzeichnis nicht an', async () => {
+    const ws = useWorkspaceStore();
+    ws.folder = null;
+    const wrapper = mount(AppearanceSection);
+
+    await edge(wrapper, 'left').trigger('click');
+
+    expect(ws.dockEdges).toEqual({});
   });
 });

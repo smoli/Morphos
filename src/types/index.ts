@@ -181,7 +181,18 @@ export interface Settings {
    * die Vorgabe (siehe core/dock).
    */
   dockAutohides?: Record<string, boolean>;
+  /**
+   * An welchem Rand das Dock steht, je Workspace-Pfad. Was hier fehlt, bekommt
+   * die Vorgabe (siehe core/dock).
+   */
+  dockEdges?: Record<string, DockEdge>;
 }
+
+/**
+ * Der Rand, an dem das Dock steht (c0063): unten wie am Mac — oder an einer der
+ * beiden Seiten bzw. oben. Gemerkt je Arbeitsverzeichnis (siehe core/dock).
+ */
+export type DockEdge = 'bottom' | 'left' | 'right' | 'top';
 
 /**
  * Der Hintergrund der Desktop-Fläche: eine Farbe, ein Verlauf zwischen zwei

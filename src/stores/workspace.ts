@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import type {
   AppSummary,
+  DockEdge,
   FsOp,
   FsPermissions,
   IconPos,
@@ -14,7 +15,14 @@ import { getHost } from '@/services/host';
 import { decideOutcome, effectivePermission } from '@/core/permissions';
 import { clampMaxAgents, DEFAULT_MAX_AGENTS } from '@/core/queue';
 import { cleanFavorites, toggleFavorite } from '@/core/favorites';
-import { cleanAutohide, cleanAutohides, DEFAULT_DOCK_AUTOHIDE } from '@/core/dock';
+import {
+  cleanAutohide,
+  cleanAutohides,
+  cleanDockEdge,
+  cleanDockEdges,
+  DEFAULT_DOCK_AUTOHIDE,
+  DEFAULT_DOCK_EDGE,
+} from '@/core/dock';
 import { cleanSessions, sameSession } from '@/core/session';
 import { cleanWallpaper, cleanWallpapers, DEFAULT_WALLPAPER } from '@/core/wallpaper';
 import {
@@ -58,6 +66,8 @@ interface WorkspaceState {
   dockBlurs: Record<string, number>;
   /** Legt das Dock sich hier aus dem Weg? Je Workspace-Pfad (siehe core/dock). */
   dockAutohides: Record<string, boolean>;
+  /** An welchem Rand das Dock steht, je Workspace-Pfad (siehe core/dock). */
+  dockEdges: Record<string, DockEdge>;
   /** Aktuell zur Genehmigung anstehende Anfrage (für den Dialog). */
   pendingPermission: PendingPermission | null;
   apps: AppSummary[];
@@ -90,6 +100,7 @@ export const useWorkspaceStore = defineStore('workspace', {
     dockTransparencies: {},
     dockBlurs: {},
     dockAutohides: {},
+    dockEdges: {},
     pendingPermission: null,
     apps: [],
     loading: false,
@@ -134,6 +145,9 @@ export const useWorkspaceStore = defineStore('workspace', {
     /** Legt das Dock sich hier aus dem Weg — ohne eigene Entscheidung die Vorgabe? */
     dockAutohide: (s): boolean =>
       (s.folder ? s.dockAutohides[s.folder] ?? DEFAULT_DOCK_AUTOHIDE : DEFAULT_DOCK_AUTOHIDE),
+    /** An welchem Rand das Dock hier steht — ohne eigene Wahl die Vorgabe. */
+    dockEdge: (s): DockEdge =>
+      (s.folder ? s.dockEdges[s.folder] ?? DEFAULT_DOCK_EDGE : DEFAULT_DOCK_EDGE),
   },
 
   actions: {
@@ -155,6 +169,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.dockTransparencies = cleanTransparencies(settings?.dockTransparencies);
         this.dockBlurs = cleanBlurs(settings?.dockBlurs);
         this.dockAutohides = cleanAutohides(settings?.dockAutohides);
+        this.dockEdges = cleanDockEdges(settings?.dockEdges);
       } catch {
         this.recentFolders = [];
         this.accessRoots = {};
@@ -169,6 +184,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.dockTransparencies = {};
         this.dockBlurs = {};
         this.dockAutohides = {};
+        this.dockEdges = {};
       }
     },
 
@@ -372,6 +388,26 @@ export const useWorkspaceStore = defineStore('workspace', {
     },
 
     /**
+     * Legt fest, an welchem Rand das Dock in diesem Verzeichnis steht. Wie beim
+     * Ausblenden wird die Vorgabe (unten) nicht gemerkt — sie ist der Weg zurück,
+     * ihr Eintrag fällt weg. Ein Rand, den es nicht gibt, wird nicht angenommen
+     * (liefert false).
+     */
+    setDockEdge(edge: DockEdge): boolean {
+      if (!this.folder) return false;
+      const clean = cleanDockEdge(edge);
+      if (clean === null) return false;
+      if (clean === DEFAULT_DOCK_EDGE) {
+        const { [this.folder]: _weg, ...rest } = this.dockEdges;
+        this.dockEdges = rest;
+      } else {
+        this.dockEdges = { ...this.dockEdges, [this.folder]: clean };
+      }
+      void this.persistSettings();
+      return true;
+    },
+
+    /**
      * Merkt die offenen Fenster dieses Verzeichnisses für den nächsten Start.
      * Eine leere Sitzung wird vergessen — der Desktop öffnet dann schlicht den
      * Launcher.
@@ -514,6 +550,7 @@ export const useWorkspaceStore = defineStore('workspace', {
       const dockTransparencies = { ...this.dockTransparencies };
       const dockBlurs = { ...this.dockBlurs };
       const dockAutohides = { ...this.dockAutohides };
+      const dockEdges = { ...this.dockEdges };
       try {
         await getHost().saveSettings({
           recentFolders,
@@ -529,6 +566,7 @@ export const useWorkspaceStore = defineStore('workspace', {
           dockTransparencies,
           dockBlurs,
           dockAutohides,
+          dockEdges,
         });
       } catch {
         /* nicht kritisch */

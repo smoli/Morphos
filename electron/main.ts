@@ -22,7 +22,7 @@ import { streamMimeType } from '../src/core/preview';
 import { FolderWatchers } from '../src/core/watch';
 import { collectDiskUsage } from '../src/core/diskusage';
 import { cleanFavorites } from '../src/core/favorites';
-import { cleanAutohides } from '../src/core/dock';
+import { cleanAutohides, cleanDockEdges } from '../src/core/dock';
 import { cleanSessions } from '../src/core/session';
 import { cleanWallpapers } from '../src/core/wallpaper';
 import { cleanBlurs, cleanTransparencies } from '../src/core/transparency';
@@ -145,6 +145,7 @@ function readSettings(): Settings {
     const dockTransparencies = cleanTransparencies(parsed.dockTransparencies);
     const dockBlurs = cleanBlurs(parsed.dockBlurs);
     const dockAutohides = cleanAutohides(parsed.dockAutohides);
+    const dockEdges = cleanDockEdges(parsed.dockEdges);
     return {
       recentFolders: recent,
       accessRoots,
@@ -159,6 +160,7 @@ function readSettings(): Settings {
       dockTransparencies,
       dockBlurs,
       dockAutohides,
+      dockEdges,
     };
   } catch {
     return {
@@ -175,6 +177,7 @@ function readSettings(): Settings {
       dockTransparencies: {},
       dockBlurs: {},
       dockAutohides: {},
+      dockEdges: {},
     };
   }
 }
@@ -605,6 +608,7 @@ ipcMain.handle('morphos:saveSettings', async (_e, settings: Settings): Promise<S
       dockTransparencies: cleanTransparencies(settings?.dockTransparencies),
       dockBlurs: cleanBlurs(settings?.dockBlurs),
       dockAutohides: cleanAutohides(settings?.dockAutohides),
+      dockEdges: cleanDockEdges(settings?.dockEdges),
     };
     fs.writeFileSync(settingsFile(), JSON.stringify(clean, null, 2), 'utf8');
     return { ok: true };

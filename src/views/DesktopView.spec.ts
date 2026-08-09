@@ -26,6 +26,7 @@ import {
   dockBackgroundCss,
   dockBlurCss,
 } from '@/core/transparency';
+import { DEFAULT_DOCK_EDGE } from '@/core/dock';
 import type { AppData, AppSummary, MorphosHost } from '@/types';
 
 const apps: AppSummary[] = [
@@ -150,15 +151,23 @@ describe('DesktopView', () => {
   }
 
   /**
-   * Eine Regel aus dem <style>-Block dieser Ansicht. jsdom rechnet kein CSS
-   * einer SFC aus — für die paar Aussagen, die am Aussehen hängen (rollt das
-   * Dock?), wird die Regel darum im Quelltext nachgeschlagen.
+   * Was der <style>-Block dieser Ansicht über einen Wähler sagt. jsdom rechnet
+   * kein CSS einer SFC aus — für die paar Aussagen, die am Aussehen hängen
+   * (rollt das Dock? wohin legt es sich?), wird es darum im Quelltext
+   * nachgeschlagen: alle Regeln, die diesen Wähler führen — auch als einer von
+   * mehreren vor der Klammer —, hintereinander.
    */
   function styleRule(selector: string): string {
     const source = readFileSync('src/views/DesktopView.vue', 'utf8');
-    const rule = new RegExp(`^${selector.replace(/[.]/g, '\\$&')}\\s*\\{([^}]*)\\}`, 'm').exec(source);
-    if (!rule) throw new Error(`Keine CSS-Regel für ${selector} in DesktopView.vue`);
-    return rule[1];
+    // Nur der Stil-Teil, und ohne Kommentare — sonst stünde deren Text mit vor
+    // der Klammer und keine Regel wäre mehr wiederzuerkennen.
+    const styles = source.slice(source.indexOf('<style')).replace(/\/\*[\s\S]*?\*\//g, '');
+    const bodies: string[] = [];
+    for (const rule of styles.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      if (rule[1].split(',').some((s) => s.trim() === selector)) bodies.push(rule[2]);
+    }
+    if (!bodies.length) throw new Error(`Keine CSS-Regel für ${selector} in DesktopView.vue`);
+    return bodies.join('');
   }
 
   /** Rechtsklick auf die Kachel einer App — ihr Kontextmenü klappt auf. */
@@ -688,6 +697,83 @@ describe('DesktopView', () => {
       // Nur der Randstreifen ist dann noch anzufassen — die Leiste liegt
       // darunter und darf dem Desktop nicht im Weg stehen.
       expect(styleRule('.dock.hidden')).toMatch(/pointer-events:\s*none/);
+    });
+
+    describe('Der Rand, an dem das Dock steht (c0063)', () => {
+      it('steht von Haus aus unten und rückt an den gewählten Rand', async () => {
+        const { wrapper } = await mountView();
+        const ws = useWorkspaceStore();
+        expect(wrapper.get('.dock').classes()).toContain(`edge-${DEFAULT_DOCK_EDGE}`);
+
+        ws.setDockEdge('left');
+        await flushPromises();
+
+        expect(wrapper.get('.dock').classes()).toContain('edge-left');
+        expect(wrapper.get('.dock').classes()).not.toContain('edge-bottom');
+      });
+
+      it('legt den Randstreifen an denselben Rand', async () => {
+        const { wrapper } = await mountView();
+        const ws = useWorkspaceStore();
+        ws.setDockAutohide(true);
+        ws.setDockEdge('top');
+        await flushPromises();
+
+        expect(wrapper.get('.dock-zone').classes()).toContain('edge-top');
+      });
+
+      it('kommt an jedem Rand hervor, wenn der Zeiger dort ankommt', async () => {
+        const { wrapper } = await mountView();
+        const ws = useWorkspaceStore();
+        ws.setDockAutohide(true);
+        ws.setDockEdge('right');
+        await flushPromises();
+        expect(wrapper.get('.dock').classes()).toContain('hidden');
+
+        await wrapper.get('.dock-zone').trigger('mouseenter');
+        expect(wrapper.get('.dock').classes()).not.toContain('hidden');
+      });
+
+      for (const edge of ['bottom', 'left', 'right', 'top']) {
+        it(`weiß, wie es am Rand „${edge}“ steht — und wohin es sich dort legt`, () => {
+          // Die Leiste sitzt an diesem Rand …
+          expect(styleRule(`.dock.edge-${edge}`)).toMatch(new RegExp(`${edge}:\\s*14px`));
+          // … und rückt ausgeblendet über genau ihn hinaus.
+          expect(styleRule(`.dock.edge-${edge}.hidden`)).toMatch(/transform:\s*translate/);
+        });
+      }
+
+      it('stellt die Glyphen hochkant, wenn es an der Seite steht', () => {
+        expect(styleRule('.dock.edge-left')).toMatch(/flex-direction:\s*column/);
+        expect(styleRule('.dock.edge-right')).toMatch(/flex-direction:\s*column/);
+        // Hochkant begrenzt die Höhe, nicht die Breite (sonst bricht nichts um).
+        expect(styleRule('.dock.edge-left')).toMatch(/max-height:/);
+      });
+
+      it('hängt die Namensblase auf die Seite, an der Platz ist', () => {
+        // Unten hängt sie über dem Icon (Vorgabe) — an den anderen Rändern
+        // stünde sie sonst außerhalb des Bildes.
+        expect(styleRule('.dock.edge-top .dock-name')).toMatch(/top:\s*100%/);
+        expect(styleRule('.dock.edge-left .dock-name')).toMatch(/left:\s*100%/);
+        expect(styleRule('.dock.edge-right .dock-name')).toMatch(/right:\s*100%/);
+      });
+
+      it('macht der Fläche Platz, wo das Dock sonst die ersten Kacheln verdeckte', async () => {
+        const { wrapper } = await mountView();
+        const ws = useWorkspaceStore();
+        // Unten liegt die Leiste über der Fläche wie eh und je (c0052).
+        expect(wrapper.get('.launcher').classes()).not.toContain('reserve-bottom');
+
+        ws.setDockEdge('left');
+        await flushPromises();
+        expect(wrapper.get('.launcher').classes()).toContain('reserve-left');
+        expect(styleRule('.launcher.reserve-left')).toMatch(/left:/);
+
+        // Ausgeblendet steht die Leiste nicht im Weg — dann gibt sie den Platz her.
+        ws.setDockAutohide(true);
+        await flushPromises();
+        expect(wrapper.get('.launcher').classes()).not.toContain('reserve-left');
+      });
     });
 
     it('reiht auf: erst die Lieblinge, dann das Laufende', async () => {

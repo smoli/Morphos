@@ -85,6 +85,23 @@ const dockVisible = computed(() => !singleMode.value || !activeWindow.value);
 // Die festen Plätze stehen vorn; dahinter setzt ein Strich die Apps ab.
 const systemCount = SYSTEM_WINDOWS.length;
 
+// An welchem Rand die Leiste steht (c0063) — unten wie am Mac, oder an einer
+// Seite bzw. oben. Der Rand steht als Klasse an der Leiste und an ihrem
+// Randstreifen; alles Weitere ist Sache des Stylesheets.
+const dockEdge = computed(() => workspace.dockEdge);
+
+/**
+ * Die Kacheln fangen oben links an — eine Leiste links oder oben verdeckte
+ * darum sofort die ersten. Steht das Dock nicht unten (dort lag es seit c0052
+ * schon immer über der Fläche) und legt es sich auch nicht aus dem Weg, rückt
+ * die Fläche an diesem Rand um die Breite der Leiste ein.
+ */
+const deskReserve = computed(() =>
+  dockVisible.value && !workspace.dockAutohide && dockEdge.value !== 'bottom'
+    ? `reserve-${dockEdge.value}`
+    : null,
+);
+
 // Ausblenden (c0062): Sagen die Einstellungen es, liegt das Dock unter dem
 // unteren Rand und kommt erst hervor, wenn der Zeiger dort ankommt — auf dem
 // Randstreifen (.dock-zone) oder auf der Leiste selbst. Aufgebaut bleibt es
@@ -491,7 +508,7 @@ function onMenuPick(id: string): void {
 
       <!-- Launcher: Icons der Apps (liegt hinter den Fenstern). Jede Kachel
            liegt dort, wo der Anwender sie abgelegt hat — sonst im Raster. -->
-      <div ref="launcher" class="launcher">
+      <div ref="launcher" class="launcher" :class="deskReserve">
         <div class="desk-tools">
           <button
             type="button"
@@ -583,6 +600,7 @@ function onMenuPick(id: string): void {
       <div
         v-if="dockVisible && workspace.dockAutohide"
         class="dock-zone"
+        :class="`edge-${dockEdge}`"
         aria-hidden="true"
         @mouseenter="dockNear = true"
         @mouseleave="dockNear = false"
@@ -593,7 +611,7 @@ function onMenuPick(id: string): void {
       <div
         v-if="dockVisible"
         class="dock"
-        :class="{ hidden: !dockShown }"
+        :class="[`edge-${dockEdge}`, { hidden: !dockShown }]"
         :style="{
           background: dockBackgroundCss(workspace.dockTransparency),
           '--dock-blur': dockBlurCss(workspace.dockBlur),
@@ -676,6 +694,22 @@ function onMenuPick(id: string): void {
   position: absolute;
   inset: 0;
   overflow: auto;
+}
+/*
+ * Platz für ein Dock, das nicht unten steht (c0063): Die Kacheln fangen oben
+ * links an, eine Leiste links oder oben verdeckte darum sofort die ersten.
+ * 76 px sind die Leiste (48 px Glyphe + Polster) und ihr Abstand vom Rand. Am
+ * unteren Rand bleibt es beim Alten — dort lag das Dock seit c0052 über der
+ * Fläche.
+ */
+.launcher.reserve-left {
+  left: 76px;
+}
+.launcher.reserve-right {
+  right: 76px;
+}
+.launcher.reserve-top {
+  top: 76px;
 }
 /* Die Fläche, auf der die Kacheln liegen — jede an ihrer eigenen Stelle. */
 .icons {
@@ -797,8 +831,13 @@ function onMenuPick(id: string): void {
   font-size: 14px;
 }
 /*
- * Das Dock wie am Mac: eine schwebende Leiste am unteren Rand, mittig, so
- * breit wie ihr Inhalt. Es trägt nur Glyphen — der Name kommt beim Überfahren.
+ * Das Dock wie am Mac: eine schwebende Leiste, so groß wie ihr Inhalt, mittig
+ * an einem Rand. Es trägt nur Glyphen — der Name kommt beim Überfahren.
+ *
+ * An welchem Rand sie steht, sagen die Einstellungen (c0063): unten wie seit
+ * c0052, an einer der beiden Seiten oder oben. Was der Rand ändert, steht
+ * gebündelt in den `.edge-…`-Regeln weiter unten — hier steht nur, was überall
+ * gilt.
  *
  * Farbe und Schleier hier sind nur der Rückfall: Wie durchsichtig die Leiste ist
  * und wie dicht ihr Milchglas, sagen die Einstellungen (core/transparency) —
@@ -806,11 +845,7 @@ function onMenuPick(id: string): void {
  */
 .dock {
   position: absolute;
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
   display: flex;
-  align-items: flex-end;
   justify-content: center;
   flex-wrap: wrap;
   gap: 6px;
@@ -821,7 +856,6 @@ function onMenuPick(id: string): void {
   border-radius: 18px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   z-index: 10000;
-  max-width: 92%;
   /*
    * Nicht rollen: Die Namensblasen liegen unsichtbar über den Icons und ragen
    * aus der Leiste heraus — eine rollbare Leiste zeigte dafür dauerhaft einen
@@ -832,29 +866,96 @@ function onMenuPick(id: string): void {
   transition: transform 0.18s ease, opacity 0.18s ease;
 }
 /*
- * Ausgeblendet (c0062): Die Leiste zieht sich unter den unteren Rand und nimmt
+ * Ausgeblendet (c0062): Die Leiste zieht sich über ihren Rand hinaus und nimmt
  * dort keine Klicks mehr an — anzufassen ist nur noch der Randstreifen. Sie
  * bleibt aber aufgebaut: So findet die Tastatur hinein (focusin holt sie
- * hervor), und ihre Fenster behalten ihren Zustand.
+ * hervor), und ihre Fenster behalten ihren Zustand. Wohin sie sich legt, sagt
+ * der jeweilige Rand (die `transform` unten).
  */
 .dock.hidden {
-  transform: translate(-50%, calc(100% + 20px));
   opacity: 0;
   pointer-events: none;
 }
+/* Unten (die Vorgabe): quer, mittig, die Glyphen auf der Grundlinie. */
+.dock.edge-bottom {
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  align-items: flex-end;
+  max-width: 92%;
+}
+.dock.edge-bottom.hidden {
+  transform: translate(-50%, calc(100% + 20px));
+}
+/* Oben: dieselbe quere Leiste, nur hängt sie unter dem oberen Rand. */
+.dock.edge-top {
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  align-items: flex-start;
+  max-width: 92%;
+}
+.dock.edge-top.hidden {
+  transform: translate(-50%, calc(-100% - 20px));
+}
 /*
- * Der Streifen, an dem das ausgeblendete Dock hervorkommt. Er überlappt die
- * Leiste um ein paar Bildpunkte (sie sitzt 14 px über dem Rand) — sonst gäbe es
- * dazwischen eine Lücke, in der sie sich sofort wieder hinlegte. Die Leiste
- * liegt darüber, ihr z-index ist höher.
+ * An den Seiten steht die Leiste hochkant: Die Glyphen stapeln sich, und was
+ * nicht mehr in die Höhe passt, bricht in eine zweite Spalte um (darum begrenzt
+ * hier die Höhe, nicht die Breite).
+ */
+.dock.edge-left,
+.dock.edge-right {
+  top: 50%;
+  transform: translateY(-50%);
+  flex-direction: column;
+  align-items: center;
+  max-height: 92%;
+}
+.dock.edge-left {
+  left: 14px;
+}
+.dock.edge-left.hidden {
+  transform: translate(calc(-100% - 20px), -50%);
+}
+.dock.edge-right {
+  right: 14px;
+}
+.dock.edge-right.hidden {
+  transform: translate(calc(100% + 20px), -50%);
+}
+/*
+ * Der Streifen, an dem das ausgeblendete Dock hervorkommt — am selben Rand wie
+ * die Leiste. Er überlappt sie um ein paar Bildpunkte (sie sitzt 14 px vom Rand)
+ * — sonst gäbe es dazwischen eine Lücke, in der sie sich sofort wieder hinlegte.
+ * Die Leiste liegt darüber, ihr z-index ist höher.
  */
 .dock-zone {
   position: absolute;
+  z-index: 9999;
+}
+.dock-zone.edge-bottom,
+.dock-zone.edge-top {
   left: 0;
   right: 0;
-  bottom: 0;
   height: 18px;
-  z-index: 9999;
+}
+.dock-zone.edge-bottom {
+  bottom: 0;
+}
+.dock-zone.edge-top {
+  top: 0;
+}
+.dock-zone.edge-left,
+.dock-zone.edge-right {
+  top: 0;
+  bottom: 0;
+  width: 18px;
+}
+.dock-zone.edge-left {
+  left: 0;
+}
+.dock-zone.edge-right {
+  right: 0;
 }
 /* Das feste ＋ steht vor den Apps, abgesetzt durch einen Strich. */
 .dock-sep {
@@ -935,5 +1036,66 @@ function onMenuPick(id: string): void {
   position: absolute;
   top: 2px;
   right: 2px;
+}
+/*
+ * Was der Rand an den Plätzen ändert (c0063): Alles, was am unteren Rand nach
+ * oben zeigt — der wachsende Platz, die Namensblase, der Laufpunkt —, dreht
+ * sich mit der Leiste zum Bild hin. Sonst wüchse ein Icon aus dem Bild heraus
+ * und seine Blase stünde außerhalb.
+ */
+.dock.edge-top .dock-item {
+  transform-origin: top center;
+}
+.dock.edge-left .dock-item {
+  transform-origin: center left;
+}
+.dock.edge-right .dock-item {
+  transform-origin: center right;
+}
+/* Hochkant trennt ein Strich quer, nicht längs. */
+.dock.edge-left .dock-sep,
+.dock.edge-right .dock-sep {
+  width: auto;
+  height: 1px;
+}
+.dock.edge-top .dock-name {
+  bottom: auto;
+  top: 100%;
+  margin-bottom: 0;
+  margin-top: 8px;
+}
+.dock.edge-left .dock-name,
+.dock.edge-right .dock-name {
+  bottom: auto;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-bottom: 0;
+}
+.dock.edge-left .dock-name {
+  left: 100%;
+  margin-left: 8px;
+}
+.dock.edge-right .dock-name {
+  left: auto;
+  right: 100%;
+  margin-right: 8px;
+}
+/* Der Laufpunkt bleibt am Rand des Bildschirms — wie unten auch. */
+.dock.edge-top .dock-dot {
+  bottom: auto;
+  top: 1px;
+}
+.dock.edge-left .dock-dot,
+.dock.edge-right .dock-dot {
+  bottom: auto;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.dock.edge-left .dock-dot {
+  left: 1px;
+}
+.dock.edge-right .dock-dot {
+  left: auto;
+  right: 1px;
 }
 </style>

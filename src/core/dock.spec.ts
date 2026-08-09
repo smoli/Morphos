@@ -2,7 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   cleanAutohide,
   cleanAutohides,
+  cleanDockEdge,
+  cleanDockEdges,
   DEFAULT_DOCK_AUTOHIDE,
+  DEFAULT_DOCK_EDGE,
+  DOCK_EDGES,
   dockEntries,
   dockRevealed,
   type DockSystem,
@@ -193,6 +197,46 @@ describe('cleanAutohides', () => {
     expect(cleanAutohides(undefined)).toEqual({});
     expect(cleanAutohides(null)).toEqual({});
     expect(cleanAutohides('nein')).toEqual({});
+  });
+});
+
+describe('cleanDockEdge', () => {
+  it('nimmt jeden der vier Ränder an', () => {
+    expect(cleanDockEdge('bottom')).toBe('bottom');
+    expect(cleanDockEdge('left')).toBe('left');
+    expect(cleanDockEdge('right')).toBe('right');
+    expect(cleanDockEdge('top')).toBe('top');
+  });
+
+  it('weist alles zurück, was kein Rand ist', () => {
+    expect(cleanDockEdge('unten')).toBeNull();
+    expect(cleanDockEdge('')).toBeNull();
+    expect(cleanDockEdge(0)).toBeNull();
+    expect(cleanDockEdge(null)).toBeNull();
+    expect(cleanDockEdge(undefined)).toBeNull();
+    expect(cleanDockEdge({})).toBeNull();
+  });
+
+  it('steht von Haus aus unten — dort, wo das Dock seit c0052 stand', () => {
+    expect(DEFAULT_DOCK_EDGE).toBe('bottom');
+    expect(DOCK_EDGES[0].id).toBe(DEFAULT_DOCK_EDGE);
+    expect(DOCK_EDGES.map((e) => e.id)).toEqual(['bottom', 'left', 'right', 'top']);
+    // Jeder Rand hat eine Aufschrift für die Einstellungen.
+    expect(DOCK_EDGES.every((e) => e.label.length > 0)).toBe(true);
+  });
+});
+
+describe('cleanDockEdges', () => {
+  it('behält die brauchbaren Einträge und wirft den Rest weg', () => {
+    expect(
+      cleanDockEdges({ '/apps': 'left', '/andere': 'top', '/kaputt': 'schräg', '/auch': null }),
+    ).toEqual({ '/apps': 'left', '/andere': 'top' });
+  });
+
+  it('macht aus allem, was kein Objekt ist, eine leere Sammlung', () => {
+    expect(cleanDockEdges(undefined)).toEqual({});
+    expect(cleanDockEdges(null)).toEqual({});
+    expect(cleanDockEdges('links')).toEqual({});
   });
 });
 

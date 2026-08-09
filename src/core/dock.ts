@@ -18,8 +18,11 @@
  *
  * Am Ende steht dazu, ob das Dock sich **aus dem Weg legt** (c0062): das
  * Ausblenden, das je Arbeitsverzeichnis gemerkt wird (siehe stores/workspace),
- * und die Frage, ob die Leiste gerade zu sehen ist.
+ * und die Frage, ob die Leiste gerade zu sehen ist — und an welchem **Rand** sie
+ * überhaupt steht (c0063).
  */
+
+import type { DockEdge } from '@/types';
 
 /** Was das Dock von einer App des Verzeichnisses wissen muss. */
 export interface DockApp {
@@ -187,4 +190,42 @@ export function cleanAutohides(raw: unknown): Record<string, boolean> {
  */
 export function dockRevealed(autohide: boolean, near: boolean, held: boolean): boolean {
   return !autohide || near || held;
+}
+
+/**
+ * Wo das Dock stehen kann (c0063), in der Reihenfolge, in der die Einstellungen
+ * die Ränder anbieten — mit der Aufschrift, unter der der Anwender sie kennt.
+ * Der erste Eintrag ist die Vorgabe.
+ */
+export const DOCK_EDGES: readonly { id: DockEdge; label: string }[] = [
+  { id: 'bottom', label: 'Unten' },
+  { id: 'left', label: 'Links' },
+  { id: 'right', label: 'Rechts' },
+  { id: 'top', label: 'Oben' },
+];
+
+/** Wo das Dock steht, solange der Anwender nichts anderes sagt: unten (c0052). */
+export const DEFAULT_DOCK_EDGE: DockEdge = 'bottom';
+
+/**
+ * Tütet einen gemerkten (oder gerade gewählten) Rand ein: Zurück kommt nur einer
+ * der vier — sonst null (dann gilt die Vorgabe).
+ */
+export function cleanDockEdge(raw: unknown): DockEdge | null {
+  return DOCK_EDGES.some((e) => e.id === raw) ? (raw as DockEdge) : null;
+}
+
+/**
+ * Die gemerkten Ränder auf brauchbare Einträge eintüten — beschädigte fallen weg
+ * (dort gilt dann die Vorgabe). Wird vom Hauptprozess beim Lesen und Schreiben
+ * der Einstellungen angewandt.
+ */
+export function cleanDockEdges(raw: unknown): Record<string, DockEdge> {
+  const out: Record<string, DockEdge> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [folder, value] of Object.entries(raw as Record<string, unknown>)) {
+    const clean = cleanDockEdge(value);
+    if (clean !== null) out[folder] = clean;
+  }
+  return out;
 }
