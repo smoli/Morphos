@@ -1,11 +1,12 @@
 ---
 id: c0052
 title: Make the dock OSX like
-status: discuss
+status: backlog
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T07:51:10
+status-changed: 2026-08-09T07:56:38
 epic: e09
+depends: [c0055, c0056]
 ---
 
 ## What
