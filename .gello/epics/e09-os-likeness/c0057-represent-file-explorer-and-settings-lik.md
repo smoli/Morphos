@@ -1,17 +1,10 @@
 ---
 id: c0057
 title: represent file explorer and settings like regular apps
-<<<<<<< HEAD
 status: in-progress
 created: 2026-08-09
 updated: 2026-08-09
 status-changed: 2026-08-09T10:17:59
-=======
-status: review
-created: 2026-08-09
-updated: 2026-08-09
-status-changed: 2026-08-09T10:06:05
->>>>>>> 33443f8 (c0057: Dateien und Einstellungen sind Fenster wie jedes andere)
 epic: e09
 ---
 
@@ -87,9 +80,5 @@ minimize, maximize, switcher, session restore).
 
 - 2026-08-09 status → ready (app)
 - 2026-08-09 status → in-progress (agent)
-<<<<<<< HEAD
-=======
 - 2026-08-09 Einstellungen als System-Fenster (SettingsPanel, shell-Store weg),
   feste Dock-Plätze in core/dock, System-Fenster in der Sitzung
-- 2026-08-09 status → review (agent)
->>>>>>> 33443f8 (c0057: Dateien und Einstellungen sind Fenster wie jedes andere)
