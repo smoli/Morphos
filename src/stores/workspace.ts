@@ -14,6 +14,7 @@ import { getHost } from '@/services/host';
 import { decideOutcome, effectivePermission } from '@/core/permissions';
 import { clampMaxAgents, DEFAULT_MAX_AGENTS } from '@/core/queue';
 import { cleanFavorites, toggleFavorite } from '@/core/favorites';
+import { cleanAutohide, cleanAutohides, DEFAULT_DOCK_AUTOHIDE } from '@/core/dock';
 import { cleanSessions, sameSession } from '@/core/session';
 import { cleanWallpaper, cleanWallpapers, DEFAULT_WALLPAPER } from '@/core/wallpaper';
 import {
@@ -55,6 +56,8 @@ interface WorkspaceState {
   dockTransparencies: Record<string, number>;
   /** Der Milchglas-Schleier des Docks, je Workspace-Pfad (siehe core/transparency). */
   dockBlurs: Record<string, number>;
+  /** Legt das Dock sich hier aus dem Weg? Je Workspace-Pfad (siehe core/dock). */
+  dockAutohides: Record<string, boolean>;
   /** Aktuell zur Genehmigung anstehende Anfrage (für den Dialog). */
   pendingPermission: PendingPermission | null;
   apps: AppSummary[];
@@ -86,6 +89,7 @@ export const useWorkspaceStore = defineStore('workspace', {
     wallpapers: {},
     dockTransparencies: {},
     dockBlurs: {},
+    dockAutohides: {},
     pendingPermission: null,
     apps: [],
     loading: false,
@@ -127,6 +131,9 @@ export const useWorkspaceStore = defineStore('workspace', {
     dockBlur: (s): number => (s.folder ? s.dockBlurs[s.folder] ?? DEFAULT_DOCK_BLUR : DEFAULT_DOCK_BLUR),
     /** Hat der Anwender hier einen eigenen Schleier gewählt? */
     hasDockBlur: (s): boolean => (s.folder ? s.dockBlurs[s.folder] !== undefined : false),
+    /** Legt das Dock sich hier aus dem Weg — ohne eigene Entscheidung die Vorgabe? */
+    dockAutohide: (s): boolean =>
+      (s.folder ? s.dockAutohides[s.folder] ?? DEFAULT_DOCK_AUTOHIDE : DEFAULT_DOCK_AUTOHIDE),
   },
 
   actions: {
@@ -147,6 +154,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.wallpapers = cleanWallpapers(settings?.wallpapers);
         this.dockTransparencies = cleanTransparencies(settings?.dockTransparencies);
         this.dockBlurs = cleanBlurs(settings?.dockBlurs);
+        this.dockAutohides = cleanAutohides(settings?.dockAutohides);
       } catch {
         this.recentFolders = [];
         this.accessRoots = {};
@@ -160,6 +168,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.wallpapers = {};
         this.dockTransparencies = {};
         this.dockBlurs = {};
+        this.dockAutohides = {};
       }
     },
 
@@ -344,6 +353,25 @@ export const useWorkspaceStore = defineStore('workspace', {
     },
 
     /**
+     * Legt fest, ob das Dock sich in diesem Verzeichnis aus dem Weg legt. Einen
+     * Knopf zum Zurücksetzen gibt es hier nicht — der Schalter selbst ist der Weg
+     * zurück; die Vorgabe wird darum nicht gemerkt, ihr Eintrag fällt weg.
+     */
+    setDockAutohide(on: boolean): boolean {
+      if (!this.folder) return false;
+      const clean = cleanAutohide(on);
+      if (clean === null) return false;
+      if (clean === DEFAULT_DOCK_AUTOHIDE) {
+        const { [this.folder]: _weg, ...rest } = this.dockAutohides;
+        this.dockAutohides = rest;
+      } else {
+        this.dockAutohides = { ...this.dockAutohides, [this.folder]: clean };
+      }
+      void this.persistSettings();
+      return true;
+    },
+
+    /**
      * Merkt die offenen Fenster dieses Verzeichnisses für den nächsten Start.
      * Eine leere Sitzung wird vergessen — der Desktop öffnet dann schlicht den
      * Launcher.
@@ -485,6 +513,7 @@ export const useWorkspaceStore = defineStore('workspace', {
       const wallpapers = JSON.parse(JSON.stringify(this.wallpapers)) as Record<string, Wallpaper>;
       const dockTransparencies = { ...this.dockTransparencies };
       const dockBlurs = { ...this.dockBlurs };
+      const dockAutohides = { ...this.dockAutohides };
       try {
         await getHost().saveSettings({
           recentFolders,
@@ -499,6 +528,7 @@ export const useWorkspaceStore = defineStore('workspace', {
           wallpapers,
           dockTransparencies,
           dockBlurs,
+          dockAutohides,
         });
       } catch {
         /* nicht kritisch */

@@ -176,6 +176,11 @@ export interface Settings {
    * Vorgabe (siehe core/transparency).
    */
   dockBlurs?: Record<string, number>;
+  /**
+   * Legt das Dock sich aus dem Weg, je Workspace-Pfad? Was hier fehlt, bekommt
+   * die Vorgabe (siehe core/dock).
+   */
+  dockAutohides?: Record<string, boolean>;
 }
 
 /**

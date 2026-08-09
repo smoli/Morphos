@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { dockEntries, type DockSystem, type DockWindow } from './dock';
+import {
+  cleanAutohide,
+  cleanAutohides,
+  DEFAULT_DOCK_AUTOHIDE,
+  dockEntries,
+  dockRevealed,
+  type DockSystem,
+  type DockWindow,
+} from './dock';
 import type { AppSummary } from '@/types';
 
 const apps = [
@@ -156,5 +164,51 @@ describe('dockEntries mit den Ansichten der Schale', () => {
     const entries = dockEntries(eigen, [], ['explorer'], systems);
     expect(entries.map((e) => e.key)).toEqual(['sys:explorer', 'sys:settings', 'explorer']);
     expect(entries[2]).toMatchObject({ title: 'Meine App', favorite: true });
+  });
+});
+
+describe('cleanAutohide', () => {
+  it('nimmt nur ein Ja oder ein Nein an', () => {
+    expect(cleanAutohide(true)).toBe(true);
+    expect(cleanAutohide(false)).toBe(false);
+  });
+
+  it('weist alles zurück, was keine Entscheidung ist', () => {
+    expect(cleanAutohide(1)).toBeNull();
+    expect(cleanAutohide('true')).toBeNull();
+    expect(cleanAutohide(null)).toBeNull();
+    expect(cleanAutohide(undefined)).toBeNull();
+    expect(cleanAutohide({})).toBeNull();
+  });
+});
+
+describe('cleanAutohides', () => {
+  it('behält die brauchbaren Einträge und wirft den Rest weg', () => {
+    expect(
+      cleanAutohides({ '/apps': true, '/andere': false, '/kaputt': 'ja', '/auch': null }),
+    ).toEqual({ '/apps': true, '/andere': false });
+  });
+
+  it('macht aus allem, was kein Objekt ist, eine leere Sammlung', () => {
+    expect(cleanAutohides(undefined)).toEqual({});
+    expect(cleanAutohides(null)).toEqual({});
+    expect(cleanAutohides('nein')).toEqual({});
+  });
+});
+
+describe('dockRevealed', () => {
+  it('lässt das Dock ohne Ausblenden immer stehen', () => {
+    expect(dockRevealed(false, false, false)).toBe(true);
+    expect(DEFAULT_DOCK_AUTOHIDE).toBe(false);
+  });
+
+  it('holt es hervor, solange der Zeiger unten ist', () => {
+    expect(dockRevealed(true, false, false)).toBe(false);
+    expect(dockRevealed(true, true, false)).toBe(true);
+  });
+
+  it('hält es fest, solange etwas darin die Aufmerksamkeit hat', () => {
+    // Die Tastatur ist hineingegangen, oder das Menü eines Platzes steht offen.
+    expect(dockRevealed(true, false, true)).toBe(true);
   });
 });

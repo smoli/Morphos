@@ -10,6 +10,7 @@ import {
   dockBackgroundCss,
   dockBlurCss,
 } from '@/core/transparency';
+import { DEFAULT_DOCK_AUTOHIDE } from '@/core/dock';
 import type { MorphosHost } from '@/types';
 
 function makeHost(over: Partial<MorphosHost> = {}): MorphosHost {
@@ -152,5 +153,47 @@ describe('AppearanceSection', () => {
     await blurSlider(wrapper).setValue('22');
 
     expect(ws.dockBlurs).toEqual({});
+  });
+
+  /** Der Schalter fürs Ausblenden des Docks. */
+  function autohide(wrapper: ReturnType<typeof mount>) {
+    return wrapper.get('input[type="checkbox"].autohide');
+  }
+
+  it('steht anfangs auf der Vorgabe: Das Dock blendet sich nicht aus', () => {
+    const wrapper = mount(AppearanceSection);
+    expect((autohide(wrapper).element as HTMLInputElement).checked).toBe(DEFAULT_DOCK_AUTOHIDE);
+  });
+
+  it('merkt das Ausblenden im Workspace — und nimmt es auch wieder zurück', async () => {
+    const wrapper = mount(AppearanceSection);
+    const ws = useWorkspaceStore();
+
+    await autohide(wrapper).setValue(true);
+    expect(ws.dockAutohide).toBe(true);
+
+    await autohide(wrapper).setValue(false);
+    expect(ws.dockAutohide).toBe(false);
+    // Die Vorgabe wird nicht gemerkt — das Verzeichnis steht dann nicht mehr drin.
+    expect(ws.dockAutohides).toEqual({});
+  });
+
+  it('zeigt in der Vorschau, was der Schalter tut', async () => {
+    const wrapper = mount(AppearanceSection);
+    expect(wrapper.get('.dock-preview').classes()).not.toContain('away');
+
+    await autohide(wrapper).setValue(true);
+
+    expect(wrapper.get('.dock-preview').classes()).toContain('away');
+  });
+
+  it('rührt das Ausblenden ohne geöffnetes Verzeichnis nicht an', async () => {
+    const ws = useWorkspaceStore();
+    ws.folder = null;
+    const wrapper = mount(AppearanceSection);
+
+    await autohide(wrapper).setValue(true);
+
+    expect(ws.dockAutohides).toEqual({});
   });
 });

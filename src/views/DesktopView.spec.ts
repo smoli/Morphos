@@ -629,6 +629,67 @@ describe('DesktopView', () => {
       expect(wrapper.get('.dock').attributes('style')).toContain(dockBlurCss(3));
     });
 
+    it('steht ohne Ausblenden fest — und legt sich mit ihm unter den Rand (c0062)', async () => {
+      const { wrapper } = await mountView();
+      const ws = useWorkspaceStore();
+      expect(wrapper.get('.dock').classes()).not.toContain('hidden');
+      // Ohne Ausblenden gibt es auch nichts, woran es hervorkäme.
+      expect(wrapper.find('.dock-zone').exists()).toBe(false);
+
+      ws.setDockAutohide(true);
+      await flushPromises();
+
+      expect(wrapper.get('.dock').classes()).toContain('hidden');
+      expect(wrapper.find('.dock-zone').exists()).toBe(true);
+    });
+
+    it('kommt hervor, wenn der Zeiger den unteren Rand erreicht — und legt sich danach wieder hin', async () => {
+      const { wrapper } = await mountView();
+      useWorkspaceStore().setDockAutohide(true);
+      await flushPromises();
+
+      await wrapper.get('.dock-zone').trigger('mouseenter');
+      expect(wrapper.get('.dock').classes()).not.toContain('hidden');
+
+      await wrapper.get('.dock').trigger('mouseleave');
+      expect(wrapper.get('.dock').classes()).toContain('hidden');
+    });
+
+    it('kommt auch hervor, wenn die Tastatur hineinfindet', async () => {
+      const { wrapper } = await mountView();
+      useWorkspaceStore().setDockAutohide(true);
+      await flushPromises();
+
+      await wrapper.get('.dock').trigger('focusin');
+      expect(wrapper.get('.dock').classes()).not.toContain('hidden');
+
+      await wrapper.get('.dock').trigger('focusout');
+      expect(wrapper.get('.dock').classes()).toContain('hidden');
+    });
+
+    it('bleibt stehen, solange das Menü eines Platzes offen ist', async () => {
+      keep('rechner-1');
+      const { wrapper } = await mountView();
+      useWorkspaceStore().setDockAutohide(true);
+      await flushPromises();
+
+      await dockItem(wrapper, 'Rechner').trigger('contextmenu', { clientX: 40, clientY: 700 });
+      // Der Zeiger ist im Menü, also nicht mehr auf der Leiste — sie zöge sich
+      // sonst unter ihrem eigenen Menü weg.
+      await wrapper.get('.dock').trigger('mouseleave');
+      expect(wrapper.get('.dock').classes()).not.toContain('hidden');
+
+      await wrapper.getComponent(ContextMenu).vm.$emit('close');
+      await flushPromises();
+      expect(wrapper.get('.dock').classes()).toContain('hidden');
+    });
+
+    it('nimmt ausgeblendet keine Klicks an', () => {
+      // Nur der Randstreifen ist dann noch anzufassen — die Leiste liegt
+      // darunter und darf dem Desktop nicht im Weg stehen.
+      expect(styleRule('.dock.hidden')).toMatch(/pointer-events:\s*none/);
+    });
+
     it('reiht auf: erst die Lieblinge, dann das Laufende', async () => {
       keep('editor-2');
       const { wrapper } = await mountView();

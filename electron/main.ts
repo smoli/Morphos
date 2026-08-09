@@ -22,6 +22,7 @@ import { streamMimeType } from '../src/core/preview';
 import { FolderWatchers } from '../src/core/watch';
 import { collectDiskUsage } from '../src/core/diskusage';
 import { cleanFavorites } from '../src/core/favorites';
+import { cleanAutohides } from '../src/core/dock';
 import { cleanSessions } from '../src/core/session';
 import { cleanWallpapers } from '../src/core/wallpaper';
 import { cleanBlurs, cleanTransparencies } from '../src/core/transparency';
@@ -143,6 +144,7 @@ function readSettings(): Settings {
     const wallpapers = cleanWallpapers(parsed.wallpapers);
     const dockTransparencies = cleanTransparencies(parsed.dockTransparencies);
     const dockBlurs = cleanBlurs(parsed.dockBlurs);
+    const dockAutohides = cleanAutohides(parsed.dockAutohides);
     return {
       recentFolders: recent,
       accessRoots,
@@ -156,6 +158,7 @@ function readSettings(): Settings {
       wallpapers,
       dockTransparencies,
       dockBlurs,
+      dockAutohides,
     };
   } catch {
     return {
@@ -171,6 +174,7 @@ function readSettings(): Settings {
       wallpapers: {},
       dockTransparencies: {},
       dockBlurs: {},
+      dockAutohides: {},
     };
   }
 }
@@ -600,6 +604,7 @@ ipcMain.handle('morphos:saveSettings', async (_e, settings: Settings): Promise<S
       wallpapers: cleanWallpapers(settings?.wallpapers),
       dockTransparencies: cleanTransparencies(settings?.dockTransparencies),
       dockBlurs: cleanBlurs(settings?.dockBlurs),
+      dockAutohides: cleanAutohides(settings?.dockAutohides),
     };
     fs.writeFileSync(settingsFile(), JSON.stringify(clean, null, 2), 'utf8');
     return { ok: true };

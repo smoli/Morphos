@@ -15,6 +15,10 @@
  *
  * Das feste ＋ („Neue App“) gehört nicht hierher — es ist kein Fenster und
  * keine App, der Desktop stellt es unverrückbar vor diese Liste.
+ *
+ * Am Ende steht dazu, ob das Dock sich **aus dem Weg legt** (c0062): das
+ * Ausblenden, das je Arbeitsverzeichnis gemerkt wird (siehe stores/workspace),
+ * und die Frage, ob die Leiste gerade zu sehen ist.
  */
 
 /** Was das Dock von einer App des Verzeichnisses wissen muss. */
@@ -143,4 +147,44 @@ function entry(
     minimized: win?.minimized ?? false,
     favorite,
   };
+}
+
+/**
+ * Legt sich das Dock aus dem Weg, solange der Anwender es nicht ruft? Von Haus
+ * aus nicht: Die Leiste steht, wie sie seit c0052 stand.
+ */
+export const DEFAULT_DOCK_AUTOHIDE = false;
+
+/**
+ * Tütet eine gemerkte Entscheidung ein: Zurück kommt nur ein Ja oder ein Nein —
+ * sonst null (dann gilt die Vorgabe).
+ */
+export function cleanAutohide(raw: unknown): boolean | null {
+  return typeof raw === 'boolean' ? raw : null;
+}
+
+/**
+ * Die gemerkten Entscheidungen auf brauchbare Einträge eintüten — beschädigte
+ * fallen weg (dort gilt dann die Vorgabe). Wird vom Hauptprozess beim Lesen und
+ * Schreiben der Einstellungen angewandt.
+ */
+export function cleanAutohides(raw: unknown): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [folder, value] of Object.entries(raw as Record<string, unknown>)) {
+    const clean = cleanAutohide(value);
+    if (clean !== null) out[folder] = clean;
+  }
+  return out;
+}
+
+/**
+ * Ist das Dock gerade zu sehen? Ohne Ausblenden immer. Mit ihm nur, solange der
+ * Zeiger unten am Rand oder auf der Leiste steht (`near`) — oder solange etwas
+ * darin die Aufmerksamkeit hält (`held`): die Tastatur ist hineingegangen, oder
+ * das Kontextmenü eines Platzes steht offen. Sonst zöge die Leiste sich unter
+ * dem eigenen Menü weg.
+ */
+export function dockRevealed(autohide: boolean, near: boolean, held: boolean): boolean {
+  return !autohide || near || held;
 }

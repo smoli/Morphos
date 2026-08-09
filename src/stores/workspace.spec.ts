@@ -4,6 +4,7 @@ import { useWorkspaceStore } from './workspace';
 import { setHost } from '@/services/host';
 import { DEFAULT_WALLPAPER } from '@/core/wallpaper';
 import { DEFAULT_DOCK_BLUR, DEFAULT_DOCK_TRANSPARENCY } from '@/core/transparency';
+import { DEFAULT_DOCK_AUTOHIDE } from '@/core/dock';
 import type { MorphosHost, AppSummary, Settings } from '@/types';
 
 const apps: AppSummary[] = [
@@ -54,7 +55,7 @@ describe('useWorkspaceStore', () => {
     expect(ws.folder).toBe('/neu');
     expect(ws.recentFolders[0]).toBe('/neu');
     expect(ws.apps).toHaveLength(2);
-    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows', maxAgents: 2, iconPositions: {}, favorites: {}, sessions: {}, wallpapers: {}, dockTransparencies: {}, dockBlurs: {} });
+    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows', maxAgents: 2, iconPositions: {}, favorites: {}, sessions: {}, wallpapers: {}, dockTransparencies: {}, dockBlurs: {}, dockAutohides: {} });
     expect(host.listApps).toHaveBeenCalledWith('/neu');
   });
 
@@ -727,6 +728,82 @@ describe('useWorkspaceStore', () => {
       await ws.init();
       await ws.openFolder('/apps');
       expect(ws.dockBlur).toBe(DEFAULT_DOCK_BLUR);
+    });
+  });
+
+  describe('Ausblenden des Docks', () => {
+    it('lädt die gemerkte Entscheidung des Workspace', async () => {
+      setHost(makeHost({
+        loadSettings: vi.fn(async () => ({
+          recentFolders: [],
+          accessRoots: {},
+          dockAutohides: { '/apps': true },
+        })),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.init();
+      expect(ws.dockAutohide).toBe(DEFAULT_DOCK_AUTOHIDE); // noch kein Ordner geöffnet
+      await ws.openFolder('/apps');
+      expect(ws.dockAutohide).toBe(true);
+    });
+
+    it('gilt die Vorgabe, solange nichts entschieden ist', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+      expect(ws.dockAutohide).toBe(DEFAULT_DOCK_AUTOHIDE);
+    });
+
+    it('merkt das Ausblenden je Workspace und speichert es', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(ws.setDockAutohide(true)).toBe(true);
+
+      expect(ws.dockAutohide).toBe(true);
+      expect(host.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ dockAutohides: { '/apps': true } }),
+      );
+    });
+
+    it('merkt die Vorgabe gar nicht erst — ein Verzeichnis ohne Eintrag ist genau das', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      ws.dockAutohides = { '/andere': true };
+      await ws.openFolder('/apps');
+      ws.setDockAutohide(true);
+
+      expect(ws.setDockAutohide(false)).toBe(true);
+
+      expect(ws.dockAutohide).toBe(false);
+      expect(host.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ dockAutohides: { '/andere': true } }),
+      );
+    });
+
+    it('rührt ohne geöffneten Ordner nichts an', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      expect(ws.setDockAutohide(true)).toBe(false);
+      expect(ws.dockAutohides).toEqual({});
+    });
+
+    it('überlebt beschädigte Einstellungen (dann gilt die Vorgabe)', async () => {
+      setHost(makeHost({
+        // Beschädigte Einstellungen von der Platte — der Typ lügt hier absichtlich.
+        loadSettings: vi.fn(async () => ({
+          recentFolders: [],
+          accessRoots: {},
+          dockAutohides: { '/apps': 'ja' },
+        } as unknown as Settings)),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.init();
+      await ws.openFolder('/apps');
+      expect(ws.dockAutohide).toBe(DEFAULT_DOCK_AUTOHIDE);
     });
   });
 

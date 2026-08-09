@@ -25,7 +25,7 @@ import { canSwitch, cycleSelection, switcherOrder } from '@/core/switcher';
 import { SETTINGS_ID, SYSTEM_WINDOWS } from '@/core/system';
 import { wallpaperCss } from '@/core/wallpaper';
 import { dockBackgroundCss, dockBlurCss } from '@/core/transparency';
-import { dockEntries, type DockEntry } from '@/core/dock';
+import { dockEntries, dockRevealed, type DockEntry } from '@/core/dock';
 import type { MenuItem } from '@/core/menu';
 import type { DesktopWindow } from '@/stores/desktop';
 import {
@@ -84,6 +84,22 @@ const dock = computed<DockEntry[]>(() =>
 const dockVisible = computed(() => !singleMode.value || !activeWindow.value);
 // Die festen Plätze stehen vorn; dahinter setzt ein Strich die Apps ab.
 const systemCount = SYSTEM_WINDOWS.length;
+
+// Ausblenden (c0062): Sagen die Einstellungen es, liegt das Dock unter dem
+// unteren Rand und kommt erst hervor, wenn der Zeiger dort ankommt — auf dem
+// Randstreifen (.dock-zone) oder auf der Leiste selbst. Aufgebaut bleibt es
+// dabei; es rückt nur aus dem Bild.
+const dockNear = ref(false);
+const dockFocus = ref(false);
+const dockShown = computed(() =>
+  dockRevealed(
+    workspace.dockAutohide,
+    dockNear.value,
+    // Was die Leiste festhält: die Tastatur darin — oder das Menü eines Platzes,
+    // das sonst über einer weggezogenen Leiste stünde.
+    dockFocus.value || menu.value?.fromDock === true,
+  ),
+);
 
 /** Arbeitet ein Agent für diesen Dock-Platz (für seine App oder sein Fenster)? */
 function dockBusy(entry: DockEntry): boolean {
@@ -400,7 +416,11 @@ async function applyIcon(icon: string | null): Promise<void> {
 // ---- Kontextmenü: die Aktionen einer App (siehe components/ContextMenu) ----
 
 // Was gerade aufgeklappt ist: die Stelle, die Einträge und die gemeinte App.
-const menu = ref<{ x: number; y: number; appId: string; items: MenuItem[] } | null>(null);
+// `fromDock` merkt sich, dass es am Dock hängt — ein ausgeblendetes Dock bleibt
+// so stehen, solange sein Menü offen ist (c0062).
+const menu = ref<
+  { x: number; y: number; appId: string; items: MenuItem[]; fromDock?: boolean } | null
+>(null);
 
 /** Der Eintrag „im Dock behalten“ — er kennt beide Richtungen. */
 function dockItem(appId: string): MenuItem {
@@ -431,7 +451,13 @@ function openIconMenu(e: MouseEvent, app: AppSummary): void {
  */
 function openDockMenu(e: MouseEvent, entry: DockEntry): void {
   if (!entry.appId) return;
-  menu.value = { x: e.clientX, y: e.clientY, appId: entry.appId, items: [dockItem(entry.appId)] };
+  menu.value = {
+    x: e.clientX,
+    y: e.clientY,
+    appId: entry.appId,
+    items: [dockItem(entry.appId)],
+    fromDock: true,
+  };
 }
 
 function onMenuPick(id: string): void {
@@ -552,15 +578,30 @@ function onMenuPick(id: string): void {
         @pick="pickFromSwitcher"
       />
 
+      <!-- Der Randstreifen, an dem ein ausgeblendetes Dock hervorkommt. Er ist
+           nur da, wenn er gebraucht wird, und liegt unter der Leiste. -->
+      <div
+        v-if="dockVisible && workspace.dockAutohide"
+        class="dock-zone"
+        aria-hidden="true"
+        @mouseenter="dockNear = true"
+        @mouseleave="dockNear = false"
+      ></div>
+
       <!-- Das Dock: ＋, die Ansichten der Schale, die behaltenen Apps und was
            gerade läuft (core/dock). -->
       <div
         v-if="dockVisible"
         class="dock"
+        :class="{ hidden: !dockShown }"
         :style="{
           background: dockBackgroundCss(workspace.dockTransparency),
           '--dock-blur': dockBlurCss(workspace.dockBlur),
         }"
+        @mouseenter="dockNear = true"
+        @mouseleave="dockNear = false"
+        @focusin="dockFocus = true"
+        @focusout="dockFocus = false"
       >
         <button
           type="button"
@@ -788,6 +829,32 @@ function onMenuPick(id: string): void {
    * Dock stattdessen in eine zweite Reihe um.
    */
   overflow: visible;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+/*
+ * Ausgeblendet (c0062): Die Leiste zieht sich unter den unteren Rand und nimmt
+ * dort keine Klicks mehr an — anzufassen ist nur noch der Randstreifen. Sie
+ * bleibt aber aufgebaut: So findet die Tastatur hinein (focusin holt sie
+ * hervor), und ihre Fenster behalten ihren Zustand.
+ */
+.dock.hidden {
+  transform: translate(-50%, calc(100% + 20px));
+  opacity: 0;
+  pointer-events: none;
+}
+/*
+ * Der Streifen, an dem das ausgeblendete Dock hervorkommt. Er überlappt die
+ * Leiste um ein paar Bildpunkte (sie sitzt 14 px über dem Rand) — sonst gäbe es
+ * dazwischen eine Lücke, in der sie sich sofort wieder hinlegte. Die Leiste
+ * liegt darüber, ihr z-index ist höher.
+ */
+.dock-zone {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 18px;
+  z-index: 9999;
 }
 /* Das feste ＋ steht vor den Apps, abgesetzt durch einen Strich. */
 .dock-sep {
