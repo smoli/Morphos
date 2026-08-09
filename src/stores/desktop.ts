@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { useWorkspaceStore } from './workspace';
 import { restorableSession, serializeSession } from '@/core/session';
+import { restoreTiles, serializeTiles } from '@/core/tilelayout';
 import { systemWindow } from '@/core/system';
 import {
   computeRects,
@@ -53,7 +54,10 @@ interface DesktopState {
   showingDesktop: boolean;
   /** Verzeichnis, dessen Sitzung bereits wiederhergestellt wurde (einmal je Start). */
   restoredFolder: string | null;
-  /** Der Kachel-Baum je Arbeitsverzeichnis (siehe core/tiling). */
+  /**
+   * Der Kachel-Baum je Arbeitsverzeichnis (siehe core/tiling). Gemerkt wird er
+   * unter App bzw. Ansicht, nicht unter der Fenster-Id (siehe core/tilelayout).
+   */
   tiles: Record<string, TileTree | null>;
   /** Die Fläche, auf der gekachelt wird — vom Desktop gemessen (Bühnen-Koordinaten). */
   tileArea: Rect;
@@ -91,6 +95,8 @@ function tileKey(): string {
 
 // Der laufende Aufschub (nicht serialisierbar → außerhalb des States).
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
+// Derselbe Aufschub für die Kachel-Anordnung (an der Fuge ziehen, c0067).
+let tilesTimer: ReturnType<typeof setTimeout> | null = null;
 // Während des Wiederherstellens schreibt kein Zwischenschritt die Sitzung.
 let restoring = false;
 
@@ -338,7 +344,9 @@ export const useDesktopStore = defineStore('desktop', {
       if (!tree) return;
       const ratio = ratioAtPoint(tree, path, point, this.tileArea, TILE_GAP);
       const next = setRatio(tree, path, ratio, this.tileArea, TILE_GAP);
-      if (next !== tree) this.tiles[tileKey()] = next;
+      if (next === tree) return;
+      this.tiles[tileKey()] = next;
+      this.schedulePersistTiles();
     },
 
     /**
@@ -367,7 +375,9 @@ export const useDesktopStore = defineStore('desktop', {
       if (!swap?.targetId) return;
       const tree = this.tileTree;
       const next = swapLeaves(tree, swap.id, swap.targetId);
-      if (next !== tree) this.tiles[tileKey()] = next;
+      if (next === tree) return;
+      this.tiles[tileKey()] = next;
+      this.persistTiles();
     },
 
     /** Abbrechen, ohne zu tauschen (das Fenster geht mitten im Zug fort). */
@@ -401,6 +411,7 @@ export const useDesktopStore = defineStore('desktop', {
         focus = id;
       }
       this.tiles[tileKey()] = tree;
+      this.persistTiles();
     },
 
     /** Zieht ein geändertes Icon in allen Fenstern dieser App nach (Titelleiste, Dock). */
@@ -427,6 +438,30 @@ export const useDesktopStore = defineStore('desktop', {
         persistTimer = null;
       }
       useWorkspaceStore().saveSession(serializeSession(this.windows));
+    },
+
+    /**
+     * Merkt die Kachel-Anordnung für den nächsten Start (siehe core/tilelayout):
+     * denselben Baum, aber unter App bzw. Ansicht statt unter der Fenster-Id.
+     * Ein Entwurf, der noch keine App ist, fällt dabei heraus.
+     */
+    persistTiles(): void {
+      if (restoring) return;
+      if (tilesTimer) {
+        clearTimeout(tilesTimer);
+        tilesTimer = null;
+      }
+      useWorkspaceStore().saveTileLayout(serializeTiles(this.tiles[tileKey()] ?? null, this.windows));
+    },
+
+    /** Dasselbe nach kurzer Ruhe — das Ziehen an der Fuge meldet jeden Mausschritt. */
+    schedulePersistTiles(): void {
+      if (restoring) return;
+      if (tilesTimer) clearTimeout(tilesTimer);
+      tilesTimer = setTimeout(() => {
+        tilesTimer = null;
+        this.persistTiles();
+      }, PERSIST_DELAY);
     },
 
     /**
@@ -476,13 +511,30 @@ export const useDesktopStore = defineStore('desktop', {
       } finally {
         restoring = false;
       }
-      // Die Fenster kamen mit ihrem gemerkten Zustand zurück — auch minimierte,
-      // die dabei am Fenstermanager vorbei gesetzt wurden. Der Kachel-Verbund
-      // wird darum am Ende noch einmal geradegezogen.
+      // Erst die gemerkte Anordnung auf die zurückgeholten Fenster legen …
+      this.restoreTileLayout();
+      // … dann den Kachel-Verbund geradeziehen: Die Fenster kamen mit ihrem
+      // gemerkten Zustand zurück — auch minimierte, die dabei am
+      // Fenstermanager vorbei gesetzt wurden —, und was in der Anordnung fehlt,
+      // wird jetzt aufgenommen.
       this.syncTiles();
       // Einmal festhalten, was wirklich offen ist — verschwundene Apps sind
-      // damit auch aus der gemerkten Sitzung heraus.
+      // damit auch aus der gemerkten Sitzung und aus der Anordnung heraus.
       this.persistSession();
+      this.persistTiles();
+    },
+
+    /**
+     * Legt die gemerkte Kachel-Anordnung auf die wiederhergestellten Fenster:
+     * Aus jedem Schlüssel wird das Fenster, das ihn trägt. Eine App, die es
+     * nicht mehr gibt, fällt heraus — ihre Schwester erbt den Platz, es bleibt
+     * also keine leere Kachel. Der Baum wird auch außerhalb des Kachel-Modus
+     * gelegt: Wechselt der Anwender später auf Kacheln, steht die Anordnung.
+     */
+    restoreTileLayout(): void {
+      const saved = useWorkspaceStore().tileLayout;
+      if (!saved) return;
+      this.tiles[tileKey()] = restoreTiles(saved, this.windows);
     },
   },
 });

@@ -3,7 +3,7 @@ import { setActivePinia, createPinia } from 'pinia';
 import { TILE_GAP, useDesktopStore } from './desktop';
 import { useWorkspaceStore } from './workspace';
 import { EXPLORER_ID, systemWindow } from '@/core/system';
-import { leafIds, MIN_TILE, type Rect } from '@/core/tiling';
+import { leaf, leafIds, MIN_TILE, split, type Rect, type TileTree } from '@/core/tiling';
 import type { AppSummary, SessionWindow } from '@/types';
 
 describe('useDesktopStore', () => {
@@ -780,6 +780,155 @@ describe('useDesktopStore', () => {
 
         expect(d.tileSwap).toBeNull();
         expect(d.tileRects).toEqual(vorher);
+      });
+    });
+
+    describe('Anordnung merken (c0068)', () => {
+      const apps: AppSummary[] = [
+        { id: 'rechner-1', name: 'Rechner', icon: '🧮', createdAt: 1, updatedAt: 5, versions: 3 },
+        { id: 'editor-2', name: 'Editor', icon: '📝', createdAt: 2, updatedAt: 9, versions: 1 },
+      ];
+
+      /** Ein gekacheltes Verzeichnis mit Apps, gemerkter Sitzung und Anordnung. */
+      function gemerkt(session?: SessionWindow[], layout?: TileTree, appList: AppSummary[] = apps) {
+        const ws = useWorkspaceStore();
+        ws.uiMode = 'tiles';
+        ws.folder = '/apps';
+        ws.apps = appList;
+        if (session) ws.sessions = { '/apps': session };
+        if (layout) ws.tileLayouts = { '/apps': layout };
+        const d = useDesktopStore();
+        d.setTileArea(AREA);
+        return { ws, d };
+      }
+
+      function eintrag(appId: string, over: Partial<SessionWindow> = {}): SessionWindow {
+        return { appId, x: 10, y: 20, w: 300, h: 240, minimized: false, maximized: false, ...over };
+      }
+
+      afterEach(() => vi.useRealTimers());
+
+      it('merkt die Kacheln unter App und Ansicht, nicht unter der Fenster-Id', () => {
+        const { ws, d } = gemerkt();
+        d.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+        d.openApp('editor-2', { title: 'Editor', icon: '📝' });
+
+        expect(ws.tileLayout).toEqual(split('row', leaf('app:rechner-1'), leaf('app:editor-2')));
+      });
+
+      it('merkt ein neues Verhältnis, sobald die Hand an der Fuge stillhält', () => {
+        vi.useFakeTimers();
+        const { ws, d } = gemerkt();
+        d.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+        d.openApp('editor-2', { title: 'Editor', icon: '📝' });
+
+        d.dragGap([], { x: 300, y: 400 });
+        // Noch steht der Stand von vor dem Ziehen — jeder Mausschritt soll nicht
+        // die Einstellungen schreiben.
+        expect((ws.tileLayout as Extract<TileTree, { kind: 'split' }>).ratio).toBe(0.5);
+
+        vi.runAllTimers();
+
+        const gezogen = ws.tileLayout as Extract<TileTree, { kind: 'split' }>;
+        expect(gezogen.ratio).toBeCloseTo((300 - TILE_GAP / 2) / (AREA.w - TILE_GAP), 3);
+      });
+
+      it('merkt einen Tausch zweier Kacheln', () => {
+        const { ws, d } = gemerkt();
+        const a = d.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+        d.openApp('editor-2', { title: 'Editor', icon: '📝' });
+        const ziel = d.tileRects[d.windows[1].instanceId];
+
+        d.startTileSwap(a);
+        d.aimTileSwap({ x: ziel.x + ziel.w / 2, y: ziel.y + ziel.h / 2 });
+        d.dropTileSwap();
+
+        expect(ws.tileLayout).toEqual(split('row', leaf('app:editor-2'), leaf('app:rechner-1')));
+      });
+
+      it('vergisst die Anordnung, wenn die letzte Kachel zugeht', () => {
+        const { ws, d } = gemerkt();
+        const a = d.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+        expect(ws.tileLayout).not.toBeNull();
+
+        d.closeWindow(a);
+
+        expect(ws.tileLayouts).toEqual({});
+      });
+
+      it('rührt die gemerkte Anordnung außerhalb des Kachel-Modus nicht an', () => {
+        const { ws, d } = gemerkt();
+        ws.uiMode = 'windows';
+        ws.tileLayouts = { '/apps': leaf('app:rechner-1') };
+
+        d.openApp('editor-2', { title: 'Editor', icon: '📝' });
+
+        expect(ws.tileLayout).toEqual(leaf('app:rechner-1'));
+      });
+
+      it('holt die Anordnung beim Start zurück — Reihenfolge und Verhältnis', () => {
+        const { d } = gemerkt(
+          [eintrag('rechner-1'), eintrag('editor-2')],
+          split('row', leaf('app:editor-2'), leaf('app:rechner-1'), 0.25),
+        );
+
+        d.restoreSession();
+
+        const rechner = d.windows.find((w) => w.appId === 'rechner-1')!.instanceId;
+        const editor = d.windows.find((w) => w.appId === 'editor-2')!.instanceId;
+        expect(leafIds(d.tileTree)).toEqual([editor, rechner]);
+        expect(d.tileRects[editor].x).toBeLessThan(d.tileRects[rechner].x);
+        expect(d.tileRects[editor].w).toBeCloseTo((AREA.w - TILE_GAP) * 0.25, 0);
+        expectDisjointWithin(Object.values(d.tileRects), AREA);
+      });
+
+      it('lässt eine App, die es nicht mehr gibt, aus der Anordnung fallen', () => {
+        const { d } = gemerkt(
+          [eintrag('rechner-1'), eintrag('geloescht-7')],
+          split('row', leaf('app:geloescht-7'), leaf('app:rechner-1'), 0.25),
+          [apps[0]],
+        );
+
+        d.restoreSession();
+
+        const rechner = d.windows.find((w) => w.appId === 'rechner-1')!.instanceId;
+        expect(d.windows).toHaveLength(1);
+        // Kein leeres Rechteck bleibt zurück: Die Schwester erbt die ganze Fläche.
+        expect(leafIds(d.tileTree)).toEqual([rechner]);
+        expect(d.tileRects[rechner]).toEqual(AREA);
+      });
+
+      it('kachelt ein Fenster dazu, das in der Anordnung fehlt', () => {
+        const { d } = gemerkt([eintrag('rechner-1'), eintrag('editor-2')], leaf('app:rechner-1'));
+
+        d.restoreSession();
+
+        expect(leafIds(d.tileTree)).toHaveLength(2);
+        expectDisjointWithin(Object.values(d.tileRects), AREA);
+      });
+
+      it('schreibt die aufgeräumte Anordnung nach dem Wiederherstellen zurück', () => {
+        const { ws, d } = gemerkt(
+          [eintrag('rechner-1')],
+          split('row', leaf('app:geloescht-7'), leaf('app:rechner-1'), 0.25),
+          [apps[0]],
+        );
+
+        d.restoreSession();
+
+        expect(ws.tileLayout).toEqual(leaf('app:rechner-1'));
+      });
+
+      it('hält auch die gemerkte Anordnung je Verzeichnis getrennt', () => {
+        const { ws, d } = gemerkt();
+        d.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+
+        ws.folder = '/zwei';
+        d.openApp('editor-2', { title: 'Editor', icon: '📝' });
+
+        // Das andere Verzeichnis bekommt seinen eigenen Eintrag, der erste bleibt.
+        expect(ws.tileLayouts['/apps']).toEqual(leaf('app:rechner-1'));
+        expect(leafIds(ws.tileLayouts['/zwei'])).toContain('app:editor-2');
       });
     });
 

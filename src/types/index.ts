@@ -1,3 +1,7 @@
+// Der Kachel-Baum ist Rechnung, keine Ablage — er steht darum in core/tiling;
+// hier steht nur, dass die Einstellungen ihn merken (siehe core/tilelayout).
+import type { TileTree } from '@/core/tiling';
+
 /** Eine virtuelle Quelldatei einer App. Pfad mit "/" relativ zum App-Ordner, stets unter src/. */
 export interface SourceFile {
   path: string;
@@ -165,6 +169,12 @@ export interface Settings {
    * Beim nächsten Start kommt der Desktop damit zurück (siehe core/session).
    */
   sessions?: Record<string, SessionWindow[]>;
+  /**
+   * Der gemerkte Kachel-Baum je Workspace-Pfad: Gestalt und Verhältnisse der
+   * Kacheln, mit App bzw. Ansicht in den Blättern statt der Fenster-Id. Beim
+   * nächsten Start kommt die Anordnung damit zurück (siehe core/tilelayout).
+   */
+  tileLayouts?: Record<string, TileTree>;
   /**
    * Der Hintergrund der Desktop-Fläche je Workspace-Pfad. Was hier fehlt,
    * bekommt die Vorgabe (siehe core/wallpaper).

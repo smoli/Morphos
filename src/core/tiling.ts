@@ -203,6 +203,36 @@ function swap(tree: TileTree, first: string, second: string): TileTree {
   return a === tree.a && b === tree.b ? tree : { ...tree, a, b };
 }
 
+/**
+ * Die Blätter umbenennen: Wer einen neuen Namen bekommt, behält seinen Platz —
+ * Gestalt und Verhältnisse bleiben also stehen. Wer `null` bekommt (und wer
+ * einen Namen doppelt trägt), fällt heraus wie bei `removeLeaf`, seine
+ * Schwester erbt die Teilung; bleibt nichts, kommt ein leerer Baum zurück.
+ *
+ * Damit wird aus dem Baum der Fenster einer der gemerkten Schlüssel — und beim
+ * nächsten Start wieder zurück (siehe core/tilelayout, c0068).
+ */
+export function mapLeaves(
+  tree: TileTree | null,
+  rename: (id: string) => string | null,
+): TileTree | null {
+  const taken = new Set<string>();
+  const step = (node: TileTree): TileTree | null => {
+    if (node.kind === 'leaf') {
+      const id = rename(node.id);
+      if (!id || taken.has(id)) return null;
+      taken.add(id);
+      return id === node.id ? node : leaf(id);
+    }
+    const a = step(node.a);
+    const b = step(node.b);
+    if (!a) return b;
+    if (!b) return a;
+    return a === node.a && b === node.b ? node : { ...node, a, b };
+  };
+  return tree ? step(tree) : null;
+}
+
 /** Der Knoten am Ende eines Pfades — `null`, wenn der Pfad ins Leere führt. */
 export function nodeAt(tree: TileTree | null, path: NodePath): TileTree | null {
   let node: TileTree | null = tree;

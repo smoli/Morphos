@@ -25,6 +25,7 @@ import { collectDiskUsage } from '../src/core/diskusage';
 import { cleanFavorites } from '../src/core/favorites';
 import { cleanAutohides, cleanDockEdges } from '../src/core/dock';
 import { cleanSessions } from '../src/core/session';
+import { cleanTileTrees } from '../src/core/tilelayout';
 import { cleanUiMode, DEFAULT_UI_MODE } from '../src/core/uimode';
 import { cleanWallpapers } from '../src/core/wallpaper';
 import { cleanBlurs, cleanTransparencies } from '../src/core/transparency';
@@ -131,6 +132,7 @@ function readSettings(): Settings {
     const iconPositions = cleanIconPositions(parsed.iconPositions);
     const favorites = cleanFavorites(parsed.favorites);
     const sessions = cleanSessions(parsed.sessions);
+    const tileLayouts = cleanTileTrees(parsed.tileLayouts);
     const wallpapers = cleanWallpapers(parsed.wallpapers);
     const dockTransparencies = cleanTransparencies(parsed.dockTransparencies);
     const dockBlurs = cleanBlurs(parsed.dockBlurs);
@@ -146,6 +148,7 @@ function readSettings(): Settings {
       iconPositions,
       favorites,
       sessions,
+      tileLayouts,
       wallpapers,
       dockTransparencies,
       dockBlurs,
@@ -163,6 +166,7 @@ function readSettings(): Settings {
       iconPositions: {},
       favorites: {},
       sessions: {},
+      tileLayouts: {},
       wallpapers: {},
       dockTransparencies: {},
       dockBlurs: {},
@@ -601,6 +605,7 @@ ipcMain.handle('morphos:saveSettings', async (_e, settings: Settings): Promise<S
       iconPositions: cleanIconPositions(settings?.iconPositions),
       favorites: cleanFavorites(settings?.favorites),
       sessions: cleanSessions(settings?.sessions),
+      tileLayouts: cleanTileTrees(settings?.tileLayouts),
       wallpapers: cleanWallpapers(settings?.wallpapers),
       dockTransparencies: cleanTransparencies(settings?.dockTransparencies),
       dockBlurs: cleanBlurs(settings?.dockBlurs),

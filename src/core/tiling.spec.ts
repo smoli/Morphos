@@ -9,6 +9,7 @@ import {
   insertLeaf,
   leaf,
   leafIds,
+  mapLeaves,
   nodeArea,
   ratioAtPoint,
   removeLeaf,
@@ -349,6 +350,37 @@ describe('ratioAtPoint', () => {
   it('gibt ohne Teilung die Mitte zurück', () => {
     expect(ratioAtPoint(tree, ['a'], { x: 100, y: 300 }, area, GAP)).toBe(0.5);
     expect(ratioAtPoint(null, [], { x: 100, y: 300 }, area, GAP)).toBe(0.5);
+  });
+});
+
+describe('mapLeaves', () => {
+  const tree = split('row', leaf('a'), split('column', leaf('b'), leaf('c'), 0.3), 0.7);
+
+  it('schreibt die Blätter um und lässt Gestalt und Verhältnisse stehen', () => {
+    expect(mapLeaves(tree, (id) => id.toUpperCase())).toEqual(
+      split('row', leaf('A'), split('column', leaf('B'), leaf('C'), 0.3), 0.7),
+    );
+  });
+
+  it('gibt denselben Baum zurück, wenn kein Blatt sich ändert', () => {
+    expect(mapLeaves(tree, (id) => id)).toBe(tree);
+  });
+
+  it('lässt ein Blatt ohne neuen Namen heraus — die Schwester erbt die Teilung', () => {
+    expect(mapLeaves(tree, (id) => (id === 'b' ? null : id))).toEqual(
+      split('row', leaf('a'), leaf('c'), 0.7),
+    );
+  });
+
+  it('behält von zwei gleich benannten Blättern das erste', () => {
+    expect(mapLeaves(tree, (id) => (id === 'c' ? 'a' : id))).toEqual(
+      split('row', leaf('a'), leaf('b'), 0.7),
+    );
+  });
+
+  it('gibt nichts zurück, wenn kein Blatt bleibt', () => {
+    expect(mapLeaves(tree, () => null)).toBeNull();
+    expect(mapLeaves(null, (id) => id)).toBeNull();
   });
 });
 

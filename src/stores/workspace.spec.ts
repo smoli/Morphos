@@ -5,6 +5,7 @@ import { setHost } from '@/services/host';
 import { DEFAULT_WALLPAPER } from '@/core/wallpaper';
 import { DEFAULT_DOCK_BLUR, DEFAULT_DOCK_TRANSPARENCY } from '@/core/transparency';
 import { DEFAULT_DOCK_AUTOHIDE, DEFAULT_DOCK_EDGE } from '@/core/dock';
+import { leaf, split } from '@/core/tiling';
 import type { MorphosHost, AppSummary, Settings } from '@/types';
 
 const apps: AppSummary[] = [
@@ -55,7 +56,7 @@ describe('useWorkspaceStore', () => {
     expect(ws.folder).toBe('/neu');
     expect(ws.recentFolders[0]).toBe('/neu');
     expect(ws.apps).toHaveLength(2);
-    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows', maxAgents: 2, iconPositions: {}, favorites: {}, sessions: {}, wallpapers: {}, dockTransparencies: {}, dockBlurs: {}, dockAutohides: {}, dockEdges: {} });
+    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows', maxAgents: 2, iconPositions: {}, favorites: {}, sessions: {}, tileLayouts: {}, wallpapers: {}, dockTransparencies: {}, dockBlurs: {}, dockAutohides: {}, dockEdges: {} });
     expect(host.listApps).toHaveBeenCalledWith('/neu');
   });
 
@@ -891,6 +892,85 @@ describe('useWorkspaceStore', () => {
       await ws.init();
       await ws.openFolder('/apps');
       expect(ws.dockEdge).toBe(DEFAULT_DOCK_EDGE);
+    });
+  });
+
+  describe('Kachel-Anordnung (c0068)', () => {
+    const baum = split('row', leaf('app:a-1'), leaf('app:b-2'), 0.4);
+
+    it('lädt den gemerkten Baum des Workspace', async () => {
+      setHost(makeHost({
+        loadSettings: vi.fn(async () => ({
+          recentFolders: [],
+          accessRoots: {},
+          tileLayouts: { '/apps': baum, '/andere': leaf('app:b-2') },
+        })),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.init();
+      expect(ws.tileLayout).toBeNull(); // noch kein Ordner geöffnet
+      await ws.openFolder('/apps');
+      expect(ws.tileLayout).toEqual(baum);
+    });
+
+    it('überliest einen beschädigten Baum', async () => {
+      setHost(makeHost({
+        // Beschädigte Einstellungen von der Platte — der Typ lügt hier absichtlich.
+        loadSettings: vi.fn(async () => ({
+          recentFolders: [],
+          accessRoots: {},
+          tileLayouts: { '/apps': 'kaputt' },
+        } as unknown as Settings)),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.init();
+      expect(ws.tileLayouts).toEqual({});
+    });
+
+    it('merkt den Baum je Workspace und speichert ihn', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      ws.tileLayouts = { '/andere': leaf('app:x-9') };
+      await ws.openFolder('/apps');
+
+      ws.saveTileLayout(baum);
+
+      expect(ws.tileLayout).toEqual(baum);
+      expect(host.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ tileLayouts: { '/andere': leaf('app:x-9'), '/apps': baum } }),
+      );
+    });
+
+    it('schreibt einen unveränderten Baum nicht noch einmal', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+      ws.saveTileLayout(baum);
+      const writes = (host.saveSettings as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      ws.saveTileLayout(split('row', leaf('app:a-1'), leaf('app:b-2'), 0.4));
+
+      expect((host.saveSettings as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(writes);
+    });
+
+    it('vergisst einen leer gewordenen Baum (alle Kacheln zu)', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+      ws.saveTileLayout(baum);
+
+      ws.saveTileLayout(null);
+
+      expect(ws.tileLayouts).toEqual({});
+    });
+
+    it('rührt ohne geöffneten Ordner nichts an', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      ws.saveTileLayout(baum);
+      expect(ws.tileLayouts).toEqual({});
     });
   });
 

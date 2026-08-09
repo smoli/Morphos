@@ -24,6 +24,7 @@ import {
   DEFAULT_DOCK_EDGE,
 } from '@/core/dock';
 import { cleanSessions, sameSession } from '@/core/session';
+import { cleanTileTrees, sameTree, type SavedTileTree } from '@/core/tilelayout';
 import { cleanUiMode, DEFAULT_UI_MODE } from '@/core/uimode';
 import { cleanWallpaper, cleanWallpapers, DEFAULT_WALLPAPER } from '@/core/wallpaper';
 import {
@@ -59,6 +60,8 @@ interface WorkspaceState {
   favorites: Record<string, string[]>;
   /** Die zuletzt offenen Fenster, je Workspace-Pfad (siehe core/session). */
   sessions: Record<string, SessionWindow[]>;
+  /** Die zuletzt gekachelte Anordnung, je Workspace-Pfad (siehe core/tilelayout). */
+  tileLayouts: Record<string, SavedTileTree>;
   /** Der Hintergrund der Desktop-Fläche, je Workspace-Pfad (siehe core/wallpaper). */
   wallpapers: Record<string, Wallpaper>;
   /** Die Durchsichtigkeit des Docks, je Workspace-Pfad (siehe core/transparency). */
@@ -97,6 +100,7 @@ export const useWorkspaceStore = defineStore('workspace', {
     iconPositions: {},
     favorites: {},
     sessions: {},
+    tileLayouts: {},
     wallpapers: {},
     dockTransparencies: {},
     dockBlurs: {},
@@ -130,6 +134,8 @@ export const useWorkspaceStore = defineStore('workspace', {
     },
     /** Die gemerkte Sitzung des aktuellen Verzeichnisses (hinten → vorn). */
     session: (s): SessionWindow[] => (s.folder ? s.sessions[s.folder] ?? [] : []),
+    /** Die gemerkte Kachel-Anordnung des aktuellen Verzeichnisses (oder keine). */
+    tileLayout: (s): SavedTileTree | null => (s.folder ? s.tileLayouts[s.folder] ?? null : null),
     /** Der Hintergrund des aktuellen Verzeichnisses — ohne eigenen die Vorgabe. */
     wallpaper: (s): Wallpaper => (s.folder ? s.wallpapers[s.folder] ?? DEFAULT_WALLPAPER : DEFAULT_WALLPAPER),
     /** Hat der Anwender hier einen eigenen Hintergrund gewählt? */
@@ -166,6 +172,7 @@ export const useWorkspaceStore = defineStore('workspace', {
           settings?.iconPositions && typeof settings.iconPositions === 'object' ? settings.iconPositions : {};
         this.favorites = cleanFavorites(settings?.favorites);
         this.sessions = cleanSessions(settings?.sessions);
+        this.tileLayouts = cleanTileTrees(settings?.tileLayouts);
         this.wallpapers = cleanWallpapers(settings?.wallpapers);
         this.dockTransparencies = cleanTransparencies(settings?.dockTransparencies);
         this.dockBlurs = cleanBlurs(settings?.dockBlurs);
@@ -181,6 +188,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.iconPositions = {};
         this.favorites = {};
         this.sessions = {};
+        this.tileLayouts = {};
         this.wallpapers = {};
         this.dockTransparencies = {};
         this.dockBlurs = {};
@@ -427,6 +435,26 @@ export const useWorkspaceStore = defineStore('workspace', {
       void this.persistSettings();
     },
 
+    /**
+     * Merkt die Kachel-Anordnung dieses Verzeichnisses für den nächsten Start.
+     * Ein leerer Baum wird vergessen — dann kachelt der Fenstermanager beim
+     * nächsten Mal von vorn. Was sich nicht geändert hat, wird nicht geschrieben
+     * (an der Fuge zu ziehen meldet jeden Mausschritt).
+     */
+    saveTileLayout(tree: SavedTileTree | null): void {
+      if (!this.folder) return;
+      const current = this.tileLayouts[this.folder] ?? null;
+      if (!tree) {
+        if (!current) return;
+        const { [this.folder]: _weg, ...rest } = this.tileLayouts;
+        this.tileLayouts = rest;
+      } else {
+        if (sameTree(current, tree)) return;
+        this.tileLayouts = { ...this.tileLayouts, [this.folder]: tree };
+      }
+      void this.persistSettings();
+    },
+
     /** Gibt eine Bibliotheks-Quelle frei (Hostname oder https-URL-Präfix). */
     addLibPattern(pattern: string): void {
       const p = pattern.trim();
@@ -547,6 +575,7 @@ export const useWorkspaceStore = defineStore('workspace', {
       const iconPositions = JSON.parse(JSON.stringify(this.iconPositions)) as Record<string, Record<string, IconPos>>;
       const favorites = JSON.parse(JSON.stringify(this.favorites)) as Record<string, string[]>;
       const sessions = JSON.parse(JSON.stringify(this.sessions)) as Record<string, SessionWindow[]>;
+      const tileLayouts = JSON.parse(JSON.stringify(this.tileLayouts)) as Record<string, SavedTileTree>;
       const wallpapers = JSON.parse(JSON.stringify(this.wallpapers)) as Record<string, Wallpaper>;
       const dockTransparencies = { ...this.dockTransparencies };
       const dockBlurs = { ...this.dockBlurs };
@@ -563,6 +592,7 @@ export const useWorkspaceStore = defineStore('workspace', {
           iconPositions,
           favorites,
           sessions,
+          tileLayouts,
           wallpapers,
           dockTransparencies,
           dockBlurs,

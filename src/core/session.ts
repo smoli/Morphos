@@ -86,8 +86,12 @@ export function restorableSession(
   return out;
 }
 
-/** Was dieses Fenster in der Sitzung ausmacht — oder null, wenn nichts (Entwurf). */
-function sessionKey(appId: string | null, systemId: string | null): string | null {
+/**
+ * Was dieses Fenster in der Sitzung ausmacht — oder null, wenn nichts (Entwurf).
+ * Auch der gemerkte Kachel-Baum kennt seine Blätter unter diesem Schlüssel, denn
+ * die Fenster-Ids gelten nur für einen Lauf (siehe core/tilelayout).
+ */
+export function sessionKey(appId: string | null, systemId: string | null): string | null {
   if (appId) return `app:${appId}`;
   return systemId ? `sys:${systemId}` : null;
 }
