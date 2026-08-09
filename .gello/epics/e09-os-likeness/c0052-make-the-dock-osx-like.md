@@ -1,10 +1,10 @@
 ---
 id: c0052
 title: Make the dock OSX like
-status: review
+status: done
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T09:45:02
+status-changed: 2026-08-09T14:09:35
 epic: e09
 depends: [c0055, c0056]
 ---
@@ -100,3 +100,4 @@ Open questions for planning:
 - 2026-08-09 core/dock.ts + Spec (rot → grün), Dock in DesktopView neu gebaut,
   ＋ aus dem Raster ins Dock, System-Fenster-Frage entschieden (Notes)
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)
