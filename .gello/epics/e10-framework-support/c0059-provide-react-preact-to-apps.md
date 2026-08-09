@@ -29,21 +29,21 @@ card is now about the **toggle + wiring**, not the plumbing.
 
 ## Acceptance criteria
 
-- [ ] A **framework toggle** („Preact“) appears in the composer **only when
+- [x] A **framework toggle** („Preact“) appears in the composer **only when
       creating a new app**, and is **on by default**.
-- [ ] Toggle **on** → the new app is generated **with Preact + htm** (the `preact`
+- [x] Toggle **on** → the new app is generated **with Preact + htm** (the `preact`
       built-in is inlined and the prompt instructs the agent to build UI and state
       with Preact); **off** → plain vanilla JS, no Preact.
-- [ ] The framework is **remembered per app**: follow-up edits to an existing app
+- [x] The framework is **remembered per app**: follow-up edits to an existing app
       continue in its style (Preact if its source already uses `preact`, otherwise
       vanilla) **without** re-toggling.
-- [ ] The always-on `SYSTEM_PROMPT` **no longer nags** about Preact; the Preact
+- [x] The always-on `SYSTEM_PROMPT` **no longer nags** about Preact; the Preact
       authoring guidance is added to the prompt **only when the app uses Preact**
       (new-app toggle on, or an existing app already using it).
-- [ ] The toggle state flows **renderer → generate → prompt** (host/preload/main
+- [x] The toggle state flows **renderer → generate → prompt** (host/preload/main
       signature carries it); generation is unchanged when off / for vanilla apps.
-- [ ] Preact stays **opt-in** — an app that doesn't use it gets nothing inlined.
-- [ ] Tests cover: the toggle shows only for a new app and defaults on; „on“
+- [x] Preact stays **opt-in** — an app that doesn't use it gets nothing inlined.
+- [x] Tests cover: the toggle shows only for a new app and defaults on; „on“
       yields Preact guidance + inlining; an existing Preact app keeps Preact on
       follow-ups; „off“ / vanilla adds nothing.
 

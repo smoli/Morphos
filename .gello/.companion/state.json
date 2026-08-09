@@ -13,13 +13,13 @@
       "cardId": "c0059",
       "phase": "running",
       "activity": {
-        "name": "Bash",
-        "arg": "grep -n \"morphos:lib\" /Users/stephan/WebstormProjects/Morphos/src/core/bundle.spec.ts"
+        "name": "Edit",
+        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e10-framework-support/c0059-provide-react-preact-to-apps.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T19:40:12",
+  "updated": "2026-08-09T19:42:47",
   "pickupDelay": 10,
   "owned": [
     "c0029",
