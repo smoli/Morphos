@@ -156,7 +156,7 @@ src/
     app.ts             Pinia-Store: EINE geöffnete App (Historie, generate/revert)
   components/          Präsentations-Komponenten (Props rein, Events raus)
     WindowFrame · ChatDock · WelcomeScreen · AppCanvas · HistoryList · DocsPanel
-    TopBar (Titelleiste) · SettingsDialog · PermissionDialog
+    TopBar (Titelleiste) · SystemWindow (Dateien, Einstellungen) · PermissionDialog
   views/
     StartView.vue      Startbildschirm: Ordnerauswahl + zuletzt genutzte Ordner
     DesktopView.vue    Desktop: Launcher, App-Fenster, Dock, Startmenü

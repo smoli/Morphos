@@ -1,22 +1,22 @@
 <script setup lang="ts">
 import TopBar from '@/components/TopBar.vue';
 import PermissionDialog from '@/components/PermissionDialog.vue';
-import SettingsDialog from '@/components/SettingsDialog.vue';
 import ToastStack from '@/components/ToastStack.vue';
-import { useShellStore } from '@/stores/shell';
+import { useDesktopStore } from '@/stores/desktop';
+import { SETTINGS_ID } from '@/core/system';
 
-// Die Einstellungen öffnet nicht nur die Kopfleiste, sondern auch das
-// Tastenkürzel des Desktops — der Zustand liegt darum in der Schale.
-const shell = useShellStore();
+// Die Einstellungen sind kein Dialog über allem, sondern ein gewöhnliches
+// Fenster des Desktops (siehe core/system) — die Kopfleiste öffnet es genauso
+// wie das Tastenkürzel des Desktops.
+const desktop = useDesktopStore();
 </script>
 
 <template>
   <div class="app">
-    <TopBar @open-settings="shell.openSettings()" />
+    <TopBar @open-settings="desktop.openSystem(SETTINGS_ID)" />
     <main class="main">
       <RouterView />
     </main>
-    <SettingsDialog v-if="shell.settingsOpen" @close="shell.closeSettings()" />
     <PermissionDialog />
     <!-- Einmal für die ganze Schale: Meldungen gehören keinem Fenster. -->
     <ToastStack />

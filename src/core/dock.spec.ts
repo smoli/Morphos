@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dockEntries, type DockWindow } from './dock';
+import { dockEntries, type DockSystem, type DockWindow } from './dock';
 import type { AppSummary } from '@/types';
 
 const apps = [
@@ -8,16 +8,28 @@ const apps = [
   { id: 'malen-3', name: 'Malen', icon: '🎨' },
 ] as unknown as AppSummary[];
 
+/** Die Ansichten der Schale, wie core/system sie führt. */
+const systems: DockSystem[] = [
+  { id: 'explorer', title: 'Dateien', icon: '📁' },
+  { id: 'settings', title: 'Einstellungen', icon: '⚙️' },
+];
+
 /** Ein offenes Fenster, wie der Desktop es führt. */
 function win(over: Partial<DockWindow> = {}): DockWindow {
   return {
     instanceId: 'win-1',
     appId: 'rechner-1',
+    systemId: null,
     title: 'Rechner',
     icon: '🧮',
     minimized: false,
     ...over,
   };
+}
+
+/** Ein Fenster einer Ansicht der Schale (Explorer, Einstellungen). */
+function sysWin(systemId: string, over: Partial<DockWindow> = {}): DockWindow {
+  return win({ instanceId: `win-${systemId}`, appId: null, systemId, title: systemId, icon: '❓', ...over });
 }
 
 describe('dockEntries', () => {
@@ -96,5 +108,53 @@ describe('dockEntries', () => {
 
   it('lässt gemerkte Lieblinge weg, die es nicht mehr gibt', () => {
     expect(dockEntries(apps, [], ['weg-9', 'editor-2']).map((e) => e.key)).toEqual(['editor-2']);
+  });
+});
+
+describe('dockEntries mit den Ansichten der Schale', () => {
+  it('stellt sie immer voran — auch wenn nichts läuft und nichts behalten wird', () => {
+    const entries = dockEntries(apps, [], [], systems);
+    expect(entries.map((e) => e.title)).toEqual(['Dateien', 'Einstellungen']);
+    expect(entries.map((e) => e.systemId)).toEqual(['explorer', 'settings']);
+    expect(entries.every((e) => !e.running && !e.favorite && e.appId === null)).toBe(true);
+  });
+
+  it('setzt sie vor die Lieblinge und alles Laufende', () => {
+    const entries = dockEntries(apps, [win({ appId: 'malen-3' })], ['editor-2'], systems);
+    expect(entries.map((e) => e.title)).toEqual(['Dateien', 'Einstellungen', 'Editor', 'Malen']);
+  });
+
+  it('markiert die offene Ansicht als laufend und merkt sich ihr Fenster', () => {
+    const entries = dockEntries(apps, [sysWin('settings', { minimized: true })], [], systems);
+    expect(entries[0]).toMatchObject({ systemId: 'explorer', running: false, instanceId: null });
+    expect(entries[1]).toMatchObject({
+      systemId: 'settings',
+      instanceId: 'win-settings',
+      running: true,
+      minimized: true,
+    });
+  });
+
+  it('führt eine offene Ansicht nur einmal — nicht noch einmal als laufendes Fenster', () => {
+    const entries = dockEntries(apps, [sysWin('explorer'), win({ instanceId: 'win-9' })], [], systems);
+    expect(entries.map((e) => e.key)).toEqual(['sys:explorer', 'sys:settings', 'rechner-1']);
+  });
+
+  it('nennt sie so, wie die Schale sie nennt — nicht wie ihr Fenster heißt', () => {
+    const [explorer] = dockEntries(apps, [sysWin('explorer', { title: 'Alt', icon: '❓' })], [], systems);
+    expect(explorer).toMatchObject({ title: 'Dateien', icon: '📁' });
+  });
+
+  it('hängt ein Fenster einer unbekannten Ansicht hinten an, statt es zu verlieren', () => {
+    const entries = dockEntries(apps, [sysWin('gibt-es-nicht', { title: 'Fremd' })], [], systems);
+    expect(entries.map((e) => e.key)).toEqual(['sys:explorer', 'sys:settings', 'win-gibt-es-nicht']);
+    expect(entries[2]).toMatchObject({ title: 'Fremd', running: true, systemId: 'gibt-es-nicht' });
+  });
+
+  it('hält ihren Platz von den App-Ids frei (eine App „explorer“ steht daneben)', () => {
+    const eigen = [{ id: 'explorer', name: 'Meine App', icon: '🧩' }] as unknown as AppSummary[];
+    const entries = dockEntries(eigen, [], ['explorer'], systems);
+    expect(entries.map((e) => e.key)).toEqual(['sys:explorer', 'sys:settings', 'explorer']);
+    expect(entries[2]).toMatchObject({ title: 'Meine App', favorite: true });
   });
 });

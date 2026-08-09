@@ -2,20 +2,22 @@
 import { computed, type Component } from 'vue';
 import WindowFrame from './WindowFrame.vue';
 import ExplorerPanel from './ExplorerPanel.vue';
-import { EXPLORER_ID } from '@/core/system';
+import SettingsPanel from './settings/SettingsPanel.vue';
+import { EXPLORER_ID, SETTINGS_ID } from '@/core/system';
 import type { DesktopWindow } from '@/stores/desktop';
 
 /**
  * Ein Fenster, das keine erzeugte App zeigt, sondern eine Ansicht der Schale
- * selbst — derzeit der Datei-Explorer (siehe core/system). Es hat denselben
- * Rahmen wie ein App-Fenster (WindowFrame), aber keinen Instanz-Store und
- * keinen Agenten: Der Inhalt ist eine Komponente der Schale.
+ * selbst — den Datei-Explorer oder die Einstellungen (siehe core/system). Es
+ * hat denselben Rahmen wie ein App-Fenster (WindowFrame), aber keinen
+ * Instanz-Store und keinen Agenten: Der Inhalt ist eine Komponente der Schale.
  */
 const props = defineProps<{ win: DesktopWindow; single?: boolean }>();
 
 /** Welche Komponente in welchem System-Fenster liegt. */
 const BODIES: Record<string, Component> = {
   [EXPLORER_ID]: ExplorerPanel,
+  [SETTINGS_ID]: SettingsPanel,
 };
 
 const body = computed<Component | null>(() =>

@@ -1,8 +1,8 @@
 /**
  * Verzeichnis der Einstellungs-Bereiche — die Erweiterungsstelle des
- * Einstellungsdialogs. Ein neuer Bereich ist eine Komponente in diesem Ordner
- * plus ein Eintrag in dieser Liste; der Dialog baut Seitenleiste und Inhalt
- * allein daraus (`SettingsDialog` nimmt die Liste auch als Prop, für Tests).
+ * Einstellungsfensters. Ein neuer Bereich ist eine Komponente in diesem Ordner
+ * plus ein Eintrag in dieser Liste; das Fenster baut Seitenleiste und Inhalt
+ * allein daraus (`SettingsPanel` nimmt die Liste auch als Prop, für Tests).
  */
 import type { Component } from 'vue';
 import AgentsSection from './AgentsSection.vue';

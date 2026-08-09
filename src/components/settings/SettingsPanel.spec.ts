@@ -3,8 +3,8 @@ import { mount, flushPromises } from '@vue/test-utils';
 import type { VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { defineComponent, h, markRaw } from 'vue';
-import SettingsDialog from './SettingsDialog.vue';
-import { SETTINGS_SECTIONS } from './settings/sections';
+import SettingsPanel from './SettingsPanel.vue';
+import { SETTINGS_SECTIONS } from './sections';
 import { SHORTCUTS, SWITCHER_KEYS } from '@/core/shortcuts';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { setHost } from '@/services/host';
@@ -46,7 +46,7 @@ async function openCategory(wrapper: VueWrapper, label: string): Promise<void> {
   await cat!.trigger('click');
 }
 
-describe('SettingsDialog', () => {
+describe('SettingsPanel', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     setHost(makeHost());
@@ -54,7 +54,7 @@ describe('SettingsDialog', () => {
   });
 
   it('zeigt für jede registrierte Kategorie einen Eintrag in der Seitenleiste', () => {
-    const wrapper = mount(SettingsDialog);
+    const wrapper = mount(SettingsPanel);
     const cats = wrapper.findAll('.cat');
     expect(cats).toHaveLength(SETTINGS_SECTIONS.length);
     for (const section of SETTINGS_SECTIONS) {
@@ -63,7 +63,7 @@ describe('SettingsDialog', () => {
   });
 
   it('zeigt anfangs die erste Kategorie und nur deren Inhalt', () => {
-    const wrapper = mount(SettingsDialog);
+    const wrapper = mount(SettingsPanel);
     const cats = wrapper.findAll('.cat');
     expect(cats[0].classes()).toContain('active');
     expect(cats[0].attributes('aria-selected')).toBe('true');
@@ -75,7 +75,7 @@ describe('SettingsDialog', () => {
   });
 
   it('wechselt die Kategorie und tauscht dabei den Inhalt aus', async () => {
-    const wrapper = mount(SettingsDialog);
+    const wrapper = mount(SettingsPanel);
     await openCategory(wrapper, 'Berechtigungen');
 
     expect(wrapper.get('.pane').text()).toContain('Datei schreiben');
@@ -92,7 +92,7 @@ describe('SettingsDialog', () => {
         render: () => h('p', { class: 'extra' }, 'Inhalt des Beispielbereichs'),
       }),
     );
-    const wrapper = mount(SettingsDialog, {
+    const wrapper = mount(SettingsPanel, {
       props: { sections: [...SETTINGS_SECTIONS, { id: 'beispiel', label: 'Beispiel', icon: '🧪', component: Extra }] },
     });
 
@@ -102,7 +102,7 @@ describe('SettingsDialog', () => {
   });
 
   it('stellt den Deckel gleichzeitiger Agenten ein (Vorgabe zwei)', async () => {
-    const wrapper = mount(SettingsDialog);
+    const wrapper = mount(SettingsPanel);
     const ws = useWorkspaceStore();
     await openCategory(wrapper, 'Agenten');
 
@@ -116,7 +116,7 @@ describe('SettingsDialog', () => {
   });
 
   it('setzt eine Funktions-Berechtigung', async () => {
-    const wrapper = mount(SettingsDialog);
+    const wrapper = mount(SettingsPanel);
     const ws = useWorkspaceStore();
     await openCategory(wrapper, 'Berechtigungen');
 
@@ -128,7 +128,7 @@ describe('SettingsDialog', () => {
   });
 
   it('gibt eine Bibliotheks-Quelle frei und entzieht sie wieder', async () => {
-    const wrapper = mount(SettingsDialog);
+    const wrapper = mount(SettingsPanel);
     const ws = useWorkspaceStore();
     await openCategory(wrapper, 'Bibliotheken');
 
@@ -145,7 +145,7 @@ describe('SettingsDialog', () => {
   it('legt den Datenordner fest', async () => {
     const host = makeHost({ chooseFolder: vi.fn(async () => ({ ok: true, path: '/daten' })) });
     setHost(host);
-    const wrapper = mount(SettingsDialog);
+    const wrapper = mount(SettingsPanel);
     await openCategory(wrapper, 'Datenordner');
 
     await wrapper.get('.access .btn').trigger('click');
@@ -155,7 +155,7 @@ describe('SettingsDialog', () => {
   });
 
   it('führt die Tastenkürzel des Desktops auf', async () => {
-    const wrapper = mount(SettingsDialog);
+    const wrapper = mount(SettingsPanel);
     await openCategory(wrapper, 'Tastenkürzel');
 
     const rows = wrapper.findAll('.keys li');
@@ -170,7 +170,7 @@ describe('SettingsDialog', () => {
   it('zeigt Agenten-Aktivität und Platzbedarf in der Telemetrie', async () => {
     const host = makeHost();
     setHost(host);
-    const wrapper = mount(SettingsDialog);
+    const wrapper = mount(SettingsPanel);
     await openCategory(wrapper, 'Telemetrie');
     await flushPromises();
 
@@ -181,10 +181,9 @@ describe('SettingsDialog', () => {
     expect(wrapper.get('.pane .total-data').text()).toContain('/daten');
   });
 
-  it('schließt über das Kreuz und den Hintergrund', async () => {
-    const wrapper = mount(SettingsDialog);
-    await wrapper.get('.close').trigger('click');
-    await wrapper.get('.backdrop').trigger('click');
-    expect(wrapper.emitted('close')).toHaveLength(2);
+  it('trägt keinen eigenen Rahmen — Titel und Schließen gehören dem Fenster', () => {
+    const wrapper = mount(SettingsPanel);
+    expect(wrapper.find('.backdrop').exists()).toBe(false);
+    expect(wrapper.find('.close').exists()).toBe(false);
   });
 });

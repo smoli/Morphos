@@ -264,7 +264,8 @@ export const useDesktopStore = defineStore('desktop', {
     /**
      * Öffnet die gemerkte Sitzung des Verzeichnisses wieder: dieselben Fenster,
      * an derselben Stelle, in derselben Reihenfolge — der Fokus landet auf dem
-     * zuletzt benutzten. Apps, die es nicht mehr gibt, bleiben weg; ohne
+     * zuletzt benutzten. Auch die Ansichten der Schale (Dateien, Einstellungen)
+     * kommen so zurück. Apps, die es nicht mehr gibt, bleiben weg; ohne
      * gemerkte Sitzung erscheint schlicht der Launcher.
      *
      * Geschieht einmal je Verzeichnis und erst, wenn dessen Apps gelesen sind —
@@ -280,8 +281,9 @@ export const useDesktopStore = defineStore('desktop', {
       restoring = true;
       try {
         for (const saved of restorableSession(workspace.session, known.keys())) {
-          const app = known.get(saved.appId)!;
-          const instanceId = this.spawn(saved.appId, app.name, app.icon);
+          const instanceId = saved.appId
+            ? this.spawn(saved.appId, known.get(saved.appId)!.name, known.get(saved.appId)!.icon)
+            : this.openSystem(saved.systemId!)!;
           const w = this.find(instanceId)!;
           w.x = saved.x;
           w.y = saved.y;

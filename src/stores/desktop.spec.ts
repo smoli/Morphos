@@ -211,12 +211,14 @@ describe('useDesktopStore', () => {
       expect(d.activeAppId).toBeNull();
     });
 
-    it('wird nicht in der Sitzung gemerkt (es gibt nichts zu laden)', () => {
+    it('wird wie ein App-Fenster in der Sitzung gemerkt', () => {
       const ws = useWorkspaceStore();
       ws.folder = '/apps';
       const d = useDesktopStore();
-      d.openSystem(EXPLORER_ID);
-      expect(ws.session).toEqual([]);
+      const w = d.find(d.openSystem(EXPLORER_ID)!)!;
+      expect(ws.session).toEqual([
+        { appId: null, systemId: EXPLORER_ID, x: w.x, y: w.y, w: w.w, h: w.h, minimized: false, maximized: false },
+      ]);
     });
   });
 
@@ -383,6 +385,43 @@ describe('useDesktopStore', () => {
       expect(rechner).toMatchObject({ title: 'Rechner', x: 10, y: 20, w: 300, h: 240, maximized: true });
       // Der Fokus landet auf dem zuletzt benutzten Fenster.
       expect(d.focusedId).toBe(rechner.instanceId);
+    });
+
+    it('bringt auch die Fenster der Schale zurück (Dateien, Einstellungen)', () => {
+      workspace([
+        { appId: null, systemId: EXPLORER_ID, x: 5, y: 6, w: 400, h: 300, minimized: true, maximized: false },
+        entry({ appId: 'rechner-1' }),
+      ]);
+      const d = useDesktopStore();
+
+      d.restoreSession();
+
+      const [explorer, rechner] = d.stacked;
+      expect(explorer).toMatchObject({
+        kind: 'system',
+        systemId: EXPLORER_ID,
+        appId: null,
+        title: systemWindow(EXPLORER_ID)!.title,
+        x: 5,
+        y: 6,
+        w: 400,
+        h: 300,
+        minimized: true,
+      });
+      expect(rechner.appId).toBe('rechner-1');
+    });
+
+    it('überspringt ein Fenster, dessen Ansicht es nicht mehr gibt', () => {
+      const ws = workspace([
+        { appId: null, systemId: 'weg', x: 5, y: 6, w: 400, h: 300, minimized: false, maximized: false },
+        entry(),
+      ]);
+      const d = useDesktopStore();
+
+      d.restoreSession();
+
+      expect(d.windows.map((w) => w.systemId)).toEqual([null]);
+      expect(ws.session.map((s) => s.appId)).toEqual(['rechner-1']);
     });
 
     it('überspringt ein Fenster, dessen App es nicht mehr gibt', () => {

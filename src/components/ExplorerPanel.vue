@@ -30,13 +30,14 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { getHost } from '@/services/host';
 import { breadcrumbs, parentDir } from '@/core/dialog';
 import { explorerEntries, formatWhen, sizeLabel, type SortKey, type SortOrder } from '@/core/explorer';
-import { useShellStore } from '@/stores/shell';
+import { useDesktopStore } from '@/stores/desktop';
+import { SETTINGS_ID } from '@/core/system';
 import { useWorkspaceStore } from '@/stores/workspace';
 import FilePreview from './FilePreview.vue';
 import type { FsEntry, ShellFsRequest, ShellFsResponse, TrashEntry } from '@/types';
 
 const workspace = useWorkspaceStore();
-const shell = useShellStore();
+const desktop = useDesktopStore();
 
 /** Der Datenordner des Arbeitsverzeichnisses — ohne ihn gibt es nichts zu zeigen. */
 const root = computed(() => workspace.accessRoot);
@@ -403,7 +404,7 @@ onBeforeUnmount(() => {
         Für dieses Arbeitsverzeichnis ist noch kein Datenordner festgelegt — der Explorer zeigt
         genau diesen Ordner.
       </p>
-      <button type="button" class="ex-choose" @click="shell.openSettings()">Datenordner festlegen …</button>
+      <button type="button" class="ex-choose" @click="desktop.openSystem(SETTINGS_ID)">Datenordner festlegen …</button>
     </div>
   </div>
 </template>

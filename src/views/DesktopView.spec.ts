@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia, type Pinia } from 'pinia';
 import { createRouter, createMemoryHistory, type Router } from 'vue-router';
@@ -13,12 +13,11 @@ import LauncherOverlay from '@/components/LauncherOverlay.vue';
 import SwitcherOverlay from '@/components/SwitcherOverlay.vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useDesktopStore } from '@/stores/desktop';
-import { useShellStore } from '@/stores/shell';
 import { useAgentsStore } from '@/stores/agents';
 import { useAppWindow } from '@/stores/app';
 import { setHost } from '@/services/host';
 import { columns, slotPos } from '@/core/arrange';
-import { EXPLORER_ID } from '@/core/system';
+import { EXPLORER_ID, SETTINGS_ID, SYSTEM_WINDOWS, systemWindow } from '@/core/system';
 import { DEFAULT_WALLPAPER, wallpaperCss } from '@/core/wallpaper';
 import type { AppData, AppSummary, MorphosHost } from '@/types';
 
@@ -90,9 +89,19 @@ describe('DesktopView', () => {
       global: { plugins: [pinia, router] },
       ...(attach ? { attachTo: document.body } : {}),
     });
+    mounted.push(wrapper);
     await flushPromises();
     return { wrapper, router };
   }
+
+  // Jede Ansicht wird nach ihrem Test wieder abgebaut. Sonst hört ihr
+  // Tastenhorcher weiter mit und greift in den nächsten Test hinein — und mit
+  // der ersten Aktion auf ihrem alten Store zeigt Pinia auch wieder auf dessen
+  // Verzeichnis.
+  const mounted: VueWrapper[] = [];
+  afterEach(() => {
+    for (const wrapper of mounted.splice(0)) wrapper.unmount();
+  });
 
   /** Die Kachel-Hülle einer App auf dem Desktop. */
   function tileWrap(wrapper: VueWrapper, name: string) {
@@ -107,11 +116,19 @@ describe('DesktopView', () => {
     return wrapper.findAll('.dock-item').find((d) => d.attributes('title') === name)!;
   }
 
-  /** Die Namen im Dock, von links nach rechts — ohne das feste ＋. */
+  /**
+   * Die Namen der App-Plätze im Dock, von links nach rechts — ohne das feste ＋
+   * und ohne die festen Ansichten der Schale (dafür: dockSystemNames).
+   */
   function dockNames(wrapper: VueWrapper): string[] {
     return wrapper
-      .findAll('.dock-item:not(.new)')
+      .findAll('.dock-item:not(.new):not(.system)')
       .map((d) => d.attributes('title') ?? '');
+  }
+
+  /** Die festen Plätze der Schale im Dock (Dateien, Einstellungen). */
+  function dockSystemNames(wrapper: VueWrapper): string[] {
+    return wrapper.findAll('.dock-item.system').map((d) => d.attributes('title') ?? '');
   }
 
   /** Rechtsklick auf die Kachel einer App — ihr Kontextmenü klappt auf. */
@@ -684,6 +701,68 @@ describe('DesktopView', () => {
       expect(wrapper.findComponent(ContextMenu).exists()).toBe(false);
     });
 
+    it('hält Dateien und Einstellungen dauerhaft vorn — auch ohne Lieblinge', async () => {
+      const { wrapper } = await mountView();
+
+      expect(dockSystemNames(wrapper)).toEqual(SYSTEM_WINDOWS.map((s) => s.title));
+      expect(dockNames(wrapper)).toEqual([]);
+      // Erst das ＋, dann die Plätze der Schale, dann alles andere.
+      const titles = wrapper.findAll('.dock-item').map((d) => d.attributes('title'));
+      expect(titles[0]).toContain('Neue App');
+      expect(titles.slice(1, 1 + SYSTEM_WINDOWS.length)).toEqual(SYSTEM_WINDOWS.map((s) => s.title));
+      // Solange nichts folgt, steht nur der Strich hinter dem ＋.
+      expect(wrapper.findAll('.dock .dock-sep')).toHaveLength(1);
+    });
+
+    it('stellt sie vor die Lieblinge und das Laufende', async () => {
+      keep('editor-2');
+      const { wrapper } = await mountView();
+      useDesktopStore().openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await flushPromises();
+
+      expect(wrapper.findAll('.dock-item:not(.new)').map((d) => d.attributes('title'))).toEqual([
+        ...SYSTEM_WINDOWS.map((s) => s.title),
+        'Editor',
+        'Rechner',
+      ]);
+      // Jetzt setzt ein zweiter Strich die festen Plätze von den Apps ab.
+      expect(wrapper.findAll('.dock .dock-sep')).toHaveLength(2);
+    });
+
+    it('öffnet die Einstellungen aus dem Dock — und holt sie beim zweiten Klick nur vor', async () => {
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      const settings = dockItem(wrapper, systemWindow(SETTINGS_ID)!.title);
+      expect(settings.find('.dock-dot').exists()).toBe(false);
+
+      await settings.trigger('click');
+      await flushPromises();
+
+      expect(desktop.windows).toHaveLength(1);
+      expect(desktop.windows[0].systemId).toBe(SETTINGS_ID);
+      expect(wrapper.getComponent(SystemWindow).find('.settings-panel').exists()).toBe(true);
+      expect(dockItem(wrapper, systemWindow(SETTINGS_ID)!.title).find('.dock-dot').exists()).toBe(true);
+
+      const instanceId = desktop.windows[0].instanceId;
+      desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await flushPromises();
+      await dockItem(wrapper, systemWindow(SETTINGS_ID)!.title).trigger('click');
+      await flushPromises();
+
+      expect(desktop.windows).toHaveLength(2);
+      expect(desktop.focusedId).toBe(instanceId);
+    });
+
+    it('lässt die festen Plätze nicht behalten oder entfernen', async () => {
+      const { wrapper } = await mountView();
+
+      for (const name of dockSystemNames(wrapper)) {
+        await dockItem(wrapper, name).trigger('contextmenu', { clientX: 40, clientY: 700 });
+        await flushPromises();
+        expect(wrapper.findComponent(ContextMenu).exists()).toBe(false);
+      }
+    });
+
     it('vergisst den Liebling einer gelöschten App', async () => {
       keep('rechner-1');
       const { wrapper } = await mountView();
@@ -1032,10 +1111,13 @@ describe('DesktopView', () => {
       expect(wrapper.findAllComponents(WindowFrame)).toHaveLength(1);
     });
 
-    it('öffnet mit Strg/⌘ + , die Einstellungen', async () => {
-      await mountView();
+    it('öffnet mit Strg/⌘ + , die Einstellungen als Fenster', async () => {
+      const { wrapper } = await mountView();
       await press(',', { metaKey: true });
-      expect(useShellStore().settingsOpen).toBe(true);
+      const desktop = useDesktopStore();
+      expect(desktop.windows).toHaveLength(1);
+      expect(desktop.windows[0]).toMatchObject({ kind: 'system', systemId: SETTINGS_ID });
+      expect(wrapper.getComponent(SystemWindow).find('.settings-panel').exists()).toBe(true);
     });
 
     it('schließt das aktive Fenster mit Strg/⌘ + ⇧ + W', async () => {
@@ -1086,7 +1168,6 @@ describe('DesktopView', () => {
       const { wrapper } = await mountView({ attach: true });
       await pressOn(wrapper.get('.dock-item.new').element, 'n', { ctrlKey: true });
       expect(useDesktopStore().windows).toHaveLength(1);
-      wrapper.unmount();
     });
 
     it('rührt sich nicht, während im Chat eines Fensters getippt wird', async () => {
@@ -1101,7 +1182,6 @@ describe('DesktopView', () => {
 
       expect(useDesktopStore().windows).toHaveLength(1); // nur der Entwurf von eben
       expect(wrapper.findComponent(LauncherOverlay).exists()).toBe(false);
-      wrapper.unmount();
     });
 
     it('rührt sich auch nicht, während das Startmenü Eingaben entgegennimmt', async () => {
@@ -1111,7 +1191,6 @@ describe('DesktopView', () => {
 
       await pressOn(wrapper.get('.lp-input').element, 'n', { ctrlKey: true });
       expect(useDesktopStore().windows).toHaveLength(0);
-      wrapper.unmount();
     });
   });
 
@@ -1245,7 +1324,6 @@ describe('DesktopView', () => {
       await flushPromises();
 
       expect(wrapper.findComponent(SwitcherOverlay).exists()).toBe(false);
-      wrapper.unmount();
     });
 
     it('wechselt auch zu einem angeklickten Fenster der Auswahl', async () => {
@@ -1262,9 +1340,9 @@ describe('DesktopView', () => {
   });
 
   describe('Datei-Explorer (System-Fenster)', () => {
-    /** Öffnet den Explorer über den Knopf auf dem Desktop. */
+    /** Öffnet den Explorer über seinen festen Platz im Dock. */
     async function openExplorer(wrapper: VueWrapper) {
-      await wrapper.get('.files-btn').trigger('click');
+      await dockItem(wrapper, 'Dateien').trigger('click');
       await flushPromises();
     }
 
@@ -1321,7 +1399,9 @@ describe('DesktopView', () => {
 
       await wrapper.get('.w-min').trigger('click');
       await flushPromises();
-      expect(dockNames(wrapper)).toEqual(['Dateien']);
+      // Sein Platz im Dock ist derselbe wie zuvor — er zeigt weiter den Laufpunkt.
+      expect(dockNames(wrapper)).toEqual([]);
+      expect(dockItem(wrapper, 'Dateien').find('.dock-dot').exists()).toBe(true);
 
       await dockItem(wrapper, 'Dateien').trigger('click');
       await flushPromises();
@@ -1360,9 +1440,9 @@ describe('DesktopView', () => {
       await wrapper.get('.w-desktop').trigger('click');
       await flushPromises();
 
-      // Zurück auf dem Desktop — das Fenster wartet im Dock.
+      // Zurück auf dem Desktop — das Fenster wartet an seinem Platz im Dock.
       expect(wrapper.findComponent(SystemWindow).exists()).toBe(false);
-      expect(dockNames(wrapper)).toEqual(['Dateien']);
+      expect(dockItem(wrapper, 'Dateien').find('.dock-dot').exists()).toBe(true);
     });
 
     it('nimmt keine Wünsche entgegen — er trägt keinen Chat', async () => {
@@ -1378,10 +1458,10 @@ describe('DesktopView', () => {
       expect(wrapper.find('.w-composer').exists()).toBe(false);
     });
 
-    it('wird nicht in der Sitzung gemerkt (nur Apps kommen zurück)', async () => {
+    it('wird wie eine App in der Sitzung gemerkt', async () => {
       const { wrapper } = await mountView();
       await openExplorer(wrapper);
-      expect(useWorkspaceStore().session).toEqual([]);
+      expect(useWorkspaceStore().session.map((s) => s.systemId)).toEqual([EXPLORER_ID]);
     });
   });
 

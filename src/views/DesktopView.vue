@@ -13,7 +13,6 @@ import IconDialog from '@/components/IconDialog.vue';
 import ContextMenu from '@/components/ContextMenu.vue';
 import LauncherOverlay from '@/components/LauncherOverlay.vue';
 import SwitcherOverlay from '@/components/SwitcherOverlay.vue';
-import { useShellStore } from '@/stores/shell';
 import {
   isSwitcherChord,
   isSwitcherRelease,
@@ -23,7 +22,7 @@ import {
   type ShortcutId,
 } from '@/core/shortcuts';
 import { canSwitch, cycleSelection, switcherOrder } from '@/core/switcher';
-import { EXPLORER_ID, SYSTEM_WINDOWS, systemWindow } from '@/core/system';
+import { SETTINGS_ID, SYSTEM_WINDOWS } from '@/core/system';
 import { wallpaperCss } from '@/core/wallpaper';
 import { dockEntries, type DockEntry } from '@/core/dock';
 import type { MenuItem } from '@/core/menu';
@@ -44,7 +43,6 @@ import type { AppSummary, IconPos } from '@/types';
 const workspace = useWorkspaceStore();
 const desktop = useDesktopStore();
 const agents = useAgentsStore();
-const shell = useShellStore();
 const setAppIcon = useSetAppIcon();
 
 const singleMode = computed(() => workspace.uiMode === 'single');
@@ -60,13 +58,16 @@ function surfaceFor(w: DesktopWindow) {
   return w.kind === 'system' ? SystemWindow : AppWindow;
 }
 
-// Das Dock: das feste ＋ und dahinter, was core/dock aufstellt — die behaltenen
-// Apps und die laufenden Fenster. Im Einzel-Modus verdeckt es die Vollbild-App
-// nicht: Dort erscheint es nur auf dem Desktop selbst.
+// Das Dock: das feste ＋ und dahinter, was core/dock aufstellt — die Ansichten
+// der Schale (Dateien, Einstellungen), die behaltenen Apps und die laufenden
+// Fenster. Im Einzel-Modus verdeckt es die Vollbild-App nicht: Dort erscheint
+// es nur auf dem Desktop selbst.
 const dock = computed<DockEntry[]>(() =>
-  dockEntries(workspace.apps, desktop.windows, workspace.favoriteIds),
+  dockEntries(workspace.apps, desktop.windows, workspace.favoriteIds, SYSTEM_WINDOWS),
 );
 const dockVisible = computed(() => !singleMode.value || !activeWindow.value);
+// Die festen Plätze stehen vorn; dahinter setzt ein Strich die Apps ab.
+const systemCount = SYSTEM_WINDOWS.length;
 
 /** Arbeitet ein Agent für diesen Dock-Platz (für seine App oder sein Fenster)? */
 function dockBusy(entry: DockEntry): boolean {
@@ -76,12 +77,17 @@ function dockBusy(entry: DockEntry): boolean {
 
 /**
  * Klick auf einen Dock-Platz: Das Fenster kommt nach vorn (und zurück, wenn es
- * minimiert wartet); eine behaltene App, die nicht läuft, wird geöffnet. Ein
- * zweiter Klick minimiert bewusst NICHT — hier ist nur der Weg hin.
+ * minimiert wartet); eine behaltene App oder eine Ansicht der Schale, die nicht
+ * läuft, wird geöffnet. Ein zweiter Klick minimiert bewusst NICHT — hier ist
+ * nur der Weg hin.
  */
 function openDockEntry(entry: DockEntry): void {
   if (entry.instanceId) {
     desktop.focusWindow(entry.instanceId);
+    return;
+  }
+  if (entry.systemId) {
+    openSystem(entry.systemId);
     return;
   }
   const app = workspace.apps.find((a) => a.id === entry.appId);
@@ -234,7 +240,7 @@ function launchApp(app: AppSummary): void {
 function newApp(): void {
   desktop.openDraft();
 }
-/** Eine Ansicht der Schale öffnen (Dateien) — sie gibt es jeweils nur einmal. */
+/** Eine Ansicht der Schale öffnen (Dateien, Einstellungen) — jeweils nur einmal. */
 function openSystem(systemId: string): void {
   desktop.openSystem(systemId);
 }
@@ -293,7 +299,7 @@ function runShortcut(id: ShortcutId): void {
       newApp();
       break;
     case 'settings':
-      shell.openSettings();
+      openSystem(SETTINGS_ID);
       break;
     case 'close-window':
       if (active) desktop.closeWindow(active);
@@ -403,8 +409,9 @@ function openIconMenu(e: MouseEvent, app: AppSummary): void {
 }
 
 /**
- * Rechtsklick im Dock: dort geht es nur ums Behalten. Ein Fenster ohne App —
- * der Entwurf, der Datei-Explorer — hat nichts zu behalten und bekommt keines.
+ * Rechtsklick im Dock: dort geht es nur ums Behalten. Ein Platz ohne App — der
+ * Entwurf, die Ansichten der Schale — hat nichts zu behalten und bekommt kein
+ * Menü: Dateien und Einstellungen stehen ohnehin immer im Dock.
  */
 function openDockMenu(e: MouseEvent, entry: DockEntry): void {
   if (!entry.appId) return;
@@ -451,14 +458,6 @@ function onMenuPick(id: string): void {
             @click="searchOpen = true"
           >
             🔍 Suchen
-          </button>
-          <button
-            type="button"
-            class="tool files-btn"
-            :title="`${systemWindow(EXPLORER_ID)!.title} — der Datenordner dieses Verzeichnisses`"
-            @click="openSystem(EXPLORER_ID)"
-          >
-            {{ systemWindow(EXPLORER_ID)!.icon }} {{ systemWindow(EXPLORER_ID)!.title }}
           </button>
           <button
             v-if="workspace.hasIconLayout"
@@ -545,7 +544,8 @@ function onMenuPick(id: string): void {
         @pick="pickFromSwitcher"
       />
 
-      <!-- Das Dock: ＋, die behaltenen Apps und was gerade läuft (core/dock). -->
+      <!-- Das Dock: ＋, die Ansichten der Schale, die behaltenen Apps und was
+           gerade läuft (core/dock). -->
       <div v-if="dockVisible" class="dock">
         <button
           type="button"
@@ -556,21 +556,23 @@ function onMenuPick(id: string): void {
           <span class="dock-glyph">＋</span>
         </button>
         <span v-if="dock.length" class="dock-sep" aria-hidden="true"></span>
-        <button
-          v-for="entry in dock"
-          :key="entry.key"
-          type="button"
-          class="dock-item"
-          :class="{ running: entry.running }"
-          :title="entry.title"
-          @click="openDockEntry(entry)"
-          @contextmenu.prevent="openDockMenu($event, entry)"
-        >
-          <AppIcon class="dock-glyph" :icon="entry.icon" :size="34" />
-          <span class="dock-name">{{ entry.title }}</span>
-          <BusyDot v-if="dockBusy(entry)" class="dock-busy" />
-          <span v-if="entry.running" class="dock-dot" aria-hidden="true"></span>
-        </button>
+        <template v-for="(entry, i) in dock" :key="entry.key">
+          <!-- Ein Strich zwischen den festen Plätzen und den Apps. -->
+          <span v-if="i === systemCount" class="dock-sep" aria-hidden="true"></span>
+          <button
+            type="button"
+            class="dock-item"
+            :class="{ running: entry.running, system: !!entry.systemId }"
+            :title="entry.title"
+            @click="openDockEntry(entry)"
+            @contextmenu.prevent="openDockMenu($event, entry)"
+          >
+            <AppIcon class="dock-glyph" :icon="entry.icon" :size="34" />
+            <span class="dock-name">{{ entry.title }}</span>
+            <BusyDot v-if="dockBusy(entry)" class="dock-busy" />
+            <span v-if="entry.running" class="dock-dot" aria-hidden="true"></span>
+          </button>
+        </template>
       </div>
     </div>
 

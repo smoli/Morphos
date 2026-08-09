@@ -4,7 +4,8 @@ import { createPinia, setActivePinia } from 'pinia';
 import ExplorerPanel from './ExplorerPanel.vue';
 import { setHost } from '@/services/host';
 import { formatWhen } from '@/core/explorer';
-import { useShellStore } from '@/stores/shell';
+import { useDesktopStore } from '@/stores/desktop';
+import { SETTINGS_ID } from '@/core/system';
 import { useWorkspaceStore } from '@/stores/workspace';
 import type { FsEntry, FsRequest, MorphosHost, ShellFsRequest, ShellFsResponse, TrashEntry } from '@/types';
 
@@ -177,7 +178,7 @@ describe('ExplorerPanel', () => {
     expect(wrapper.text()).toContain('Datenordner');
 
     await wrapper.get('.ex-choose').trigger('click');
-    expect(useShellStore().settingsOpen).toBe(true);
+    expect(useDesktopStore().windows[0]).toMatchObject({ kind: 'system', systemId: SETTINGS_ID });
   });
 
   it('meldet den Ordner beim Hauptprozess zur Beobachtung an', async () => {

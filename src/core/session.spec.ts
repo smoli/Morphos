@@ -65,6 +65,24 @@ describe('serializeSession', () => {
   it('liefert für einen leeren Desktop eine leere Sitzung', () => {
     expect(serializeSession([])).toEqual([]);
   });
+
+  it('merkt auch die Fenster der Schale — Dateien und Einstellungen', () => {
+    const session = serializeSession([
+      win({ appId: null, systemId: 'settings', z: 1, x: 5, y: 6 }),
+      win({ appId: 'a-1', z: 2 }),
+    ]);
+    expect(session.map((s) => s.systemId ?? s.appId)).toEqual(['settings', 'a-1']);
+    expect(session[0]).toMatchObject({ appId: null, systemId: 'settings', x: 5, y: 6 });
+  });
+
+  it('behält von zwei Fenstern derselben Ansicht nur das vordere', () => {
+    const session = serializeSession([
+      win({ appId: null, systemId: 'explorer', z: 1, x: 10 }),
+      win({ appId: null, systemId: 'explorer', z: 9, x: 99 }),
+    ]);
+    expect(session).toHaveLength(1);
+    expect(session[0].x).toBe(99);
+  });
 });
 
 describe('restorableSession', () => {
@@ -89,6 +107,16 @@ describe('restorableSession', () => {
   it('öffnet dieselbe App nicht doppelt', () => {
     const doppelt = [...saved, saved[0]];
     expect(restorableSession(doppelt, ['a-1', 'b-2']).map((s) => s.appId)).toEqual(['a-1', 'b-2']);
+  });
+
+  it('bringt eine Ansicht der Schale zurück, auch ohne dass eine App sie kennt', () => {
+    const session = serializeSession([win({ appId: null, systemId: 'explorer', z: 1 }), win({ appId: 'a-1', z: 2 })]);
+    expect(restorableSession(session, ['a-1']).map((s) => s.systemId ?? s.appId)).toEqual(['explorer', 'a-1']);
+  });
+
+  it('überspringt eine Ansicht, die es nicht mehr gibt', () => {
+    const session = serializeSession([win({ appId: null, systemId: 'weg', z: 1 })]);
+    expect(restorableSession(session, ['a-1'])).toEqual([]);
   });
 });
 
@@ -165,6 +193,13 @@ describe('cleanSessions', () => {
       '/apps': [{ appId: 'a-1', x: -30, y: 12.6, w: 300.4, h: 240, minimized: 1, maximized: 'ja' }],
     })['/apps'];
     expect(clean).toEqual({ appId: 'a-1', x: 0, y: 13, w: 300, h: 240, minimized: true, maximized: true });
+  });
+
+  it('reicht ein Fenster der Schale durch (es hat keine App-Id)', () => {
+    const sys = { ...entry, appId: null, systemId: 'explorer' };
+    expect(cleanSessions({ '/apps': [sys] })).toEqual({ '/apps': [sys] });
+    // Ohne beides bleibt nichts übrig, womit sich ein Fenster füllen ließe.
+    expect(cleanSessions({ '/apps': [{ ...entry, appId: null, systemId: 42 }] })).toEqual({});
   });
 
   it('lässt Verzeichnisse ohne brauchbare Fenster weg', () => {

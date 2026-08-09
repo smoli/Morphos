@@ -4,9 +4,10 @@ import { createPinia, setActivePinia } from 'pinia';
 import SystemWindow from './SystemWindow.vue';
 import WindowFrame from './WindowFrame.vue';
 import ExplorerPanel from './ExplorerPanel.vue';
+import SettingsPanel from './settings/SettingsPanel.vue';
 import { useDesktopStore } from '@/stores/desktop';
 import { useWorkspaceStore } from '@/stores/workspace';
-import { EXPLORER_ID, systemWindow } from '@/core/system';
+import { EXPLORER_ID, SETTINGS_ID, systemWindow } from '@/core/system';
 import type { DesktopWindow } from '@/stores/desktop';
 
 function mountSystem(win: DesktopWindow, single = false) {
@@ -34,6 +35,14 @@ describe('SystemWindow', () => {
     expect(wrapper.findComponent(ExplorerPanel).exists()).toBe(true);
     expect(wrapper.get('.w-title').text()).toBe(systemWindow(EXPLORER_ID)!.title);
     expect(wrapper.get('.w-icon').text()).toBe(systemWindow(EXPLORER_ID)!.icon);
+  });
+
+  it('zeigt die Einstellungen im gewöhnlichen Fensterrahmen', () => {
+    const wrapper = mountSystem(desktop.find(desktop.openSystem(SETTINGS_ID)!)!);
+
+    expect(wrapper.findComponent(SettingsPanel).exists()).toBe(true);
+    expect(wrapper.findComponent(ExplorerPanel).exists()).toBe(false);
+    expect(wrapper.get('.w-title').text()).toBe(systemWindow(SETTINGS_ID)!.title);
   });
 
   it('zeigt keine App: kein Canvas, kein Willkommensbildschirm, keine Versionen', () => {

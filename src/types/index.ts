@@ -183,11 +183,15 @@ export interface IconPos {
 }
 
 /**
- * Ein gemerktes App-Fenster einer Sitzung: welche App, wo und wie. Titel und
- * Icon fehlen mit Absicht — sie kommen beim Öffnen aus dem Verzeichnis.
+ * Ein gemerktes Fenster einer Sitzung: welche App (oder welche Ansicht der
+ * Schale), wo und wie. Titel und Icon fehlen mit Absicht — sie kommen beim
+ * Öffnen aus dem Verzeichnis bzw. von der Schale.
  */
 export interface SessionWindow {
-  appId: string;
+  /** Die App — null bei einem Fenster der Schale (siehe core/system). */
+  appId: string | null;
+  /** Die Ansicht der Schale (Dateien, Einstellungen) — fehlt bei einer App. */
+  systemId?: string;
   x: number;
   y: number;
   w: number;
