@@ -1,12 +1,11 @@
 ---
 id: c0065
 title: "Tiling: split-tree engine (dwindle)"
-status: ready
+status: in-progress
 epic: e09
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T19:13:13
-order: 20
+status-changed: 2026-08-09T19:27:34
 ---
 
 ## What
@@ -39,3 +38,4 @@ the c0064 breakdown.
 
 - 2026-08-09 created from the c0064 tiling-window-manager breakdown
 - 2026-08-09 status → ready (app)
+- 2026-08-09 status → in-progress (agent)
