@@ -4,7 +4,8 @@
     "c0064",
     "c0066",
     "c0067",
-    "c0068"
+    "c0068",
+    "c0069"
   ],
   "waiting": [],
   "runs": [
@@ -13,12 +14,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "grep -n \"Entwurf\\|newDraft\\|openNew\\|draft\" /Users/stephan/WebstormProjects/Morphos/src/components/AppWindow.spec.ts | head -20"
+        "arg": "grep -n \"morphos:lib\" /Users/stephan/WebstormProjects/Morphos/src/core/bundle.spec.ts"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T19:39:35",
+  "updated": "2026-08-09T19:40:12",
   "pickupDelay": 10,
   "owned": [
     "c0029",
