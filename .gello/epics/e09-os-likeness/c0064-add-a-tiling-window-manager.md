@@ -1,12 +1,13 @@
 ---
 id: c0064
 title: Add a tiling window manager
-status: discuss
+status: ready
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T18:06:57
+status-changed: 2026-08-09T19:13:23
 epic: e09
 depends: [c0065, c0066, c0067, c0068]
+order: 60
 ---
 
 ## Breakdown
@@ -88,3 +89,4 @@ Open questions for planning:
 ## Log
 
 - 2026-08-09 status → discuss (app)
+- 2026-08-09 status → ready (app)

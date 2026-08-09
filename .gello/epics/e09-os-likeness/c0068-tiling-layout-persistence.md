@@ -1,11 +1,13 @@
 ---
 id: c0068
 title: "Tiling: per-workspace layout persistence"
-status: backlog
+status: ready
 epic: e09
 depends: [c0066]
 created: 2026-08-09
 updated: 2026-08-09
+status-changed: 2026-08-09T19:13:19
+order: 50
 ---
 
 ## What
@@ -30,3 +32,4 @@ session, alongside which apps are open — mirroring the session-restore pattern
 ## Log
 
 - 2026-08-09 created from the c0064 tiling-window-manager breakdown
+- 2026-08-09 status → ready (app)

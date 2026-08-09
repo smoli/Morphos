@@ -1,11 +1,13 @@
 ---
 id: c0067
 title: "Tiling: gap-drag resize + swap-drag"
-status: backlog
+status: ready
 epic: e09
 depends: [c0066]
 created: 2026-08-09
 updated: 2026-08-09
+status-changed: 2026-08-09T19:13:17
+order: 40
 ---
 
 ## What
@@ -31,3 +33,4 @@ swap their positions.
 ## Log
 
 - 2026-08-09 created from the c0064 tiling-window-manager breakdown
+- 2026-08-09 status → ready (app)
