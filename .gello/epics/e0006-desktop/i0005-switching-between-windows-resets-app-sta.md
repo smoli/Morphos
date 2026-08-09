@@ -1,12 +1,14 @@
 ---
 id: i0005
 title: Switching between windows resets app state
-status: review
+status: done
 type: issue
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T14:25:18
+status-changed: 2026-08-09T18:04:43
 epic: e0006
+usage-tokens: 23747
+usage-cost: 3.510765
 ---
 
 When I switch between two app windows, the apps are reloaded and therefore reset
@@ -61,3 +63,4 @@ die im Einzel-Modus das *Abbauen* festhielten, prüfen jetzt die Sichtbarkeit
 - 2026-08-09 Fenster bleiben an ihrem Platz im DOM und werden nur ausgeblendet;
   der Stapel liegt allein im z-index (Tests rot → grün) (agent)
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)

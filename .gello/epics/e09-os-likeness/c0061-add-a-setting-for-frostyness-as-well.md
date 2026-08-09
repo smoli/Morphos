@@ -1,12 +1,14 @@
 ---
 id: c0061
 title: Add a setting for frostyness as well
-status: review
+status: done
 ref: c0060
 epic: e09
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T14:32:57
+status-changed: 2026-08-09T18:04:40
+usage-tokens: 33042
+usage-cost: 3.52462
 ---
 
 # Add a setting for frostyness as well
@@ -65,3 +67,4 @@ mattiert. Wie die Durchsichtigkeit gilt der Wert je Arbeitsverzeichnis.
   grün), `dockBlurs` durch Store, Typen und Hauptprozess gezogen, zweiter Regler
   im Bereich „Darstellung“, Dock nimmt den Schleier über `--dock-blur`
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)

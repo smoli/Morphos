@@ -1,21 +1,9 @@
 {
-  "status": "running",
-  "ready": [
-    "c0061"
-  ],
+  "status": "idle",
+  "ready": [],
   "waiting": [],
-  "runs": [
-    {
-      "cardId": "i0005",
-      "phase": "running",
-      "activity": {
-        "name": "Read",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/src/views/DesktopView.spec.ts"
-      },
-      "model": "claude-opus-5"
-    }
-  ],
-  "updated": "2026-08-09T14:19:25",
+  "runs": [],
+  "updated": "2026-08-09T18:04:43",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -50,6 +38,8 @@
     "c0057",
     "i0004",
     "c0060",
-    "i0005"
+    "i0005",
+    "c0061",
+    "c0062"
   ]
 }

@@ -1,12 +1,14 @@
 ---
 id: c0062
 title: Add a setting for autohide
-status: review
+status: done
 ref: c0052
 epic: e09
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T14:42:13
+status-changed: 2026-08-09T18:04:42
+usage-tokens: 36347
+usage-cost: 5.493618
 ---
 
 # Add a setting for autohide
@@ -73,3 +75,4 @@ Arbeitsverzeichnis, wie Durchsichtigkeit (c0060) und Schleier (c0061) auch.
   gezogen, Schalter im Bereich „Das Dock“, Leiste legt sich unter den Rand und
   kommt am Randstreifen wieder hervor
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)
