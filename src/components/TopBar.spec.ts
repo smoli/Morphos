@@ -75,22 +75,11 @@ describe('TopBar', () => {
     expect(wrapper.text()).toContain('MeineApps');
   });
 
-  it('schaltet den Desktop-Modus um', async () => {
+  // Die Darstellung wählt man in den Einstellungen (c0069) — nicht mehr hier.
+  it('trägt keinen Umschalter für die Darstellung mehr', async () => {
     const wrapper = await mountDesktop();
-    const ws = useWorkspaceStore();
-    expect(ws.uiMode).toBe('windows');
-    const single = wrapper.findAll('.mode-switch button').find((b) => b.text().includes('Einzeln'))!;
-    await single.trigger('click');
-    expect(ws.uiMode).toBe('single');
-  });
-
-  it('schaltet in den Kachel-Modus', async () => {
-    const wrapper = await mountDesktop();
-    const ws = useWorkspaceStore();
-    const tiles = wrapper.findAll('.mode-switch button').find((b) => b.text().includes('Kacheln'))!;
-    await tiles.trigger('click');
-    expect(ws.uiMode).toBe('tiles');
-    expect(tiles.classes()).toContain('active');
+    expect(wrapper.find('.mode-switch').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Kacheln');
   });
 
   it('meldet den Wunsch nach den Einstellungen', async () => {

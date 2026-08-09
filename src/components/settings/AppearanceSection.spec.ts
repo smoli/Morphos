@@ -11,6 +11,7 @@ import {
   dockBlurCss,
 } from '@/core/transparency';
 import { DEFAULT_DOCK_AUTOHIDE, DEFAULT_DOCK_EDGE, DOCK_EDGES } from '@/core/dock';
+import { DEFAULT_UI_MODE, UI_MODE_OPTIONS } from '@/core/uimode';
 import type { MorphosHost } from '@/types';
 
 function makeHost(over: Partial<MorphosHost> = {}): MorphosHost {
@@ -242,5 +243,33 @@ describe('AppearanceSection', () => {
     await edge(wrapper, 'left').trigger('click');
 
     expect(ws.dockEdges).toEqual({});
+  });
+
+  /** Der Knopf für eine Darstellung (c0069). */
+  function mode(wrapper: ReturnType<typeof mount>, id: string) {
+    return wrapper.get(`button.ui-mode[data-mode="${id}"]`);
+  }
+
+  it('bietet alle drei Darstellungen an und hebt die aktive hervor', () => {
+    const wrapper = mount(AppearanceSection);
+    expect(wrapper.findAll('button.ui-mode').map((b) => b.attributes('data-mode'))).toEqual(
+      UI_MODE_OPTIONS.map((o) => o.id),
+    );
+    for (const option of UI_MODE_OPTIONS) {
+      expect(mode(wrapper, option.id).text()).toContain(option.label);
+      expect(mode(wrapper, option.id).text()).toContain(option.hint);
+    }
+    expect(mode(wrapper, DEFAULT_UI_MODE).classes()).toContain('active');
+  });
+
+  it('schaltet die Darstellung im Workspace um', async () => {
+    const wrapper = mount(AppearanceSection);
+    const ws = useWorkspaceStore();
+
+    await mode(wrapper, 'tiles').trigger('click');
+
+    expect(ws.uiMode).toBe('tiles');
+    expect(mode(wrapper, 'tiles').classes()).toContain('active');
+    expect(mode(wrapper, DEFAULT_UI_MODE).classes()).not.toContain('active');
   });
 });

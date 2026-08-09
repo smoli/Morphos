@@ -8,8 +8,9 @@ dort gespeicherte App ein Icon; von hier lässt sich eine bestehende App öffnen
 oder eine neue anlegen. Apps öffnen sich als **frei bewegliche, überlappende
 Fenster** auf dem Desktop — mehrere gleichzeitig, jedes mit eigener Titelleiste
 (Ziehen, Größe ändern, Maximieren, Versionen, Minimieren in den Dock, Schließen).
-Über die Kopfleiste lässt sich zwischen **Fenster-Modus** und **Einzel-Modus**
-(eine App im Vollbild) umschalten. Die Eingabe gehört der App, nicht dem
+In den **Einstellungen** (Bereich „Darstellung“) lässt sich zwischen
+**Fenster-Modus**, **Einzel-Modus** (eine App im Vollbild) und **Kacheln**
+(lückenlos geteilte Fläche) umschalten. Die Eingabe gehört der App, nicht dem
 Desktop: Jedes App-Fenster trägt einen **Chat**, der über 💬 in seiner
 Titelleiste (oder Strg/⌘ + ⇧ + C) unten am Fenster aufgeht und mit Escape
 wieder zu.

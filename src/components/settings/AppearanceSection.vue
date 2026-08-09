@@ -1,16 +1,19 @@
 <script setup lang="ts">
 /**
- * Einstellungs-Bereich „Darstellung“: die schwebende Leiste (das Dock). An
- * welchem Rand sie steht (c0063), wie durchsichtig sie ist (c0060), wie dicht
- * ihr Milchglas-Schleier (c0061) — und ob sie sich aus dem Weg legt, bis der
- * Zeiger den Rand erreicht (c0062). Alles gilt je Arbeitsverzeichnis und wird
- * sofort wirksam; die Vorschau zeigt es über dem echten Hintergrund dieses
+ * Einstellungs-Bereich „Darstellung“: zuerst, wie der Desktop seine Fenster
+ * stellt — überlappend, einzeln oder gekachelt (c0069; die Darstellungen selbst
+ * stehen in core/uimode). Danach die schwebende Leiste (das Dock): an welchem
+ * Rand sie steht (c0063), wie durchsichtig sie ist (c0060), wie dicht ihr
+ * Milchglas-Schleier (c0061) — und ob sie sich aus dem Weg legt, bis der Zeiger
+ * den Rand erreicht (c0062). Alles gilt je Arbeitsverzeichnis und wird sofort
+ * wirksam; die Vorschau zeigt es über dem echten Hintergrund dieses
  * Verzeichnisses.
  */
 import { computed } from 'vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { DOCK_EDGES } from '@/core/dock';
-import type { DockEdge } from '@/types';
+import { UI_MODE_OPTIONS } from '@/core/uimode';
+import type { DockEdge, UiMode } from '@/types';
 import {
   BLUR_STEP,
   DEFAULT_DOCK_BLUR,
@@ -49,10 +52,41 @@ function onAutohide(event: Event): void {
 function onEdge(id: DockEdge): void {
   workspace.setDockEdge(id);
 }
+
+const uiMode = computed(() => workspace.uiMode);
+
+function onUiMode(id: UiMode): void {
+  workspace.setUiMode(id);
+}
 </script>
 
 <template>
   <section class="block">
+    <h3>Der Desktop</h3>
+    <p class="hint">
+      Wie der Desktop seine Fenster stellt. Die Wahl gilt sofort und bleibt für dieses
+      Arbeitsverzeichnis erhalten.
+    </p>
+
+    <div class="modes" role="group" aria-label="Darstellung des Desktops">
+      <button
+        v-for="m in UI_MODE_OPTIONS"
+        :key="m.id"
+        type="button"
+        class="ui-mode"
+        :data-mode="m.id"
+        :class="{ active: uiMode === m.id }"
+        :aria-pressed="uiMode === m.id"
+        @click="onUiMode(m.id)"
+      >
+        <span class="mode-icon" aria-hidden="true">{{ m.icon }}</span>
+        <span class="mode-name">{{ m.label }}</span>
+        <small class="mode-hint">{{ m.hint }}</small>
+      </button>
+    </div>
+  </section>
+
+  <section class="block dock">
     <h3>Das Dock</h3>
     <p class="hint">
       An welchem Rand die Leiste steht, wie stark der Hintergrund durch sie scheint, wie sehr sie
@@ -151,6 +185,54 @@ function onEdge(id: DockEdge): void {
 
 <style scoped src="./settings.css"></style>
 <style scoped>
+/* Der Dock-Block steht unter dem Desktop-Block — mit Luft dazwischen. */
+.dock {
+  margin-top: 26px;
+}
+/*
+ * Die drei Darstellungen als Karten nebeneinander: Zeichen, Name, ein Satz.
+ * Sie tragen mehr Text als ein Segment-Umschalter (wie er in der Kopfleiste
+ * stand) und dürfen darum umbrechen.
+ */
+.modes {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ui-mode {
+  flex: 1 1 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.ui-mode:hover {
+  border-color: var(--accent);
+}
+.ui-mode.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.mode-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+.mode-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.mode-hint {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
 .preview {
   height: 96px;
   border: 1px solid var(--border);

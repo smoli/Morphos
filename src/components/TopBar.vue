@@ -4,7 +4,6 @@ import { useRoute } from 'vue-router';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { getHost } from '@/services/host';
 import AgentsIndicator from './AgentsIndicator.vue';
-import type { UiMode } from '@/types';
 
 const emit = defineEmits<{ 'open-settings': [] }>();
 
@@ -44,10 +43,6 @@ function folderName(p: string | null): string {
   return parts[parts.length - 1] || p;
 }
 
-function setMode(mode: UiMode): void {
-  workspace.setUiMode(mode);
-}
-
 function minimize(): void {
   void getHost().minimizeWindow?.();
 }
@@ -79,17 +74,6 @@ function closeWindow(): void {
 
     <div class="right no-drag">
       <template v-if="onDesktop">
-        <div class="mode-switch" role="group" aria-label="Darstellungsmodus">
-          <button type="button" :class="{ active: workspace.uiMode === 'windows' }" @click="setMode('windows')">
-            ▦ Fenster
-          </button>
-          <button type="button" :class="{ active: workspace.uiMode === 'single' }" @click="setMode('single')">
-            ▢ Einzeln
-          </button>
-          <button type="button" :class="{ active: workspace.uiMode === 'tiles' }" @click="setMode('tiles')">
-            ⊞ Kacheln
-          </button>
-        </div>
         <AgentsIndicator />
         <button type="button" class="icon-btn settings" title="Einstellungen" @click="emit('open-settings')">⚙</button>
         <RouterLink to="/" class="link">Ordner wechseln</RouterLink>
@@ -169,28 +153,6 @@ function closeWindow(): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.mode-switch {
-  display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  overflow: hidden;
-}
-.mode-switch button {
-  background: var(--panel-2);
-  border: 0;
-  border-left: 1px solid var(--border);
-  color: var(--muted);
-  padding: 6px 10px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.mode-switch button:first-child {
-  border-left: 0;
-}
-.mode-switch button.active {
-  background: var(--accent);
-  color: #fff;
 }
 .icon-btn {
   background: var(--panel-2);
