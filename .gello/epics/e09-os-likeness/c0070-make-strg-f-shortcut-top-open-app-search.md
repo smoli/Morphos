@@ -1,10 +1,10 @@
 ---
 id: c0070
 title: make ctrl+space shortcut top open app search
-status: review
+status: done
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T21:34:21
+status-changed: 2026-08-09T21:35:30
 epic: e09
 usage-tokens: 10240
 usage-cost: 1.207275
@@ -31,3 +31,4 @@ Betriebssystems.
 - 2026-08-09 status → ready (app)
 - 2026-08-09 status → in-progress (agent)
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)
