@@ -59,6 +59,21 @@ function surfaceFor(w: DesktopWindow) {
   return w.kind === 'system' ? SystemWindow : AppWindow;
 }
 
+/**
+ * Ist dieses Fenster gerade zu sehen? Im Einzel-Modus nur das aktive, sonst
+ * jedes, das nicht minimiert wartet.
+ *
+ * Ausgeblendet heißt hier ausdrücklich NICHT abgebaut: Ein Fenster, das den
+ * Renderer verlässt (oder auch nur im DOM umgehängt wird), nimmt sein iframe
+ * mit — und ein wieder eingehängtes iframe lädt sein Dokument von vorn. Die
+ * laufende App verlöre damit bei jedem Fensterwechsel ihren Zustand (i0005).
+ * Darum steht jedes Fenster fest an seinem Platz; den Stapel macht der
+ * z-index des Rahmens (siehe components/WindowFrame).
+ */
+function visible(w: DesktopWindow): boolean {
+  return singleMode.value ? w.instanceId === desktop.activeId : !w.minimized;
+}
+
 // Das Dock: das feste ＋ und dahinter, was core/dock aufstellt — die Ansichten
 // der Schale (Dateien, Einstellungen), die behaltenen Apps und die laufenden
 // Fenster. Im Einzel-Modus verdeckt es die Vollbild-App nicht: Dort erscheint
@@ -504,26 +519,18 @@ function onMenuPick(id: string): void {
         </div>
       </div>
 
-      <!-- Fenster-Ebene. -->
+      <!-- Fenster-Ebene: jedes offene Fenster steht hier, ein Leben lang an
+           derselben Stelle im DOM. Was gerade nicht zu sehen ist — minimiert,
+           oder im Einzel-Modus nicht das aktive —, wird nur ausgeblendet. -->
       <div class="windows-layer">
-        <template v-if="singleMode">
-          <component
-            :is="surfaceFor(activeWindow)"
-            v-if="activeWindow"
-            :key="activeWindow.instanceId"
-            :win="activeWindow"
-            :single="true"
-          />
-        </template>
-        <template v-else>
-          <component
-            :is="surfaceFor(w)"
-            v-for="w in desktop.stacked"
-            v-show="!w.minimized"
-            :key="w.instanceId"
-            :win="w"
-          />
-        </template>
+        <component
+          :is="surfaceFor(w)"
+          v-for="w in desktop.windows"
+          v-show="visible(w)"
+          :key="w.instanceId"
+          :win="w"
+          :single="singleMode"
+        />
       </div>
 
       <!-- Startmenü: liegt über allem auf der Bühne, auch über den Fenstern. -->

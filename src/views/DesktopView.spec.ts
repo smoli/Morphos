@@ -134,6 +134,17 @@ describe('DesktopView', () => {
   }
 
   /**
+   * Die Fenster, die wirklich zu sehen sind. Offen heißt nicht sichtbar: Jedes
+   * offene Fenster bleibt aufgebaut (sonst lüde seine App neu, i0005) — was
+   * gerade nicht drankommt, ist nur ausgeblendet.
+   */
+  function visibleFrames(wrapper: VueWrapper) {
+    return wrapper
+      .findAllComponents(WindowFrame)
+      .filter((f) => (f.element as HTMLElement).style.display !== 'none');
+  }
+
+  /**
    * Eine Regel aus dem <style>-Block dieser Ansicht. jsdom rechnet kein CSS
    * einer SFC aus — für die paar Aussagen, die am Aussehen hängen (rollt das
    * Dock?), wird die Regel darum im Quelltext nachgeschlagen.
@@ -936,6 +947,85 @@ describe('DesktopView', () => {
     });
   });
 
+  describe('Fensterwechsel lädt die Apps nicht neu (i0005)', () => {
+    /** Die Fenster-Knoten der Bühne, in der Reihenfolge des DOM. */
+    function windowNodes(wrapper: VueWrapper): Element[] {
+      return Array.from(wrapper.get('.windows-layer').element.children);
+    }
+
+    /** Der Rahmen eines Fensters, gesucht über die App, die es zeigt. */
+    function frameOf(wrapper: VueWrapper, appId: string): HTMLElement {
+      const frame = wrapper.findAllComponents(WindowFrame).find((f) => f.props('win').appId === appId);
+      if (!frame) throw new Error(`Kein Fenster für ${appId}`);
+      return frame.element as HTMLElement;
+    }
+
+    /** Sind es Knoten für Knoten dieselben Elemente wie vorher? */
+    function sameNodes(nodes: Element[], before: Element[]): boolean[] {
+      return nodes.map((node, i) => node === before[i]);
+    }
+
+    it('rührt die Reihenfolge der Fenster im DOM nicht an — der Stapel liegt im z-index', async () => {
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      const rechner = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });
+      await flushPromises();
+      const before = windowNodes(wrapper);
+      expect(before).toHaveLength(2);
+
+      desktop.focusWindow(rechner);
+      await flushPromises();
+
+      // Dieselben Knoten an derselben Stelle: Ein umgehängtes iframe lädt sein
+      // Dokument neu — die laufende App fienge von vorn an.
+      expect(sameNodes(windowNodes(wrapper), before)).toEqual([true, true]);
+      // Vorn liegt der Rechner trotzdem — das sagt allein der z-index.
+      const z = (el: HTMLElement) => Number(el.style.zIndex);
+      expect(z(frameOf(wrapper, 'rechner-1'))).toBeGreaterThan(z(frameOf(wrapper, 'editor-2')));
+    });
+
+    it('baut im Einzel-Modus das verlassene Fenster nicht ab, sondern blendet es aus', async () => {
+      useWorkspaceStore().uiMode = 'single';
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      const rechner = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      const editor = desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });
+      await flushPromises();
+      const rechnerFrame = frameOf(wrapper, 'rechner-1');
+
+      desktop.focusWindow(rechner);
+      await flushPromises();
+      desktop.focusWindow(editor);
+      await flushPromises();
+
+      // Derselbe Knoten wie zu Beginn — der Rechner wurde nie abgebaut.
+      expect(frameOf(wrapper, 'rechner-1')).toBe(rechnerFrame);
+      // Zu sehen ist nur das aktive Fenster.
+      expect(rechnerFrame.style.display).toBe('none');
+      expect(frameOf(wrapper, 'editor-2').style.display).toBe('');
+    });
+
+    it('blendet im Einzel-Modus auf dem Desktop alle Fenster aus (sie laufen weiter)', async () => {
+      useWorkspaceStore().uiMode = 'single';
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await flushPromises();
+
+      await wrapper.get('.w-desktop').trigger('click');
+      await flushPromises();
+
+      expect(frameOf(wrapper, 'rechner-1').style.display).toBe('none');
+      // … und über das Dock kommt genau dieses Fenster zurück.
+      const before = frameOf(wrapper, 'rechner-1');
+      await dockItem(wrapper, 'Rechner').trigger('click');
+      await flushPromises();
+      expect(frameOf(wrapper, 'rechner-1')).toBe(before);
+      expect(before.style.display).toBe('');
+    });
+  });
+
   it('zeigt im Einzel-Modus nur das aktive Fenster (Vollbild)', async () => {
     const ws = useWorkspaceStore();
     ws.uiMode = 'single';
@@ -946,10 +1036,12 @@ describe('DesktopView', () => {
     desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });
     await flushPromises();
 
-    const frames = wrapper.findAllComponents(WindowFrame);
-    expect(frames).toHaveLength(1);
-    expect(frames[0].props('single')).toBe(true);
-    expect(frames[0].props('win').appId).toBe('editor-2'); // das zuletzt fokussierte
+    // Beide Fenster bleiben aufgebaut — zu sehen ist nur das aktive.
+    expect(wrapper.findAllComponents(WindowFrame)).toHaveLength(2);
+    const shown = visibleFrames(wrapper);
+    expect(shown).toHaveLength(1);
+    expect(shown[0].props('single')).toBe(true);
+    expect(shown[0].props('win').appId).toBe('editor-2'); // das zuletzt fokussierte
   });
 
   it('kehrt im Einzel-Modus über den Desktop-Knopf zum Launcher zurück', async () => {
@@ -958,13 +1050,13 @@ describe('DesktopView', () => {
     const desktop = useDesktopStore();
     desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
     await flushPromises();
-    expect(wrapper.findAllComponents(WindowFrame)).toHaveLength(1);
+    expect(visibleFrames(wrapper)).toHaveLength(1);
 
     await wrapper.get('.w-desktop').trigger('click');
     await flushPromises();
 
     // Keine App mehr im Vordergrund, der Launcher ist wieder frei.
-    expect(wrapper.findAllComponents(WindowFrame)).toHaveLength(0);
+    expect(visibleFrames(wrapper)).toHaveLength(0);
     expect(wrapper.findAll('.tile')).toHaveLength(2);
   });
 
@@ -983,7 +1075,7 @@ describe('DesktopView', () => {
 
     await dockItem(wrapper, 'Rechner').trigger('click');
     await flushPromises();
-    expect(wrapper.findAllComponents(WindowFrame)).toHaveLength(1);
+    expect(visibleFrames(wrapper)).toHaveLength(1);
   });
 
   describe('Ein laufender Agent überlebt den Abstecher zum Desktop', () => {
@@ -1479,8 +1571,9 @@ describe('DesktopView', () => {
       await wrapper.get('.w-desktop').trigger('click');
       await flushPromises();
 
-      // Zurück auf dem Desktop — das Fenster wartet an seinem Platz im Dock.
-      expect(wrapper.findComponent(SystemWindow).exists()).toBe(false);
+      // Zurück auf dem Desktop — das Fenster wartet (ausgeblendet) an seinem
+      // Platz im Dock.
+      expect(visibleFrames(wrapper)).toHaveLength(0);
       expect(dockItem(wrapper, 'Dateien').find('.dock-dot').exists()).toBe(true);
     });
 
@@ -1514,13 +1607,17 @@ describe('DesktopView', () => {
 
     await wrapper.get('.w-chat').trigger('click');
 
+    const frame = wrapper.get('.window-frame').element as HTMLElement;
     expect(useAppWindow(instanceId).composerOpen).toBe(true);
-    expect(wrapper.get('.window-frame').classes()).toContain('full');
+    expect(frame.classList).toContain('full');
     expect(wrapper.get('.w-composer').find('textarea').exists()).toBe(true);
 
-    // Auf dem Desktop selbst gibt es keine Eingabe mehr.
+    // Auf dem Desktop selbst ist keine Eingabe zu sehen: Der Chat gehört dem
+    // Fenster und verschwindet mit ihm (aufgebaut bleibt es, i0005).
     await wrapper.get('.w-desktop').trigger('click');
     await flushPromises();
-    expect(wrapper.find('textarea').exists()).toBe(false);
+    expect(visibleFrames(wrapper)).toHaveLength(0);
+    expect(frame.style.display).toBe('none');
+    expect(wrapper.get('.w-composer textarea').element.closest('.window-frame')).toBe(frame);
   });
 });

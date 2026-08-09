@@ -92,8 +92,6 @@ export const useDesktopStore = defineStore('desktop', {
       const w = this.windows.find((win) => win.instanceId === id);
       return w && w.kind === 'app' ? id : null;
     },
-    /** Fenster von hinten nach vorn (aufsteigendes z) — stabile Renderreihenfolge. */
-    stacked: (s): DesktopWindow[] => [...s.windows].sort((a, b) => a.z - b.z),
   },
 
   actions: {

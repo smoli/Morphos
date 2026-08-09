@@ -121,12 +121,20 @@ describe('useDesktopStore', () => {
     expect(w.icon).toBe('🧮');
   });
 
-  it('listet Fenster nach z sortiert (hinten → vorn) für stabiles Rendern', () => {
+  // Den Stapel macht allein das z jedes Fensters: Die Ansicht zeichnet die
+  // Fenster in der Reihenfolge, in der sie geöffnet wurden, und legt sie über
+  // den z-index übereinander. Umsortieren hieße, ihre iframes im DOM
+  // umzuhängen — und damit die laufenden Apps neu zu laden (i0005).
+  it('hebt ein Fenster im Stapel (z), ohne die Liste umzusortieren', () => {
     const d = useDesktopStore();
     const a = d.openApp('a', { title: 'A', icon: '🅰' });
     const b = d.openApp('b', { title: 'B', icon: '🅱' });
+    expect(d.find(b)!.z).toBeGreaterThan(d.find(a)!.z);
+
     d.focusWindow(a);
-    expect(d.stacked.map((w) => w.instanceId)).toEqual([b, a]);
+
+    expect(d.find(a)!.z).toBeGreaterThan(d.find(b)!.z);
+    expect(d.windows.map((w) => w.instanceId)).toEqual([a, b]);
   });
 
   it('maximiert ein Fenster und stellt es wieder her', () => {
@@ -187,7 +195,7 @@ describe('useDesktopStore', () => {
 
       d.focusWindow(sys);
       expect(d.focusedId).toBe(sys);
-      expect(d.stacked.map((w) => w.instanceId)).toEqual([app, sys]);
+      expect(d.find(sys)!.z).toBeGreaterThan(d.find(app)!.z);
 
       d.minimizeWindow(sys);
       expect(d.find(sys)!.minimized).toBe(true);
@@ -379,8 +387,8 @@ describe('useDesktopStore', () => {
 
       d.restoreSession();
 
-      expect(d.stacked.map((w) => w.appId)).toEqual(['editor-2', 'rechner-1']);
-      const [editor, rechner] = d.stacked;
+      expect(d.windows.map((w) => w.appId)).toEqual(['editor-2', 'rechner-1']);
+      const [editor, rechner] = d.windows;
       expect(editor).toMatchObject({ title: 'Editor', icon: '📝', x: 5, y: 6, w: 400, h: 300, minimized: true });
       expect(rechner).toMatchObject({ title: 'Rechner', x: 10, y: 20, w: 300, h: 240, maximized: true });
       // Der Fokus landet auf dem zuletzt benutzten Fenster.
@@ -396,7 +404,7 @@ describe('useDesktopStore', () => {
 
       d.restoreSession();
 
-      const [explorer, rechner] = d.stacked;
+      const [explorer, rechner] = d.windows;
       expect(explorer).toMatchObject({
         kind: 'system',
         systemId: EXPLORER_ID,
