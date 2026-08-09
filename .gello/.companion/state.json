@@ -11,13 +11,13 @@
       "cardId": "c0049",
       "phase": "running",
       "activity": {
-        "name": "Edit",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/src/core/appfs.ts"
+        "name": "Bash",
+        "arg": "npx vitest run src/core/preview.spec.ts src/core/filelink.spec.ts src/core/appfs.spec.ts src/core/markdown.spec.ts 2>&1 | tail -30"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T07:17:24",
+  "updated": "2026-08-09T07:18:04",
   "pickupDelay": 10,
   "owned": [
     "c0029",
