@@ -3,22 +3,21 @@
   "ready": [
     "c0064",
     "c0067",
-    "c0068",
-    "c0069"
+    "c0068"
   ],
   "waiting": [],
   "runs": [
     {
-      "cardId": "c0066",
+      "cardId": "c0069",
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "git show --stat 7f5391f | head -30; echo \"=== message\"; git log -3 --format='%B%n---'"
+        "arg": "ls src/components src/views src/stores src/core 2>/dev/null && cat .gello/epics/e09-os-likeness/c0066-tiling-mode-and-rendering.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T19:55:22",
+  "updated": "2026-08-09T19:56:28",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -59,6 +58,7 @@
     "c0063",
     "c0065",
     "c0059",
-    "c0066"
+    "c0066",
+    "c0069"
   ]
 }
