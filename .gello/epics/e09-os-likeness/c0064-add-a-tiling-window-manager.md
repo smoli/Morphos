@@ -1,10 +1,10 @@
 ---
 id: c0064
 title: Add a tiling window manager
-status: in-progress
+status: review
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T21:26:18
+status-changed: 2026-08-09T21:30:51
 epic: e09
 depends: [c0065, c0066, c0067, c0068]
 ---
@@ -85,8 +85,43 @@ Open questions for planning:
   the desktop store gains a per-workspace tiling tree. Reuse the iframe drag-shield
   for gap-drag and swap-drag. Layout persistence mirrors the c0044 pattern.
 
+### Wie es gebaut wurde (c0065–c0068)
+
+- **Rechnung** — `src/core/tiling.ts`: der Teilungsbaum als schlichte Objekte,
+  ohne Vue und DOM (`insertLeaf`, `removeLeaf`, `swapLeaves`, `setRatio`,
+  `computeRects`, `hitGap`/`gapBands`, `hitLeaf`, `ratioAtPoint`, `mapLeaves`).
+- **Aufbewahrung** — `src/core/tilelayout.ts` schreibt den Baum unter App- bzw.
+  Ansichts-Schlüssel und holt ihn beim Start zurück.
+- **Oberfläche** — `stores/desktop.ts` (Baum je Verzeichnis, `tileRects`,
+  Fugen-Zug, Tausch), `components/TileGaps.vue` (die Griffe),
+  `components/WindowFrame.vue` (Platz aus dem Baum, Tragen zum Tauschen),
+  `views/DesktopView.vue` (Fläche messen, Dock herausrechnen).
+- **Wahl der Darstellung** — `core/uimode.ts` + Einstellungen → „Darstellung“
+  (c0069), gemerkt wie jede andere Einstellung.
+
+### Die offenen Fragen, so beantwortet
+
+- **Fugen:** fest, `DEFAULT_GAP = 12` — dieselbe Luft zum Rand wie zwischen den
+  Kacheln; der Griff greift mit Toleranz auch knapp daneben. Nicht einstellbar.
+- **Schweben:** in dieser Fassung schwebt nichts — im Kachel-Modus ist jedes
+  Fenster im Verbund. Maximieren füllt vorübergehend die Fläche.
+- **Dock:** es hält Platz frei (`reserve-*`), die Kachelfläche endet davor;
+  der Composer bleibt Sache des einzelnen Fensters.
+- **Fenster der Schale** (Dateien, Einstellungen): kacheln wie App-Fenster.
+
+### Diese Karte selbst
+
+Alle vier Teilkarten sind `done`; hier stand die Abnahme im Ganzen. Dabei fiel
+eine Lücke in den Prüfungen auf: geprüft war „überschneidungsfrei und innerhalb
+der Fläche“, nicht aber **lückenlos** — ein Baum mit lauter platten Kacheln wäre
+durchgegangen. `core/tiling.spec.ts` prüft nun mit `expectFillsArea`, dass
+Kacheln und Fugen zusammen genau die Fläche ergeben: beim Aufnehmen und
+Abräumen vieler Fenster, am Anschlag der Mindestgröße, nach einem Tausch und auf
+einer Fläche, die kaum die Fuge fasst. Die Rechnung hielt bereits stand.
+
 ## Log
 
 - 2026-08-09 status → discuss (app)
 - 2026-08-09 status → ready (app)
 - 2026-08-09 status → in-progress (agent)
+- 2026-08-09 status → review (agent)
