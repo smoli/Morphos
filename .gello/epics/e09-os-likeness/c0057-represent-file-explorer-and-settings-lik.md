@@ -1,10 +1,10 @@
 ---
 id: c0057
 title: represent file explorer and settings like regular apps
-status: review
+status: done
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T10:21:05
+status-changed: 2026-08-09T14:08:40
 epic: e09
 usage-tokens: 8462
 usage-cost: 4.572894
@@ -88,3 +88,4 @@ minimize, maximize, switcher, session restore).
   Zweig beim Committen); auf `desktop` übernommen als 101c27b — ohne den
   CSP-Spike. Tests, Typprüfung und Build dort erneut grün.
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)

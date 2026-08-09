@@ -1,13 +1,13 @@
 ---
 id: i0004
 title: Dock without apps has scrollbar
-status: review
+status: done
 type: issue
 ref: c0052
 epic: e09
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T10:24:22
+status-changed: 2026-08-09T14:08:38
 usage-tokens: 10296
 usage-cost: 1.110209
 ---
@@ -36,3 +36,4 @@ it should not
 - 2026-08-09 `.dock` rollt nicht mehr (Test rot → grün, `overflow: visible` +
   `flex-wrap: wrap`)
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)
