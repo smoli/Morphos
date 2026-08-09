@@ -1,21 +1,19 @@
 {
   "status": "running",
-  "ready": [
-    "c0071"
-  ],
+  "ready": [],
   "waiting": [],
   "runs": [
     {
-      "cardId": "c0070",
+      "cardId": "c0071",
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "git add -A src .gello/epics/e09-os-likeness/c0070-make-strg-f-shortcut-top-open-app-search.md && git status --short && git commit -q -m \"$(cat <<'EOF'\nc0070: Strg/⌘ + Leertaste öffnet die App-Suche\n\nWie die Suche eines Betriebssystems führt die Leertaste ins Startmenü.\nEin Kürzel darf dafür eine Zweittaste tragen (`also`) — unter macOS\ngehört ⌘ + Leertaste Spotlight, dort bleibt Strg/⌘ + K der Weg hinein.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nEOF\n)\" && git log --oneline -1"
+        "arg": "find src -type f | sort && echo \"---TESTS---\" && find src -name \"*.test.*\" -o -name \"*.spec.*\" | sort"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T21:34:25",
+  "updated": "2026-08-09T21:34:48",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -61,6 +59,7 @@
     "c0067",
     "c0068",
     "c0064",
-    "c0070"
+    "c0070",
+    "c0071"
   ]
 }
