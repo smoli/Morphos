@@ -87,6 +87,27 @@ export function resolveWithin(root: string, relPath: string): string | null {
   }
 }
 
+/** Geburtsstunde einer Datei — nicht jedes Dateisystem kennt sie; dann 0. */
+function birth(s: fs.Stats): number {
+  return Number.isFinite(s.birthtimeMs) && s.birthtimeMs > 0 ? s.birthtimeMs : 0;
+}
+
+/**
+ * Größe und Zeitpunkte eines Eintrags für die Liste (c0051) — mit `lstat`, also
+ * OHNE dem Symlink zu folgen: Ein Link beschreibt sich selbst und verrät nichts
+ * über ein Ziel, das außerhalb des Datenordners liegen mag. Was sich nicht
+ * lesen lässt (Eintrag zwischenzeitlich weg, keine Rechte), bleibt ohne Angaben
+ * — der Name allein ist immer noch etwas wert.
+ */
+function measure(abs: string): { size?: number; modified?: number; created?: number } {
+  try {
+    const s = fs.lstatSync(abs);
+    return { size: s.size, modified: s.mtimeMs, created: birth(s) };
+  } catch {
+    return {};
+  }
+}
+
 function ok(result?: FsResult): FsResponse {
   return { ok: true, result };
 }
@@ -137,6 +158,7 @@ export function runFs(root: string, req: FsRequest): FsResponse {
               name: d.name,
               path: path.relative(root, abs).split(path.sep).join('/'),
               isDir: d.isDirectory(),
+              ...measure(abs),
             };
           })
           .filter((e) => !isTrashPath(e.path));
@@ -148,7 +170,7 @@ export function runFs(root: string, req: FsRequest): FsResponse {
 
       case 'stat': {
         if (!fs.existsSync(target)) {
-          const info: FsStatInfo = { exists: false, isDir: false, size: 0, modified: 0 };
+          const info: FsStatInfo = { exists: false, isDir: false, size: 0, modified: 0, created: 0 };
           return ok(info);
         }
         const s = fs.statSync(target);
@@ -157,6 +179,7 @@ export function runFs(root: string, req: FsRequest): FsResponse {
           isDir: s.isDirectory(),
           size: s.size,
           modified: s.mtimeMs,
+          created: birth(s),
         };
         return ok(info);
       }

@@ -16,6 +16,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { getHost } from '@/services/host';
 import { formatBytes } from '@/core/bytes';
+import { formatWhen } from '@/core/explorer';
 import { fileUrl } from '@/core/filelink';
 import { renderMarkdown } from '@/core/markdown';
 import {
@@ -52,6 +53,19 @@ let token = 0;
 const streamUrl = computed(() => fileUrl(props.root, props.entry.path));
 const sizeLabel = computed(() => (info.value ? formatBytes(info.value.size) : ''));
 const typeLabel = computed(() => kindLabel(kind.value));
+
+/** Die beiden Zeitpunkte der Datei — was unbekannt ist, wird gar nicht erst gesagt. */
+const dates = computed(() => {
+  const list: { label: string; text: string }[] = [];
+  if (!info.value) return list;
+  for (const [label, ms] of [
+    ['geändert', info.value.modified],
+    ['erstellt', info.value.created],
+  ] as const) {
+    if (ms > 0) list.push({ label, text: formatWhen(ms) });
+  }
+  return list;
+});
 
 /** Eingerücktes, gefärbtes JSON — null, wenn der Inhalt keines ist. */
 const json = computed(() => {
@@ -154,6 +168,9 @@ onBeforeUnmount(() => {
     <header class="pv-head">
       <span class="pv-name" :title="entry.name">{{ entry.name }}</span>
       <span class="pv-meta">{{ typeLabel }}<template v-if="sizeLabel"> · {{ sizeLabel }}</template></span>
+      <span v-if="dates.length" class="pv-dates">
+        <template v-for="(d, i) in dates" :key="d.label">{{ i ? ' · ' : '' }}{{ d.label }} {{ d.text }}</template>
+      </span>
     </header>
 
     <!-- Mittig steht, was als Ganzes gesehen wird; Gelesenes beginnt oben. -->
@@ -223,6 +240,13 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   font-size: 11px;
   color: var(--muted);
+}
+.pv-dates {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .pv-body {
   flex: 1;

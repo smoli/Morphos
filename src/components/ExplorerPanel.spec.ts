@@ -3,6 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import ExplorerPanel from './ExplorerPanel.vue';
 import { setHost } from '@/services/host';
+import { formatWhen } from '@/core/explorer';
 import { useShellStore } from '@/stores/shell';
 import { useWorkspaceStore } from '@/stores/workspace';
 import type { FsEntry, FsRequest, MorphosHost, ShellFsRequest, ShellFsResponse, TrashEntry } from '@/types';
@@ -10,10 +11,17 @@ import type { FsEntry, FsRequest, MorphosHost, ShellFsRequest, ShellFsResponse, 
 // Ein kleiner Datenordner: Pfad → Einträge. `.trash` gehört nicht in die Liste.
 let tree: Record<string, FsEntry[]>;
 
+/** Zwei feste Zeitpunkte für Größe und Datum (c0051). */
+const AUGUST = new Date(2026, 7, 9, 10, 30).getTime();
+const JULI = new Date(2026, 6, 1, 8, 0).getTime();
+
 const fs = vi.fn(async (_root: string, req: FsRequest) => {
   // Was die Vorschau der ausgewählten Datei braucht (siehe FilePreview).
   if (req.op === 'stat') {
-    return { ok: true as const, result: { exists: true, isDir: false, size: 7, modified: 0 } };
+    return {
+      ok: true as const,
+      result: { exists: true, isDir: false, size: 2048, modified: AUGUST, created: JULI },
+    };
   }
   if (req.op === 'read') return { ok: true as const, result: 'inhalt' };
   if (req.op !== 'list') return { ok: false as const, error: 'unerwartet' };
@@ -44,9 +52,10 @@ const watchFolder = vi.fn(async (_root: string, _path: string, cb: () => void) =
 beforeEach(() => {
   tree = {
     '': [
-      { name: 'liste.txt', path: 'liste.txt', isDir: false },
-      { name: 'notizen', path: 'notizen', isDir: true },
+      { name: 'liste.txt', path: 'liste.txt', isDir: false, size: 2048, modified: AUGUST, created: JULI },
+      { name: 'notizen', path: 'notizen', isDir: true, size: 4096, modified: AUGUST, created: AUGUST },
       { name: '.trash', path: '.trash', isDir: true },
+      // Ohne Angaben — so, wie es ein Dateisystem hin und wieder liefert.
       { name: 'bild.png', path: 'bild.png', isDir: false },
     ],
     notizen: [{ name: 'heute.txt', path: 'notizen/heute.txt', isDir: false }],
@@ -80,6 +89,11 @@ function names(wrapper: Awaited<ReturnType<typeof open>>): string[] {
   return wrapper.findAll('.entry .entry-name').map((e) => e.text().trim());
 }
 
+/** Der Kopf einer Spalte — dort wird sortiert. */
+function column(wrapper: Awaited<ReturnType<typeof open>>, key: string) {
+  return wrapper.get(`.ex-col[data-key="${key}"]`);
+}
+
 describe('ExplorerPanel', () => {
   it('listet den Datenordner: Ordner vor Dateien, Verborgenes bleibt draußen', async () => {
     const wrapper = await open();
@@ -107,8 +121,52 @@ describe('ExplorerPanel', () => {
 
   it('sortiert auf Wunsch andersherum', async () => {
     const wrapper = await open();
-    await wrapper.get('.ex-sort').trigger('click');
+    await column(wrapper, 'name').trigger('click');
     expect(names(wrapper)).toEqual(['notizen', 'liste.txt', 'bild.png']);
+  });
+
+  describe('Größe und Zeitpunkte (c0051)', () => {
+    it('zeigt zu jedem Eintrag Größe, Änderung und Erstellung', async () => {
+      const wrapper = await open();
+      const row = wrapper.findAll('.entry')[2]; // liste.txt
+      expect(row.get('.entry-name').text()).toBe('liste.txt');
+      expect(row.get('.entry-size').text()).toBe('2,0 KB');
+      expect(row.get('.entry-modified').text()).toBe(formatWhen(AUGUST));
+      expect(row.get('.entry-created').text()).toBe(formatWhen(JULI));
+    });
+
+    it('lässt Ordner ohne Größe und Unbekanntes ohne Datum', async () => {
+      const wrapper = await open();
+      const ordner = wrapper.findAll('.entry')[0]; // notizen
+      expect(ordner.get('.entry-size').text()).toBe('—');
+      // bild.png bringt gar keine Angaben mit — dann steht dort nichts Erfundenes.
+      const bild = wrapper.findAll('.entry')[1];
+      expect(bild.get('.entry-size').text()).toBe('—');
+      expect(bild.get('.entry-created').text()).toBe('—');
+    });
+
+    it('sortiert nach einer angeklickten Spalte — Größtes und Jüngstes zuerst', async () => {
+      const wrapper = await open();
+
+      await column(wrapper, 'size').trigger('click');
+      expect(names(wrapper)).toEqual(['notizen', 'liste.txt', 'bild.png']);
+      // Noch einmal dieselbe Spalte dreht die Richtung um.
+      await column(wrapper, 'size').trigger('click');
+      expect(names(wrapper)).toEqual(['notizen', 'bild.png', 'liste.txt']);
+
+      await column(wrapper, 'modified').trigger('click');
+      expect(names(wrapper)).toEqual(['notizen', 'liste.txt', 'bild.png']);
+    });
+
+    it('nennt der Vorschau ebenfalls Größe und Zeitpunkte', async () => {
+      const wrapper = await open();
+      await wrapper.findAll('.entry')[2].trigger('click');
+      await flushPromises();
+
+      const head = wrapper.get('.ex-preview .pv-dates').text();
+      expect(head).toContain(`geändert ${formatWhen(AUGUST)}`);
+      expect(head).toContain(`erstellt ${formatWhen(JULI)}`);
+    });
   });
 
   it('bittet um einen Datenordner, wenn keiner festgelegt ist', async () => {

@@ -212,6 +212,12 @@ export interface FsEntry {
   /** Pfad relativ zum Zugriffsordner, mit "/" als Trenner. */
   path: string;
   isDir: boolean;
+  /** Größe in Bytes; fehlt, wenn sie sich nicht ermitteln ließ. */
+  size?: number;
+  /** Letzte Änderung, ms seit Epoch (0/fehlend = unbekannt). */
+  modified?: number;
+  /** Erstellung, ms seit Epoch (0/fehlend = unbekannt — nicht jedes Dateisystem kennt sie). */
+  created?: number;
 }
 
 /** Metadaten zu einem Pfad. */
@@ -220,6 +226,8 @@ export interface FsStatInfo {
   isDir: boolean;
   size: number;
   modified: number;
+  /** Erstellung, ms seit Epoch (0 = unbekannt). */
+  created: number;
 }
 
 /** Anfrage einer App an das Dateisystem (Pfad relativ zum Zugriffsordner). */

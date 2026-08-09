@@ -13,6 +13,10 @@
  * neu gelesen. Mit dem Ordnerwechsel wandert der Beobachter mit, mit dem
  * Fenster endet er.
  *
+ * Jeder Eintrag zeigt neben dem Namen seine Größe und seine beiden Zeitpunkte
+ * (geändert, erstellt); jede dieser Spalten sortiert die Liste, ein zweiter
+ * Klick dreht die Richtung. Was das Dateisystem nicht weiß, bleibt ein Strich.
+ *
  * Die ausgewählte Datei zeigt daneben ihre Vorschau (FilePreview) — passives
  * escape-first in der Schale, aktives HTML/SVG in einer Sandbox.
  *
@@ -25,7 +29,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { getHost } from '@/services/host';
 import { breadcrumbs, parentDir } from '@/core/dialog';
-import { explorerEntries, type SortOrder } from '@/core/explorer';
+import { explorerEntries, formatWhen, sizeLabel, type SortKey, type SortOrder } from '@/core/explorer';
 import { useShellStore } from '@/stores/shell';
 import { useWorkspaceStore } from '@/stores/workspace';
 import FilePreview from './FilePreview.vue';
@@ -44,8 +48,17 @@ const loading = ref(false);
 const error = ref('');
 const selected = ref('');
 const order = ref<SortOrder>('asc');
+const sortKey = ref<SortKey>('name');
 
-const items = computed(() => explorerEntries(entries.value, order.value));
+/** Die Spalten der Liste — Beschriftung, Sortierschlüssel und erste Richtung. */
+const COLUMNS: { key: SortKey; label: string; first: SortOrder }[] = [
+  { key: 'name', label: 'Name', first: 'asc' },
+  { key: 'size', label: 'Größe', first: 'desc' },
+  { key: 'modified', label: 'Geändert', first: 'desc' },
+  { key: 'created', label: 'Erstellt', first: 'desc' },
+];
+
+const items = computed(() => explorerEntries(entries.value, order.value, sortKey.value));
 const crumbs = computed(() => breadcrumbs(dir.value));
 
 /** Der ausgewählte Eintrag — Grundlage jeder Verwaltungs-Aktion. */
@@ -239,11 +252,6 @@ async function emptyTrash(): Promise<void> {
   await after(await manage({ op: 'emptyTrash', path: '' }));
 }
 
-/** Wann etwas gelöscht wurde — kurz und lesbar. */
-function when(ms: number): string {
-  return ms ? new Date(ms).toLocaleString('de-DE') : '';
-}
-
 function onEntry(entry: FsEntry): void {
   selected.value = entry.name;
 }
@@ -253,8 +261,17 @@ function onEntryOpen(entry: FsEntry): void {
   else selected.value = entry.name;
 }
 
-function toggleOrder(): void {
-  order.value = order.value === 'asc' ? 'desc' : 'asc';
+/**
+ * Sortiert nach einer Spalte: dieselbe noch einmal dreht die Richtung um, eine
+ * andere fängt so an, wie man sie zu lesen erwartet — Namen von A an, Größe und
+ * Datum mit dem Größten und Jüngsten oben.
+ */
+function sortBy(col: { key: SortKey; first: SortOrder }): void {
+  if (sortKey.value === col.key) order.value = order.value === 'asc' ? 'desc' : 'asc';
+  else {
+    sortKey.value = col.key;
+    order.value = col.first;
+  }
 }
 
 // Ein neu festgelegter (oder gewechselter) Datenordner fängt oben wieder an —
@@ -295,14 +312,6 @@ onBeforeUnmount(() => {
           </template>
         </nav>
         <span class="ex-spacer"></span>
-        <button
-          type="button"
-          class="ex-sort"
-          :title="`Nach Namen sortieren (${order === 'asc' ? 'aufsteigend' : 'absteigend'})`"
-          @click="toggleOrder"
-        >
-          Name {{ order === 'asc' ? '↑' : '↓' }}
-        </button>
         <button type="button" class="ex-refresh" title="Neu einlesen" @click="list">↻</button>
       </div>
 
@@ -327,28 +336,49 @@ onBeforeUnmount(() => {
           <li v-for="item in trash" :key="item.id" class="trash-item">
             <span class="entry-icon">{{ item.isDir ? '📁' : '📄' }}</span>
             <span class="entry-name">{{ item.name }}</span>
-            <span class="trash-from">aus /{{ item.from }} · {{ when(item.deletedAt) }}</span>
+            <span class="trash-from">aus /{{ item.from }} · {{ formatWhen(item.deletedAt) }}</span>
             <button type="button" class="trash-restore" @click="restore(item)">Wiederherstellen</button>
           </li>
         </ul>
       </div>
 
       <div v-else class="ex-main">
-        <ul class="ex-list">
-          <li v-if="loading && !items.length" class="ex-empty">Wird gelesen …</li>
-          <li v-else-if="!items.length" class="ex-empty">Dieser Ordner ist leer.</li>
-          <li
-            v-for="entry in items"
-            :key="entry.path"
-            class="entry"
-            :class="{ dir: entry.isDir, active: entry.name === selected }"
-            @click="onEntry(entry)"
-            @dblclick="onEntryOpen(entry)"
-          >
-            <span class="entry-icon">{{ entry.isDir ? '📁' : '📄' }}</span>
-            <span class="entry-name">{{ entry.name }}</span>
-          </li>
-        </ul>
+        <div class="ex-files">
+          <div class="ex-head">
+            <button
+              v-for="col in COLUMNS"
+              :key="col.key"
+              type="button"
+              class="ex-col"
+              :class="{ on: sortKey === col.key, [`col-${col.key}`]: true }"
+              :data-key="col.key"
+              @click="sortBy(col)"
+            >
+              {{ col.label }}<span v-if="sortKey === col.key" class="ex-arrow">{{ order === 'asc' ? '↑' : '↓' }}</span>
+            </button>
+          </div>
+
+          <ul class="ex-list">
+            <li v-if="loading && !items.length" class="ex-empty">Wird gelesen …</li>
+            <li v-else-if="!items.length" class="ex-empty">Dieser Ordner ist leer.</li>
+            <li
+              v-for="entry in items"
+              :key="entry.path"
+              class="entry"
+              :class="{ dir: entry.isDir, active: entry.name === selected }"
+              @click="onEntry(entry)"
+              @dblclick="onEntryOpen(entry)"
+            >
+              <span class="entry-label">
+                <span class="entry-icon">{{ entry.isDir ? '📁' : '📄' }}</span>
+                <span class="entry-name" :title="entry.name">{{ entry.name }}</span>
+              </span>
+              <span class="entry-size">{{ sizeLabel(entry) }}</span>
+              <span class="entry-modified">{{ formatWhen(entry.modified) }}</span>
+              <span class="entry-created">{{ formatWhen(entry.created) }}</span>
+            </li>
+          </ul>
+        </div>
 
         <FilePreview v-if="preview && root" :key="preview.path" :root="root" :entry="preview" class="ex-preview" />
       </div>
@@ -420,7 +450,6 @@ onBeforeUnmount(() => {
 .ex-spacer {
   flex: 1;
 }
-.ex-sort,
 .ex-refresh {
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -430,7 +459,6 @@ onBeforeUnmount(() => {
   font-size: 12px;
   cursor: pointer;
 }
-.ex-sort:hover,
 .ex-refresh:hover {
   color: var(--text);
   border-color: var(--accent);
@@ -445,6 +473,47 @@ onBeforeUnmount(() => {
   flex: 1.2;
   min-width: 0;
 }
+/* Liste und Spaltenköpfe teilen sich dasselbe Raster (c0051). */
+.ex-files {
+  --ex-cols: minmax(0, 1fr) 62px 92px 92px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  min-height: 0;
+}
+.ex-head {
+  display: grid;
+  grid-template-columns: var(--ex-cols);
+  gap: 8px;
+  padding: 0 9px;
+}
+.ex-col {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+.ex-col:hover {
+  color: var(--text);
+}
+.ex-col.on {
+  color: var(--text);
+}
+.ex-col.col-size {
+  justify-content: flex-end;
+}
+.ex-arrow {
+  opacity: 0.8;
+}
 .ex-list {
   flex: 1;
   min-width: 0;
@@ -457,7 +526,8 @@ onBeforeUnmount(() => {
   border-radius: 10px;
 }
 .entry {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--ex-cols);
   align-items: center;
   gap: 8px;
   padding: 5px 8px;
@@ -465,6 +535,29 @@ onBeforeUnmount(() => {
   font-size: 13px;
   cursor: default;
   user-select: none;
+}
+.entry-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.entry-size,
+.entry-modified,
+.entry-created {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.entry-size {
+  text-align: right;
+}
+.entry.active .entry-size,
+.entry.active .entry-modified,
+.entry.active .entry-created {
+  color: rgba(255, 255, 255, 0.85);
 }
 .entry:hover {
   background: rgba(255, 255, 255, 0.06);

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { confineWithin, resolveWithin, runFs, runShellFs } from './fsaccess';
-import type { TrashEntry } from '@/types';
+import type { FsEntry, FsStatInfo, TrashEntry } from '@/types';
 
 describe('confineWithin', () => {
   const root = path.resolve('/data/workspace');
@@ -98,6 +98,34 @@ describe('runFs', () => {
     expect(entries.find((e) => e.name === 'ordner')!.isDir).toBe(true);
   });
 
+  it('gibt jedem Eintrag der Liste Größe und Zeitpunkte mit (c0051)', () => {
+    runFs(root, { op: 'write', path: 'a.txt', data: 'abcde' });
+    runFs(root, { op: 'mkdir', path: 'ordner' });
+    const res = runFs(root, { op: 'list', path: '' });
+    const entries = (res as { result: FsEntry[] }).result;
+
+    const file = entries.find((e) => e.name === 'a.txt')!;
+    expect(file.size).toBe(5);
+    expect(file.modified).toBeGreaterThan(0);
+    // Ein Erstellungsdatum kennt nicht jedes Dateisystem — bekannt oder 0, nie undefined.
+    expect(typeof file.created).toBe('number');
+
+    const dir = entries.find((e) => e.name === 'ordner')!;
+    expect(dir.isDir).toBe(true);
+    expect(dir.modified).toBeGreaterThan(0);
+  });
+
+  it('beschreibt in der Liste den Symlink selbst, nicht sein Ziel', () => {
+    const big = 'x'.repeat(1000);
+    runFs(root, { op: 'write', path: 'echt.txt', data: big });
+    fs.symlinkSync(path.join(root, 'echt.txt'), path.join(root, 'link.txt'));
+
+    const res = runFs(root, { op: 'list', path: '' });
+    const entries = (res as { result: FsEntry[] }).result;
+    expect(entries.find((e) => e.name === 'echt.txt')!.size).toBe(1000);
+    expect(entries.find((e) => e.name === 'link.txt')!.size).toBeLessThan(1000);
+  });
+
   it('prüft Existenz', () => {
     runFs(root, { op: 'write', path: 'da.txt', data: 'x' });
     expect(runFs(root, { op: 'exists', path: 'da.txt' })).toEqual({ ok: true, result: true });
@@ -108,10 +136,12 @@ describe('runFs', () => {
     runFs(root, { op: 'write', path: 'f.txt', data: 'abcde' });
     const res = runFs(root, { op: 'stat', path: 'f.txt' });
     expect(res.ok).toBe(true);
-    const info = (res as { result: { exists: boolean; isDir: boolean; size: number } }).result;
+    const info = (res as { result: FsStatInfo }).result;
     expect(info.exists).toBe(true);
     expect(info.isDir).toBe(false);
     expect(info.size).toBe(5);
+    expect(info.modified).toBeGreaterThan(0);
+    expect(typeof info.created).toBe('number');
   });
 
   it('legt Verzeichnisse an und löscht Einträge', () => {

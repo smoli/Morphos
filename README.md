@@ -207,9 +207,9 @@ Im Sandbox-iframe steht dafür ein globales, asynchrones API bereit:
 ```js
 await morphosFS.writeFile('notizen/heute.txt', 'Hallo');
 const text     = await morphosFS.readFile('notizen/heute.txt');
-const eintraege = await morphosFS.list('notizen');   // [{ name, path, isDir }]
+const eintraege = await morphosFS.list('notizen');   // [{ name, path, isDir, size, modified, created }]
 const da        = await morphosFS.exists('notizen/heute.txt');
-const info      = await morphosFS.stat('notizen/heute.txt'); // { exists, isDir, size, modified }
+const info      = await morphosFS.stat('notizen/heute.txt'); // { exists, isDir, size, modified, created }
 await morphosFS.mkdir('notizen');
 await morphosFS.remove('notizen/heute.txt');
 ```
