@@ -6,7 +6,20 @@ created: 2026-08-09
 updated: 2026-08-09
 status-changed: 2026-08-09T18:06:57
 epic: e09
+depends: [c0065, c0066, c0067, c0068]
 ---
+
+## Breakdown
+
+Umbrella card — split into four dependent sub-cards. Done when all four are:
+
+1. **c0065** — split-tree engine (dwindle), pure + tested *(root)*
+2. **c0066** — „Kacheln“ mode + tree-derived rendering *(← c0065)*
+3. **c0067** — gap-drag resize + swap-drag *(← c0066)*
+4. **c0068** — per-workspace layout persistence *(← c0066)*
+
+The acceptance criteria below are the overall definition of done, split across
+those cards.
 
 ## What
 
