@@ -8,12 +8,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "grep -n \"it(\\|describe(\" src/stores/desktop.spec.ts | sed -n '1,200p'"
+        "arg": "sed -n '140,175p' src/core/tiling.spec.ts; echo \"=== DesktopView spec tiling ===\"; grep -rn \"tiles\\|Kachel\" src/views/DesktopView.spec.ts | head -30"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T21:27:46",
+  "updated": "2026-08-09T21:28:05",
   "pickupDelay": 10,
   "owned": [
     "c0029",
