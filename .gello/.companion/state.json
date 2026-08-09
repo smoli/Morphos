@@ -8,12 +8,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "cat .gello/epics/e09-os-likeness/epic.md 2>/dev/null; ls .gello/epics/e09-os-likeness/"
+        "arg": "git add src/views/DesktopView.vue src/views/DesktopView.spec.ts .gello/epics/e09-os-likeness/i0004-dock-without-apps-has-scrollbar.md && git commit -q -F - <<'EOF' && git log --oneline -1\ni0004: Das Dock rollt nicht mehr — kein Balken ohne Apps\n\nDie Namensblase jedes Dock-Platzes steht immer im Baum (nur unsichtbar) und\nragt über den rechten Rand hinaus. Weil `.dock` mit `overflow-x: auto` eine\nrollbare Leiste war, zählte sie zum rollbaren Inhalt — also zeigte das Dock\ndauerhaft eine Bildlaufleiste, selbst wenn nur das ＋ dastand.\n\nJetzt rollt es nicht mehr (`overflow: visible`); wird es eng, bricht es\nmittig in eine zweite Reihe um. Nebenbei werden Namensblase und\nHover-Vergrößerung nicht mehr beschnitten.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nEOF"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T10:21:49",
+  "updated": "2026-08-09T10:24:29",
   "pickupDelay": 10,
   "owned": [
     "c0029",
