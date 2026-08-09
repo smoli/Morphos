@@ -1,12 +1,13 @@
 ---
 id: c0052
 title: Make the dock OSX like
-status: backlog
+status: ready
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T07:56:38
+status-changed: 2026-08-09T07:59:28
 epic: e09
 depends: [c0055, c0056]
+order: 20
 ---
 
 ## What
@@ -68,3 +69,4 @@ Open questions for planning:
 - 2026-08-09 status → ready (app)
 - 2026-08-09 status → discuss (app)
 - 2026-08-09 depends [c0055, c0056] + status → backlog (shell build sequence)
+- 2026-08-09 status → ready (app)
