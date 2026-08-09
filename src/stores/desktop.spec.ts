@@ -3,6 +3,7 @@ import { setActivePinia, createPinia } from 'pinia';
 import { useDesktopStore } from './desktop';
 import { useWorkspaceStore } from './workspace';
 import { EXPLORER_ID, systemWindow } from '@/core/system';
+import { leafIds, type Rect } from '@/core/tiling';
 import type { AppSummary, SessionWindow } from '@/types';
 
 describe('useDesktopStore', () => {
@@ -478,6 +479,184 @@ describe('useDesktopStore', () => {
       const d = useDesktopStore();
       d.restoreSession();
       expect(d.windows).toEqual([]);
+    });
+  });
+
+  describe('Kachel-Modus', () => {
+    const AREA: Rect = { x: 0, y: 0, w: 1200, h: 800 };
+
+    /** Ein Desktop im Kachel-Modus, mit einer gemessenen Fläche. */
+    function tiled(): ReturnType<typeof useDesktopStore> {
+      useWorkspaceStore().uiMode = 'tiles';
+      const d = useDesktopStore();
+      d.setTileArea(AREA);
+      return d;
+    }
+
+    /** Überschneiden sich zwei Rechtecke (bei Berührung noch nicht)? */
+    function overlaps(a: Rect, b: Rect): boolean {
+      return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    }
+
+    function expectDisjointWithin(rects: Rect[], area: Rect): void {
+      for (const r of rects) {
+        expect(r.w).toBeGreaterThan(0);
+        expect(r.h).toBeGreaterThan(0);
+        expect(r.x).toBeGreaterThanOrEqual(area.x);
+        expect(r.y).toBeGreaterThanOrEqual(area.y);
+        expect(r.x + r.w).toBeLessThanOrEqual(area.x + area.w);
+        expect(r.y + r.h).toBeLessThanOrEqual(area.y + area.h);
+      }
+      for (let i = 0; i < rects.length; i += 1)
+        for (let j = i + 1; j < rects.length; j += 1) expect(overlaps(rects[i], rects[j])).toBe(false);
+    }
+
+    it('hält im Fenster-Modus gar keinen Baum', () => {
+      const d = useDesktopStore();
+      d.openApp('a', { title: 'A', icon: '🅰' });
+      expect(d.tiling).toBe(false);
+      expect(d.tileTree).toBeNull();
+      expect(d.tileRects).toEqual({});
+    });
+
+    it('kachelt beim Wechsel in den Kachel-Modus die offenen Fenster', () => {
+      const d = useDesktopStore();
+      const a = d.openApp('a', { title: 'A', icon: '🅰' });
+      const b = d.openApp('b', { title: 'B', icon: '🅱' });
+      const c = d.openDraft();
+
+      useWorkspaceStore().uiMode = 'tiles';
+      d.setTileArea(AREA);
+      d.syncTiles();
+
+      expect(leafIds(d.tileTree).sort()).toEqual([a, b, c].sort());
+      expectDisjointWithin(Object.values(d.tileRects), AREA);
+    });
+
+    it('nimmt jedes neu geöffnete Fenster in den Verbund auf', () => {
+      const d = tiled();
+      const a = d.openApp('a', { title: 'A', icon: '🅰' });
+      const b = d.openApp('b', { title: 'B', icon: '🅱' });
+
+      expect(leafIds(d.tileTree)).toEqual([a, b]);
+      expectDisjointWithin(Object.values(d.tileRects), AREA);
+      // Zwei Kacheln teilen die (breitere) Fläche nebeneinander.
+      expect(d.tileRects[a].x).toBeLessThan(d.tileRects[b].x);
+      expect(d.tileRects[a].y).toBe(d.tileRects[b].y);
+    });
+
+    it('teilt die Kachel mit dem Brennpunkt, nicht irgendeine', () => {
+      const d = tiled();
+      const a = d.openApp('a', { title: 'A', icon: '🅰' });
+      d.openApp('b', { title: 'B', icon: '🅱' });
+      // Zurück auf die linke Kachel — dort soll das nächste Fenster hinein.
+      d.focusWindow(a);
+      const before = d.tileRects[a];
+
+      const c = d.openApp('c', { title: 'C', icon: '🇨' });
+
+      // a hat Platz gemacht, b nicht.
+      expect(d.tileRects[a].h).toBeLessThan(before.h);
+      expect(d.tileRects[c].x).toBe(d.tileRects[a].x);
+      expectDisjointWithin(Object.values(d.tileRects), AREA);
+    });
+
+    it('lässt beim Schließen die Schwester den Platz erben', () => {
+      const d = tiled();
+      const a = d.openApp('a', { title: 'A', icon: '🅰' });
+      const b = d.openApp('b', { title: 'B', icon: '🅱' });
+
+      d.closeWindow(b);
+
+      expect(leafIds(d.tileTree)).toEqual([a]);
+      expect(d.tileRects[a]).toEqual(AREA);
+    });
+
+    it('räumt den Baum ab, wenn das letzte Fenster zugeht', () => {
+      const d = tiled();
+      const a = d.openApp('a', { title: 'A', icon: '🅰' });
+      d.closeWindow(a);
+      expect(d.tileTree).toBeNull();
+      expect(d.tileRects).toEqual({});
+    });
+
+    it('nimmt ein minimiertes Fenster heraus und beim Wiederherstellen zurück', () => {
+      const d = tiled();
+      const a = d.openApp('a', { title: 'A', icon: '🅰' });
+      const b = d.openApp('b', { title: 'B', icon: '🅱' });
+
+      d.minimizeWindow(b);
+      expect(leafIds(d.tileTree)).toEqual([a]);
+      expect(d.tileRects[a]).toEqual(AREA);
+      expect(d.tileRects[b]).toBeUndefined();
+
+      d.restoreWindow(b);
+      expect(leafIds(d.tileTree).sort()).toEqual([a, b].sort());
+      expectDisjointWithin(Object.values(d.tileRects), AREA);
+    });
+
+    it('lässt den Baum unberührt, während ein Fenster maximiert ist', () => {
+      const d = tiled();
+      const a = d.openApp('a', { title: 'A', icon: '🅰' });
+      const b = d.openApp('b', { title: 'B', icon: '🅱' });
+      const before = d.tileRects;
+
+      d.toggleMaximize(b);
+      expect(leafIds(d.tileTree)).toEqual([a, b]);
+      d.toggleMaximize(b);
+      // Zurück in dieselbe Anordnung.
+      expect(d.tileRects).toEqual(before);
+    });
+
+    it('rechnet die Kacheln auf eine geänderte Fläche um', () => {
+      const d = tiled();
+      d.openApp('a', { title: 'A', icon: '🅰' });
+      d.openApp('b', { title: 'B', icon: '🅱' });
+
+      const area: Rect = { x: 10, y: 20, w: 600, h: 900 };
+      d.setTileArea(area);
+      expectDisjointWithin(Object.values(d.tileRects), area);
+    });
+
+    it('kachelt eine wiederhergestellte Sitzung ohne die minimierten Fenster', () => {
+      const ws = useWorkspaceStore();
+      ws.uiMode = 'tiles';
+      ws.folder = '/apps';
+      ws.apps = [
+        { id: 'rechner-1', name: 'Rechner', icon: '🧮', createdAt: 1, updatedAt: 5, versions: 3 },
+        { id: 'editor-2', name: 'Editor', icon: '📝', createdAt: 2, updatedAt: 9, versions: 1 },
+      ];
+      const geom = { x: 10, y: 20, w: 300, h: 240, maximized: false };
+      ws.sessions = {
+        '/apps': [
+          { appId: 'rechner-1', ...geom, minimized: false },
+          { appId: 'editor-2', ...geom, minimized: true },
+        ],
+      };
+      const d = useDesktopStore();
+      d.setTileArea(AREA);
+
+      d.restoreSession();
+
+      const offen = d.windows.find((w) => w.appId === 'rechner-1')!.instanceId;
+      expect(leafIds(d.tileTree)).toEqual([offen]);
+      expect(d.tileRects[offen]).toEqual(AREA);
+    });
+
+    it('hält den Baum je Verzeichnis getrennt', () => {
+      const ws = useWorkspaceStore();
+      ws.uiMode = 'tiles';
+      ws.folder = '/eins';
+      const d = useDesktopStore();
+      d.setTileArea(AREA);
+      const a = d.openApp('a', { title: 'A', icon: '🅰' });
+      expect(leafIds(d.tileTree)).toEqual([a]);
+
+      ws.folder = '/zwei';
+      expect(d.tileTree).toBeNull();
+
+      ws.folder = '/eins';
+      expect(leafIds(d.tileTree)).toEqual([a]);
     });
   });
 });

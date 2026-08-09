@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useWorkspaceStore } from '@/stores/workspace';
-import { useDesktopStore } from '@/stores/desktop';
+import { TILE_GAP, useDesktopStore } from '@/stores/desktop';
 import { useAgentsStore } from '@/stores/agents';
 import { useAppWindow } from '@/stores/app';
 import { useSetAppIcon } from '@/composables/useSetAppIcon';
@@ -39,6 +39,7 @@ import {
   TILE_W,
   type Bounds,
 } from '@/core/arrange';
+import type { Rect } from '@/core/tiling';
 import type { AppSummary, IconPos } from '@/types';
 
 const workspace = useWorkspaceStore();
@@ -47,6 +48,9 @@ const agents = useAgentsStore();
 const setAppIcon = useSetAppIcon();
 
 const singleMode = computed(() => workspace.uiMode === 'single');
+// Kachel-Modus (c0066): Die Fenster liegen lückenlos nebeneinander, ihr
+// Zuschnitt kommt aus dem Teilungsbaum (stores/desktop → core/tiling).
+const tilesMode = computed(() => workspace.uiMode === 'tiles');
 
 // Im Einzel-Modus wird nur das aktive Fenster (Vollbild) gezeigt — oder gar
 // keines, solange der Anwender über „← Desktop“ beim Launcher ist.
@@ -161,13 +165,40 @@ function closeActiveComposer(): boolean {
 // ---- Anordnung der Kacheln (frei abgelegt, sonst Raster — siehe core/arrange) ----
 
 const launcher = ref<HTMLElement | null>(null);
-const bounds = ref<Bounds>({ w: 0, h: 0 });
+/**
+ * Die freie Fläche des Desktops in Koordinaten der Bühne: Ihre Größe begrenzt,
+ * wohin eine Icon-Kachel darf; ihre Lage (das Dock, das an einem Rand Platz
+ * wegnimmt) brauchen die Fenster-Kacheln, die daneben in derselben Bühne liegen.
+ */
+const desk = ref<Rect>({ x: 0, y: 0, w: 0, h: 0 });
+const bounds = computed<Bounds>(() => ({ w: desk.value.w, h: desk.value.h }));
 
-/** Die sichtbare Fläche messen — sie begrenzt, wohin eine Kachel darf. */
+/** Die sichtbare Fläche messen — Lage wie Größe. */
 function measure(): void {
   const el = launcher.value;
-  bounds.value = el ? { w: el.clientWidth, h: el.clientHeight } : { w: 0, h: 0 };
+  desk.value = el
+    ? { x: el.offsetLeft, y: el.offsetTop, w: el.clientWidth, h: el.clientHeight }
+    : { x: 0, y: 0, w: 0, h: 0 };
 }
+
+/**
+ * Worauf gekachelt wird: die freie Fläche, ringsum um eine Fuge eingerückt —
+ * so steht zwischen zwei Kacheln genau so viel Luft wie zum Rand hin.
+ */
+const tileArea = computed<Rect>(() => ({
+  x: desk.value.x + TILE_GAP,
+  y: desk.value.y + TILE_GAP,
+  w: Math.max(0, desk.value.w - 2 * TILE_GAP),
+  h: Math.max(0, desk.value.h - 2 * TILE_GAP),
+}));
+
+// Der Baum rechnet in dieser Fläche: Sie ändert sich mit dem Programmfenster
+// und mit dem Dock, und die Kacheln rücken dann nach.
+watch(tileArea, (area) => desktop.setTileArea(area), { immediate: true });
+
+// Beim Wechsel in den Kachel-Modus kommt, was schon offen ist, in den Verbund;
+// alles Weitere treiben die Fenster-Aktionen selbst (stores/desktop).
+watch(() => workspace.uiMode, () => desktop.syncTiles());
 
 // Die Fläche gehört ganz den Apps — das ＋ steht im Dock, kein Rasterplatz ist
 // mehr vergeben.
@@ -573,6 +604,7 @@ function onMenuPick(id: string): void {
           :key="w.instanceId"
           :win="w"
           :single="singleMode"
+          :tiled="tilesMode"
         />
       </div>
 

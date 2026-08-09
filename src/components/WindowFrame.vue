@@ -14,8 +14,13 @@ import type { DesktopWindow } from '@/stores/desktop';
  * eine erzeugte App, components/SystemWindow eine Ansicht der Schale (etwa den
  * Datei-Explorer). Sie füllen den Inhalt und, wo nötig, Icon, Titel und eigene
  * Knöpfe der Titelleiste.
+ *
+ * Im Kachel-Modus (`tiled`, c0066) kommt die Geometrie NICHT von hier: Der
+ * Rahmen liest sein Rechteck aus dem Kachel-Baum (stores/desktop → core/tiling)
+ * und rückt nach, sobald der sich ändert. Ziehen und Größenändern gibt es dann
+ * nicht — nur Maximieren, das die Kachel vorübergehend über alles legt.
  */
-const props = defineProps<{ win: DesktopWindow; single?: boolean }>();
+const props = defineProps<{ win: DesktopWindow; single?: boolean; tiled?: boolean }>();
 
 const desktop = useDesktopStore();
 const agents = useAgentsStore();
@@ -24,6 +29,27 @@ const interacting = ref(false); // Ziehen/Größe ändern → Schutzschicht übe
 
 // Vollflächig (kein Ziehen/Größe): im Einzel-Modus oder wenn maximiert.
 const full = computed(() => props.single || props.win.maximized);
+
+// Gekachelt: Solange das Fenster nicht maximiert die Fläche füllt, sagt der
+// Baum, wo es liegt. Fehlt sein Rechteck (die Fläche ist noch nicht gemessen),
+// bleibt es bei der eigenen Geometrie.
+const tile = computed(() =>
+  props.tiled && !full.value ? desktop.tileRects[props.win.instanceId] ?? null : null,
+);
+// Frei beweglich ist ein Fenster nur im Fenster-Modus.
+const movable = computed(() => !full.value && !props.tiled);
+
+const frameStyle = computed(() => {
+  if (full.value) return { zIndex: props.win.z };
+  const r = tile.value ?? props.win;
+  return {
+    left: `${r.x}px`,
+    top: `${r.y}px`,
+    width: `${r.w}px`,
+    height: `${r.h}px`,
+    zIndex: props.win.z,
+  };
+});
 
 // Arbeitet ein Agent für dieses Fenster (bzw. für die App, die es zeigt)? Das
 // gilt auch für einen wartenden Wunsch und für einen Lauf, der ohne sein
@@ -94,8 +120,8 @@ function stopInteraction(): void {
 <template>
   <section
     class="window-frame"
-    :class="{ full }"
-    :style="full ? { zIndex: win.z } : { left: win.x + 'px', top: win.y + 'px', width: win.w + 'px', height: win.h + 'px', zIndex: win.z }"
+    :class="{ full, tiled: !!tile }"
+    :style="frameStyle"
     @mousedown="focus"
   >
     <!-- Vollflächige Schutzschicht: verhindert, dass die iframes beim Ziehen/
@@ -104,14 +130,14 @@ function stopInteraction(): void {
 
     <!-- Im Einzel-Modus trägt die Kopfzeile KEINE Fensterknöpfe (es gibt dort
          keinen Fenstermanager), sondern nur den Weg zurück zum Desktop. -->
-    <header class="titlebar" @mousedown.self="!full && startDrag($event)" @dblclick="!single && toggleMaximize()">
+    <header class="titlebar" @mousedown.self="movable && startDrag($event)" @dblclick="!single && toggleMaximize()">
       <button v-if="single" type="button" class="w-desktop" title="Zurück zum Desktop" @mousedown.stop @click="backToDesktop">
         ← Desktop
       </button>
       <slot name="icon">
         <AppIcon class="w-icon" :icon="win.icon" :size="16" @mousedown.stop />
       </slot>
-      <span class="w-title" @mousedown.self="!full && startDrag($event)">
+      <span class="w-title" @mousedown.self="movable && startDrag($event)">
         <slot name="title">{{ win.title }}</slot>
       </span>
       <BusyDot v-if="agentBusy" class="w-busy" @mousedown.stop />
@@ -143,7 +169,7 @@ function stopInteraction(): void {
       <slot name="composer" />
     </footer>
 
-    <div v-if="!full" class="resize-handle" title="Größe ändern" @mousedown.stop="startResize"></div>
+    <div v-if="movable" class="resize-handle" title="Größe ändern" @mousedown.stop="startResize"></div>
   </section>
 </template>
 
@@ -160,6 +186,20 @@ function stopInteraction(): void {
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   pointer-events: auto;
+}
+/*
+ * Gekachelt: Der Baum teilt die Fläche lückenlos auf — eine Mindestgröße dürfte
+ * dem nicht dazwischenkommen, sonst überlappten sich schmale Kacheln doch
+ * wieder. Die Kachel bleibt am Platz; wie klein sie werden darf, begrenzt beim
+ * Ziehen an der Fuge der Baum selbst (MIN_TILE, c0067).
+ */
+.window-frame.tiled {
+  min-width: 0;
+  min-height: 0;
+}
+.window-frame.tiled .titlebar,
+.window-frame.tiled .w-title {
+  cursor: default;
 }
 /* Vollflächig: maximiert oder Einzel-Modus. */
 .window-frame.full {

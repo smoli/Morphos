@@ -86,6 +86,9 @@ function closeWindow(): void {
           <button type="button" :class="{ active: workspace.uiMode === 'single' }" @click="setMode('single')">
             ▢ Einzeln
           </button>
+          <button type="button" :class="{ active: workspace.uiMode === 'tiles' }" @click="setMode('tiles')">
+            ⊞ Kacheln
+          </button>
         </div>
         <AgentsIndicator />
         <button type="button" class="icon-btn settings" title="Einstellungen" @click="emit('open-settings')">⚙</button>

@@ -84,6 +84,15 @@ describe('TopBar', () => {
     expect(ws.uiMode).toBe('single');
   });
 
+  it('schaltet in den Kachel-Modus', async () => {
+    const wrapper = await mountDesktop();
+    const ws = useWorkspaceStore();
+    const tiles = wrapper.findAll('.mode-switch button').find((b) => b.text().includes('Kacheln'))!;
+    await tiles.trigger('click');
+    expect(ws.uiMode).toBe('tiles');
+    expect(tiles.classes()).toContain('active');
+  });
+
   it('meldet den Wunsch nach den Einstellungen', async () => {
     const wrapper = await mountDesktop();
     await wrapper.get('.settings').trigger('click');

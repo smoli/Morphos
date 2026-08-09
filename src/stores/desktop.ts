@@ -2,6 +2,16 @@ import { defineStore } from 'pinia';
 import { useWorkspaceStore } from './workspace';
 import { restorableSession, serializeSession } from '@/core/session';
 import { systemWindow } from '@/core/system';
+import {
+  computeRects,
+  DEFAULT_GAP,
+  hasLeaf,
+  insertLeaf,
+  leafIds,
+  removeLeaf,
+  type Rect,
+  type TileTree,
+} from '@/core/tiling';
 
 /**
  * Was ein Fenster zeigt: eine (erzeugte) App oder eine Ansicht der Schale
@@ -37,6 +47,10 @@ interface DesktopState {
   showingDesktop: boolean;
   /** Verzeichnis, dessen Sitzung bereits wiederhergestellt wurde (einmal je Start). */
   restoredFolder: string | null;
+  /** Der Kachel-Baum je Arbeitsverzeichnis (siehe core/tiling). */
+  tiles: Record<string, TileTree | null>;
+  /** Die Fläche, auf der gekachelt wird — vom Desktop gemessen (Bühnen-Koordinaten). */
+  tileArea: Rect;
 }
 
 const MIN_W = 240;
@@ -45,8 +59,19 @@ const DEFAULT_W = 720;
 const DEFAULT_H = 520;
 const CASCADE = 28;
 
+/** Die Fuge zwischen zwei Kacheln (c0066 nimmt den Vorschlag aus core/tiling). */
+export const TILE_GAP = DEFAULT_GAP;
+
+/** Ohne gemessene Fläche gibt es nichts zu kacheln. */
+const NO_AREA: Rect = { x: 0, y: 0, w: 0, h: 0 };
+
 /** Ruhezeit, bevor ein Ziehen/Größenändern in die Einstellungen wandert (ms). */
 const PERSIST_DELAY = 300;
+
+/** Unter welchem Schlüssel der Kachel-Baum liegt — je Arbeitsverzeichnis einer. */
+function tileKey(): string {
+  return useWorkspaceStore().folder ?? '';
+}
 
 // Der laufende Aufschub (nicht serialisierbar → außerhalb des States).
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -65,6 +90,8 @@ export const useDesktopStore = defineStore('desktop', {
     nextZ: 1,
     showingDesktop: false,
     restoredFolder: null,
+    tiles: {},
+    tileArea: { ...NO_AREA },
   }),
 
   getters: {
@@ -91,6 +118,23 @@ export const useDesktopStore = defineStore('desktop', {
       const id = this.activeId;
       const w = this.windows.find((win) => win.instanceId === id);
       return w && w.kind === 'app' ? id : null;
+    },
+
+    /** Wird gerade gekachelt? Dann gibt der Baum die Geometrie vor, nicht die Maus. */
+    tiling: (): boolean => useWorkspaceStore().uiMode === 'tiles',
+
+    /** Der Kachel-Baum dieses Verzeichnisses — außerhalb des Kachel-Modus keiner. */
+    tileTree(): TileTree | null {
+      return this.tiling ? this.tiles[tileKey()] ?? null : null;
+    },
+
+    /**
+     * Wohin jedes gekachelte Fenster gehört. Rein aus dem Baum gerechnet: Wer
+     * hier steht, steht überschneidungsfrei und lückenlos in der Fläche — und
+     * jede Änderung am Baum (oder an der Fläche) zeichnet die Fenster neu.
+     */
+    tileRects(): Record<string, Rect> {
+      return computeRects(this.tileTree, this.tileArea, TILE_GAP);
     },
   },
 
@@ -151,6 +195,9 @@ export const useDesktopStore = defineStore('desktop', {
 
     /** Ein neues Fenster: um eine Stufe versetzt, ganz vorn im Stapel. */
     spawnWindow(meta: Pick<DesktopWindow, 'kind' | 'appId' | 'systemId' | 'title' | 'icon'>): string {
+      // Wer den Brennpunkt hatte, gibt im Kachel-Modus seine Kachel her — das
+      // muss vor dem Anlegen feststehen, das neue Fenster kommt ja nach vorn.
+      const splitting = this.focusedId;
       this.showingDesktop = false;
       this.seq += 1;
       const instanceId = `win-${this.seq}`;
@@ -166,6 +213,7 @@ export const useDesktopStore = defineStore('desktop', {
         minimized: false,
         maximized: false,
       });
+      this.syncTiles(splitting);
       this.persistSession();
       return instanceId;
     },
@@ -173,15 +221,20 @@ export const useDesktopStore = defineStore('desktop', {
     focusWindow(instanceId: string): void {
       const w = this.find(instanceId);
       if (!w) return;
+      // Ein minimiertes Fenster kommt zurück in den Verbund — und zwar dort
+      // hinein, wo der Anwender gerade war.
+      const splitting = this.focusedId;
       // Ein Fenster in den Vordergrund holen beendet die Desktop-Ansicht.
       this.showingDesktop = false;
       w.minimized = false;
       w.z = this.nextZ += 1;
+      this.syncTiles(splitting);
       this.persistSession();
     },
 
     closeWindow(instanceId: string): void {
       this.windows = this.windows.filter((w) => w.instanceId !== instanceId);
+      this.syncTiles();
       this.persistSession();
     },
 
@@ -189,6 +242,7 @@ export const useDesktopStore = defineStore('desktop', {
       const w = this.find(instanceId);
       if (!w) return;
       w.minimized = true;
+      this.syncTiles();
       this.persistSession();
     },
 
@@ -197,6 +251,8 @@ export const useDesktopStore = defineStore('desktop', {
     },
 
     moveWindow(instanceId: string, x: number, y: number): void {
+      // Im Kachel-Modus gibt der Baum den Platz vor — kein freies Verschieben.
+      if (this.tiling) return;
       const w = this.find(instanceId);
       if (!w) return;
       w.x = Math.max(0, Math.round(x));
@@ -205,6 +261,8 @@ export const useDesktopStore = defineStore('desktop', {
     },
 
     resizeWindow(instanceId: string, w: number, h: number): void {
+      // Dasselbe für die Größe: Sie fällt aus dem Baum ab (c0067 zieht an der Fuge).
+      if (this.tiling) return;
       const win = this.find(instanceId);
       if (!win) return;
       win.w = Math.max(MIN_W, Math.round(w));
@@ -218,6 +276,50 @@ export const useDesktopStore = defineStore('desktop', {
       if (!w) return;
       w.maximized = !w.maximized;
       this.focusWindow(instanceId);
+    },
+
+    /**
+     * Die Fläche melden, auf der gekachelt wird — der Desktop misst sie und
+     * rechnet Dock und Fuge heraus. Ändert sie sich, rücken alle Kacheln nach.
+     */
+    setTileArea(area: Rect): void {
+      const next = {
+        x: Math.round(area.x),
+        y: Math.round(area.y),
+        w: Math.max(0, Math.round(area.w)),
+        h: Math.max(0, Math.round(area.h)),
+      };
+      const a = this.tileArea;
+      if (a.x === next.x && a.y === next.y && a.w === next.w && a.h === next.h) return;
+      this.tileArea = next;
+    },
+
+    /**
+     * Bringt den Kachel-Baum mit den offenen Fenstern zur Deckung: Was fehlt,
+     * kommt hinein — es teilt die Kachel mit dem Brennpunkt (`splitting`, sonst
+     * die gerade vorderste) —, was nicht mehr da ist (geschlossen oder ins Dock
+     * minimiert), fällt heraus und seine Schwester erbt den Platz.
+     *
+     * Das ist der einzige Weg, auf dem der Baum sich ändert: Öffnen, Schließen,
+     * Minimieren und Wiederherstellen rufen ihn selbst; der Desktop tut es beim
+     * Wechsel in den Kachel-Modus, um die schon offenen Fenster zu kacheln.
+     * Außerhalb des Kachel-Modus geschieht nichts — der Baum eines Verzeichnisses
+     * bleibt liegen, bis der Anwender zurückwechselt.
+     */
+    syncTiles(splitting: string | null = null): void {
+      if (!this.tiling) return;
+      const open = this.windows.filter((w) => !w.minimized).map((w) => w.instanceId);
+      let tree = this.tiles[tileKey()] ?? null;
+      for (const id of leafIds(tree)) if (!open.includes(id)) tree = removeLeaf(tree, id);
+      let focus = splitting ?? this.focusedId;
+      for (const id of open) {
+        if (hasLeaf(tree, id)) continue;
+        tree = insertLeaf(tree, focus, id, this.tileArea, TILE_GAP);
+        // Reihenweise Aufnahme (beim Wechsel in den Modus): Jedes weitere
+        // Fenster teilt das zuletzt aufgenommene — daraus wird die Spirale.
+        focus = id;
+      }
+      this.tiles[tileKey()] = tree;
     },
 
     /** Zieht ein geändertes Icon in allen Fenstern dieser App nach (Titelleiste, Dock). */
@@ -293,6 +395,10 @@ export const useDesktopStore = defineStore('desktop', {
       } finally {
         restoring = false;
       }
+      // Die Fenster kamen mit ihrem gemerkten Zustand zurück — auch minimierte,
+      // die dabei am Fenstermanager vorbei gesetzt wurden. Der Kachel-Verbund
+      // wird darum am Ende noch einmal geradegezogen.
+      this.syncTiles();
       // Einmal festhalten, was wirklich offen ist — verschwundene Apps sind
       // damit auch aus der gemerkten Sitzung heraus.
       this.persistSession();

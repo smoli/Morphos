@@ -143,7 +143,7 @@ export interface Settings {
    * die Shell Bibliotheken laden (einmalig, gecacht, offline eingebettet).
    */
   libWhitelist?: string[];
-  /** Darstellungsmodus des Desktops: überlappende Fenster oder eine App zur Zeit. */
+  /** Darstellungsmodus des Desktops: Fenster, eine App zur Zeit, oder Kacheln. */
   uiMode?: UiMode;
   /**
    * Wie viele Agentenläufe höchstens gleichzeitig arbeiten dürfen (global, weil
@@ -234,8 +234,12 @@ export interface SessionWindow {
   maximized: boolean;
 }
 
-/** Desktop-Modus: mehrere überlappende Fenster oder genau eine App im Vollbild. */
-export type UiMode = 'windows' | 'single';
+/**
+ * Desktop-Modus: mehrere überlappende Fenster, genau eine App im Vollbild —
+ * oder lückenlose Kacheln, deren Zuschnitt der Teilungsbaum vorgibt (c0066,
+ * siehe core/tiling). Was davon gilt, stutzt core/uimode zurecht.
+ */
+export type UiMode = 'windows' | 'single' | 'tiles';
 
 /** Von den erzeugten Apps aufrufbare Dateisystem-Operationen. */
 export type FsOp = 'read' | 'write' | 'list' | 'exists' | 'stat' | 'delete' | 'mkdir';

@@ -12,7 +12,7 @@ import type { DesktopWindow } from '@/stores/desktop';
  * hat denselben Rahmen wie ein App-Fenster (WindowFrame), aber keinen
  * Instanz-Store und keinen Agenten: Der Inhalt ist eine Komponente der Schale.
  */
-const props = defineProps<{ win: DesktopWindow; single?: boolean }>();
+const props = defineProps<{ win: DesktopWindow; single?: boolean; tiled?: boolean }>();
 
 /** Welche Komponente in welchem System-Fenster liegt. */
 const BODIES: Record<string, Component> = {
@@ -26,7 +26,7 @@ const body = computed<Component | null>(() =>
 </script>
 
 <template>
-  <WindowFrame :win="win" :single="single">
+  <WindowFrame :win="win" :single="single" :tiled="tiled">
     <component :is="body" v-if="body" />
     <p v-else class="sys-unknown">Diese Ansicht gibt es nicht mehr.</p>
   </WindowFrame>

@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import WindowFrame from './WindowFrame.vue';
 import { useDesktopStore } from '@/stores/desktop';
+import { useWorkspaceStore } from '@/stores/workspace';
 import { EXPLORER_ID } from '@/core/system';
 
 /**
@@ -157,5 +158,69 @@ describe('WindowFrame', () => {
     await wrapper.vm.$nextTick();
 
     expect(desktop.find(win.instanceId)!.x).toBe(startX);
+  });
+
+  describe('Kachel-Modus', () => {
+    /** Ein Rahmen, dessen Platz aus dem Kachel-Baum kommt (siehe stores/desktop). */
+    function mountTile() {
+      useWorkspaceStore().uiMode = 'tiles';
+      const desktop = useDesktopStore();
+      desktop.setTileArea({ x: 0, y: 0, w: 1000, h: 600 });
+      const id = desktop.openSystem(EXPLORER_ID)!;
+      const win = desktop.find(id)!;
+      const wrapper = mount(WindowFrame, { props: { win, tiled: true } });
+      return { wrapper, desktop, win };
+    }
+
+    it('nimmt seinen Platz aus dem Baum, nicht aus der eigenen Geometrie', () => {
+      const { wrapper, desktop, win } = mountTile();
+      const rect = desktop.tileRects[win.instanceId];
+      const style = wrapper.attributes('style') ?? '';
+
+      expect(rect).toEqual({ x: 0, y: 0, w: 1000, h: 600 });
+      expect(style).toContain(`left: ${rect.x}px`);
+      expect(style).toContain(`top: ${rect.y}px`);
+      expect(style).toContain(`width: ${rect.w}px`);
+      expect(style).toContain(`height: ${rect.h}px`);
+      expect(wrapper.get('.window-frame').classes()).toContain('tiled');
+    });
+
+    it('folgt jeder Änderung am Baum', async () => {
+      const { wrapper, desktop, win } = mountTile();
+      // Ein zweites Fenster teilt die Fläche — der Rahmen rückt nach.
+      desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });
+      await wrapper.vm.$nextTick();
+
+      const rect = desktop.tileRects[win.instanceId];
+      expect(rect.w).toBeLessThan(1000);
+      expect(wrapper.attributes('style')).toContain(`width: ${rect.w}px`);
+    });
+
+    it('lässt sich weder ziehen noch am Griff größer machen', async () => {
+      const { wrapper, desktop, win } = mountTile();
+      const before = desktop.tileRects[win.instanceId];
+
+      expect(wrapper.find('.resize-handle').exists()).toBe(false);
+      await wrapper.get('.titlebar').trigger('mousedown', { clientX: 200, clientY: 100 });
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: 400, clientY: 300 }));
+      await wrapper.vm.$nextTick();
+
+      expect(desktop.tileRects[win.instanceId]).toEqual(before);
+      expect(wrapper.attributes('style')).toContain(`left: ${before.x}px`);
+    });
+
+    it('füllt maximiert die ganze Fläche und kehrt danach in die Kachel zurück', async () => {
+      const { wrapper, desktop, win } = mountTile();
+      desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });
+      await wrapper.vm.$nextTick();
+      const tile = desktop.tileRects[win.instanceId];
+
+      await wrapper.get('.w-max').trigger('click');
+      expect(wrapper.get('.window-frame').classes()).toContain('full');
+
+      await wrapper.get('.w-max').trigger('click');
+      expect(wrapper.get('.window-frame').classes()).not.toContain('full');
+      expect(wrapper.attributes('style')).toContain(`width: ${tile.w}px`);
+    });
   });
 });

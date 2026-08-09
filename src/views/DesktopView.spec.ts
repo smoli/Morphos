@@ -1785,4 +1785,130 @@ describe('DesktopView', () => {
     expect(frame.style.display).toBe('none');
     expect(wrapper.get('.w-composer textarea').element.closest('.window-frame')).toBe(frame);
   });
+
+  describe('Kachel-Modus', () => {
+    const AREA = { x: 0, y: 0, w: 1200, h: 800 };
+
+    /** Die Rechtecke der sichtbaren Rahmen, wie sie im Stil stehen. */
+    function frameRects(wrapper: VueWrapper) {
+      return visibleFrames(wrapper).map((f) => {
+        const s = (f.element as HTMLElement).style;
+        return {
+          x: parseFloat(s.left),
+          y: parseFloat(s.top),
+          w: parseFloat(s.width),
+          h: parseFloat(s.height),
+        };
+      });
+    }
+
+    function expectDisjoint(rects: { x: number; y: number; w: number; h: number }[]): void {
+      for (const r of rects) {
+        expect(r.w).toBeGreaterThan(0);
+        expect(r.h).toBeGreaterThan(0);
+      }
+      for (let i = 0; i < rects.length; i += 1)
+        for (let j = i + 1; j < rects.length; j += 1) {
+          const [a, b] = [rects[i], rects[j]];
+          expect(a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h).toBe(false);
+        }
+    }
+
+    /**
+     * jsdom rechnet kein Layout aus — die gemessene Fläche wäre 0. Sie wird
+     * darum von Hand gesetzt, nachdem die Ansicht steht (der Beobachter der
+     * Ansicht meldet nur eine Änderung SEINER Messung, überschreibt also nichts).
+     */
+    async function tileOn() {
+      useDesktopStore().setTileArea(AREA);
+      useWorkspaceStore().uiMode = 'tiles';
+      await flushPromises();
+    }
+
+    it('kachelt beim Umschalten die schon offenen Fenster überschneidungsfrei', async () => {
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });
+      await flushPromises();
+
+      await tileOn();
+
+      const rects = frameRects(wrapper);
+      expect(rects).toHaveLength(2);
+      expectDisjoint(rects);
+      // Zusammen füllen sie die Fläche (bis auf die Fuge dazwischen).
+      expect(rects[0].w + rects[1].w).toBe(AREA.w - 12);
+      expect(visibleFrames(wrapper).every((f) => f.props('tiled') === true)).toBe(true);
+    });
+
+    it('nimmt ein neu geöffnetes Fenster in den Verbund und reflowt beim Schließen', async () => {
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      const rechner = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await tileOn();
+      expect(frameRects(wrapper)).toEqual([AREA]);
+
+      await tileWrap(wrapper, 'Editor').get('.tile').trigger('click');
+      await flushPromises();
+      expectDisjoint(frameRects(wrapper));
+      expect(frameRects(wrapper)).toHaveLength(2);
+
+      desktop.closeWindow(rechner);
+      await flushPromises();
+      // Die Schwester erbt die ganze Fläche.
+      expect(frameRects(wrapper)).toEqual([AREA]);
+    });
+
+    it('nimmt ein minimiertes Fenster heraus und beim Zurückholen wieder auf', async () => {
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      const editor = desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });
+      await tileOn();
+
+      desktop.minimizeWindow(editor);
+      await flushPromises();
+      expect(frameRects(wrapper)).toEqual([AREA]);
+
+      // Über das Dock kommt es zurück — und bekommt wieder eine Kachel.
+      await dockItem(wrapper, 'Editor').trigger('click');
+      await flushPromises();
+      const rects = frameRects(wrapper);
+      expect(rects).toHaveLength(2);
+      expectDisjoint(rects);
+    });
+
+    it('lässt ein gekacheltes Fenster nicht mehr frei verschieben', async () => {
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await tileOn();
+
+      await wrapper.get('.titlebar').trigger('mousedown', { clientX: 200, clientY: 100 });
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: 400, clientY: 300 }));
+      await flushPromises();
+
+      expect(frameRects(wrapper)).toEqual([AREA]);
+      expect(wrapper.find('.resize-handle').exists()).toBe(false);
+    });
+
+    it('rechnet die Kacheln auf eine geänderte Fläche um', async () => {
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });
+      await tileOn();
+
+      desktop.setTileArea({ x: 40, y: 10, w: 600, h: 900 });
+      await flushPromises();
+
+      const rects = frameRects(wrapper);
+      expectDisjoint(rects);
+      for (const r of rects) {
+        expect(r.x).toBeGreaterThanOrEqual(40);
+        expect(r.x + r.w).toBeLessThanOrEqual(640);
+      }
+    });
+  });
 });

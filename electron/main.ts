@@ -25,6 +25,7 @@ import { collectDiskUsage } from '../src/core/diskusage';
 import { cleanFavorites } from '../src/core/favorites';
 import { cleanAutohides, cleanDockEdges } from '../src/core/dock';
 import { cleanSessions } from '../src/core/session';
+import { cleanUiMode, DEFAULT_UI_MODE } from '../src/core/uimode';
 import { cleanWallpapers } from '../src/core/wallpaper';
 import { cleanBlurs, cleanTransparencies } from '../src/core/transparency';
 import { resolveLibs } from './libcache';
@@ -125,7 +126,7 @@ function readSettings(): Settings {
     const libWhitelist = Array.isArray(parsed.libWhitelist)
       ? parsed.libWhitelist.filter((p) => typeof p === 'string')
       : [];
-    const uiMode = parsed.uiMode === 'single' ? 'single' : 'windows';
+    const uiMode = cleanUiMode(parsed.uiMode);
     const maxAgents = clampMaxAgents(parsed.maxAgents);
     const iconPositions = cleanIconPositions(parsed.iconPositions);
     const favorites = cleanFavorites(parsed.favorites);
@@ -157,7 +158,7 @@ function readSettings(): Settings {
       accessRoots: {},
       permissions: {},
       libWhitelist: [],
-      uiMode: 'windows',
+      uiMode: DEFAULT_UI_MODE,
       maxAgents: DEFAULT_MAX_AGENTS,
       iconPositions: {},
       favorites: {},
@@ -595,7 +596,7 @@ ipcMain.handle('morphos:saveSettings', async (_e, settings: Settings): Promise<S
       accessRoots: settings?.accessRoots ?? {},
       permissions: settings?.permissions ?? {},
       libWhitelist: (settings?.libWhitelist ?? []).filter((p) => typeof p === 'string' && p.trim()).slice(0, 100),
-      uiMode: settings?.uiMode === 'single' ? 'single' : 'windows',
+      uiMode: cleanUiMode(settings?.uiMode),
       maxAgents: clampMaxAgents(settings?.maxAgents),
       iconPositions: cleanIconPositions(settings?.iconPositions),
       favorites: cleanFavorites(settings?.favorites),

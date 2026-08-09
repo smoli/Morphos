@@ -25,7 +25,7 @@ import type { Attachment } from '@/types';
  * Zuruf unten am Fenster erscheint. Den Rahmen — Geometrie, Ziehen,
  * Fensterknöpfe — stellt WindowFrame; hier liegt nur, was die App angeht.
  */
-const props = defineProps<{ win: DesktopWindow; single?: boolean }>();
+const props = defineProps<{ win: DesktopWindow; single?: boolean; tiled?: boolean }>();
 
 const desktop = useDesktopStore();
 const workspace = useWorkspaceStore();
@@ -115,7 +115,7 @@ async function onIcon(icon: string | null): Promise<void> {
 </script>
 
 <template>
-  <WindowFrame :win="win" :single="single">
+  <WindowFrame :win="win" :single="single" :tiled="tiled">
     <!-- Das Icon der App ist zugleich der Weg zum Icon-Dialog. -->
     <template #icon>
       <button

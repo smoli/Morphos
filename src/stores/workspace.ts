@@ -24,6 +24,7 @@ import {
   DEFAULT_DOCK_EDGE,
 } from '@/core/dock';
 import { cleanSessions, sameSession } from '@/core/session';
+import { cleanUiMode, DEFAULT_UI_MODE } from '@/core/uimode';
 import { cleanWallpaper, cleanWallpapers, DEFAULT_WALLPAPER } from '@/core/wallpaper';
 import {
   cleanBlur,
@@ -48,7 +49,7 @@ interface WorkspaceState {
   permissions: Record<string, FsPermissions>;
   /** Freigegebene Bibliotheks-Quellen (global, siehe core/libs). */
   libWhitelist: string[];
-  /** Desktop-Darstellung: überlappende Fenster oder eine App zur Zeit. */
+  /** Desktop-Darstellung: überlappende Fenster, eine App zur Zeit, oder Kacheln. */
   uiMode: UiMode;
   /** Wie viele Agentenläufe gleichzeitig arbeiten dürfen (global). */
   maxAgents: number;
@@ -91,7 +92,7 @@ export const useWorkspaceStore = defineStore('workspace', {
     accessRoots: {},
     permissions: {},
     libWhitelist: [],
-    uiMode: 'windows',
+    uiMode: DEFAULT_UI_MODE,
     maxAgents: DEFAULT_MAX_AGENTS,
     iconPositions: {},
     favorites: {},
@@ -159,7 +160,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.accessRoots = settings?.accessRoots && typeof settings.accessRoots === 'object' ? settings.accessRoots : {};
         this.permissions = settings?.permissions && typeof settings.permissions === 'object' ? settings.permissions : {};
         this.libWhitelist = Array.isArray(settings?.libWhitelist) ? settings.libWhitelist : [];
-        this.uiMode = settings?.uiMode === 'single' ? 'single' : 'windows';
+        this.uiMode = cleanUiMode(settings?.uiMode);
         this.maxAgents = clampMaxAgents(settings?.maxAgents);
         this.iconPositions =
           settings?.iconPositions && typeof settings.iconPositions === 'object' ? settings.iconPositions : {};
@@ -175,7 +176,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.accessRoots = {};
         this.permissions = {};
         this.libWhitelist = [];
-        this.uiMode = 'windows';
+        this.uiMode = DEFAULT_UI_MODE;
         this.maxAgents = DEFAULT_MAX_AGENTS;
         this.iconPositions = {};
         this.favorites = {};
@@ -232,7 +233,7 @@ export const useWorkspaceStore = defineStore('workspace', {
       await this.refresh();
     },
 
-    /** Schaltet den Desktop-Modus um (überlappende Fenster ⇄ eine App zur Zeit). */
+    /** Schaltet den Desktop-Modus um (Fenster ⇄ Einzeln ⇄ Kacheln, siehe core/uimode). */
     setUiMode(mode: UiMode): void {
       this.uiMode = mode;
       void this.persistSettings();
