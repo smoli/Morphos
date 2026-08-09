@@ -11,7 +11,7 @@ epic: e09
 ## What
 
 Turn the bottom dock into a **macOS-style dock**. Left → right it holds: the
-pinned **＋ New-App** (c0053, always there), the user's **favorite** apps (pinned,
+pinned **＋ New-App** (always there), the user's **favorite** apps (pinned,
 stay even when closed), then any **running** apps not already pinned — each
 running app carries a **running indicator**. It replaces today's
 minimized-only dock; a minimized app is reachable from its dock item.
@@ -21,6 +21,8 @@ minimized-only dock; a minimized app is reachable from its dock item.
 - [ ] The dock shows, in order: the **＋ New-App** pin, then **favorites**, then
       **running** apps not already pinned; an app that is both favorite and
       running appears **once** (with the running indicator).
+- [ ] The launcher grid **no longer** contains a ＋ New-App tile — the ＋ lives
+      only in the dock *(merged c0053)*.
 - [ ] A **running indicator** marks currently-open apps; a favorite that isn't
       running shows without it.
 - [ ] Clicking a dock item **focuses** the app's window, **restoring** it if
@@ -52,8 +54,8 @@ Open questions for planning:
   global.
 - Does the **file-explorer system window** (c0047) appear in the dock / be
   pinnable? (It's a system window, not an app.)
-- **c0053** is now a near-subset of this card (the ＋ pin) — merge, or keep as the
-  thin "move ＋ to dock" slice?
+- **c0053 merged in** (2026-08-09): the grid→dock move of the ＋ is an acceptance
+  criterion above; c0053 has been archived.
 - Assumes the bottom edge is free — depends on the composer moving out of the way
   (Cluster B / c0056).
 
