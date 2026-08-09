@@ -1,12 +1,12 @@
 ---
 id: c0042
 title: Telemetry — agent activity & disk usage
-status: review
+status: done
 epic: e09
 depends: [c0039]
 created: 2026-08-08
 updated: 2026-08-09
-status-changed: 2026-08-09T00:20:05
+status-changed: 2026-08-09T07:01:02
 usage-tokens: 43615
 usage-cost: 5.929118
 ---
@@ -62,3 +62,4 @@ folder use (per-app sizes + total), so the user has a feel for cost and storage.
   „Telemetrie“ in den Einstellungen; 766 Tests grün, typecheck + build sauber
 - 2026-08-09 status → in-progress (agent)
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)
