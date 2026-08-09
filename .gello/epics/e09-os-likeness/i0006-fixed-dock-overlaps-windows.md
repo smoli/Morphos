@@ -7,6 +7,7 @@ created: 2026-08-09
 updated: 2026-08-09
 status-changed: 2026-08-09T23:05:03
 epic: e09
+commit: b07e88d
 ---
 
 If the dock is fixed it should not overlap windows that are fullscreen, or when in tiling mode
