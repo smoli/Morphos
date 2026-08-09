@@ -4,7 +4,7 @@ import { getHost } from '@/services/host';
 import { agentEventIcon, agentEventLabel } from '@/core/agent';
 import { useElapsed } from '@/composables/useElapsed';
 import { renderMarkdown } from '@/core/markdown';
-import type { AgentEvent, Attachment, ChatMessage } from '@/types';
+import type { AgentEvent, Attachment, ChatMessage, Framework } from '@/types';
 
 /**
  * Der Chat einer App: Verlauf, Eingabe, Anhänge und der Fortschritt des
@@ -23,9 +23,27 @@ const props = defineProps<{
   startedAt?: number | null;
   /** Wie viele Wünsche für diese App noch warten (sie laufen nacheinander). */
   queued?: number;
+  /**
+   * Es entsteht gerade eine NEUE App — nur dann steht die Framework-Wahl zur
+   * Debatte. Eine bestehende App bringt ihre Wahl selbst mit und wird nicht
+   * noch einmal gefragt.
+   */
+  newApp?: boolean;
+  /** Die aktuelle Framework-Wahl für die neue App. */
+  framework?: Framework;
 }>();
 
-const emit = defineEmits<{ submit: [text: string, attachments: Attachment[]] }>();
+const emit = defineEmits<{
+  submit: [text: string, attachments: Attachment[]];
+  'update:framework': [framework: Framework];
+}>();
+
+// Preact ist die Vorgabe — der Haken ist an, bis der Anwender ihn wegnimmt.
+const preact = computed(() => props.framework !== 'vanilla');
+
+function setPreact(on: boolean): void {
+  emit('update:framework', on ? 'preact' : 'vanilla');
+}
 
 const text = ref('');
 // Wer den Chat öffnet, will ihn sehen: Der Verlauf steht von Anfang an offen
@@ -263,6 +281,13 @@ function fmt(ts: number): string {
           </span>
         </div>
         <div v-if="attachError" class="attach-error">{{ attachError }}</div>
+
+        <!-- Nur beim Anlegen: Womit soll die neue App gebaut werden? Danach
+             steht die Wahl im Quelltext der App und wird nicht mehr gefragt. -->
+        <label v-if="newApp" class="framework" title="Oberfläche und Zustand mit Preact + htm bauen (statt von Hand)">
+          <input type="checkbox" :checked="preact" @change="setPreact(($event.target as HTMLInputElement).checked)" />
+          <span class="framework-label">Mit Preact bauen</span>
+        </label>
 
         <div class="inputrow">
           <button
@@ -518,6 +543,25 @@ function fmt(ts: number): string {
 .attach-error {
   color: #ffb3b3;
   font-size: 12px;
+}
+/* Die Framework-Wahl sitzt unauffällig über der Eingabe — sie ist eine Vorgabe,
+   keine Frage, die den Blick vom Wunsch wegziehen soll. */
+.framework {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.framework input {
+  accent-color: var(--accent);
+  cursor: pointer;
+  margin: 0;
+}
+.framework:hover .framework-label {
+  color: var(--text);
 }
 .inputrow {
   display: flex;

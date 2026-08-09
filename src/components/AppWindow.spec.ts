@@ -430,6 +430,31 @@ describe('AppWindow', () => {
       expect(wrapper.findComponent(ChatDock).exists()).toBe(true);
     });
 
+    it('stellt beim Anlegen einer neuen App die Framework-Wahl — mit Preact vorgehakt', async () => {
+      const { wrapper } = await mountDraft();
+
+      const dock = wrapper.getComponent(ChatDock);
+      expect(dock.props('newApp')).toBe(true);
+      expect(dock.props('framework')).toBe('preact');
+      expect((wrapper.get('.framework input').element as HTMLInputElement).checked).toBe(true);
+    });
+
+    it('nimmt das Abwählen in den Zustand des Fensters auf', async () => {
+      const { wrapper, store } = await mountDraft();
+
+      await wrapper.get('.framework input').setValue(false);
+
+      expect(store.newFramework).toBe('vanilla');
+    });
+
+    it('fragt eine bestehende App nicht noch einmal nach dem Framework', async () => {
+      const { wrapper } = await mountFrameForApp();
+      await wrapper.get('.w-chat').trigger('click');
+
+      expect(wrapper.getComponent(ChatDock).props('newApp')).toBe(false);
+      expect(wrapper.find('.framework').exists()).toBe(false);
+    });
+
     it('geht bei einer Rückfrage des LLM von selbst auf', async () => {
       const { wrapper, win } = await mountFrameForApp();
       expect(wrapper.findComponent(ChatDock).exists()).toBe(false);

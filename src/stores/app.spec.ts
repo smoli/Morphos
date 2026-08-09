@@ -92,6 +92,7 @@ describe('useAppStore', () => {
       [],
       [],
       expect.any(String),
+      'preact',
     );
     expect(store.name).toBe('Taschenrechner');
     expect(store.icon).toBe('🧮');
@@ -775,6 +776,46 @@ describe('useAppStore', () => {
       await store.generate('Ein Rechner');
 
       expect(store.composerOpen).toBe(false);
+    });
+  });
+
+  describe('Framework-Wahl', () => {
+    /** Das Framework-Argument des letzten generate-Aufrufs. */
+    const frameworkOf = (host: MorphosHost): unknown =>
+      (host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls.at(-1)![6];
+
+    it('legt eine neue App mit Preact an, ohne dass jemand danach fragen muss', async () => {
+      const host = makeHost();
+      setHost(host);
+      const store = useAppStore();
+      store.newDraft('/apps');
+
+      expect(store.newFramework).toBe('preact');
+      await store.generate('Ein Zähler');
+
+      expect(frameworkOf(host)).toBe('preact');
+    });
+
+    it('reicht die abgewählte Preact-Wahl an den Hauptprozess durch', async () => {
+      const host = makeHost();
+      setHost(host);
+      const store = useAppStore();
+      store.newDraft('/apps');
+      store.newFramework = 'vanilla';
+
+      await store.generate('Ein Zähler');
+
+      expect(frameworkOf(host)).toBe('vanilla');
+    });
+
+    it('setzt die Wahl mit jedem neuen Entwurf auf die Vorgabe zurück', () => {
+      setHost(makeHost());
+      const store = useAppStore();
+      store.newFramework = 'vanilla';
+
+      store.newDraft('/apps');
+
+      expect(store.newFramework).toBe('preact');
     });
   });
 });

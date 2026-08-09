@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractLibs, matchesWhitelist } from './libs';
+import { BUILTIN_LIBS, extractLibs, isBuiltinLib, matchesWhitelist, splitLibs } from './libs';
 
 describe('extractLibs', () => {
   it('liest alle morphos:lib-Metatags', () => {
@@ -23,6 +23,30 @@ describe('extractLibs', () => {
       '</head></html>';
     expect(extractLibs(html)).toEqual(['https://a.example/x.js']);
     expect(extractLibs('<html></html>')).toEqual([]);
+  });
+});
+
+describe('eingebaute Bibliotheken', () => {
+  it('kennt Preact samt Hooks und htm', () => {
+    expect(isBuiltinLib('preact')).toBe(true);
+    expect(BUILTIN_LIBS.preact.files).toHaveLength(3);
+    // Der Kleber legt das Tagged-Template `html` global bereit.
+    expect(BUILTIN_LIBS.preact.glue).toContain('htm.bind(preact.h)');
+  });
+
+  it('hält nichts Ererbtes für eingebaut', () => {
+    expect(isBuiltinLib('constructor')).toBe(false);
+    expect(isBuiltinLib('toString')).toBe(false);
+  });
+
+  it('trennt eingebaute Namen von externen URLs', () => {
+    const { builtin, external } = splitLibs(['preact', 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1']);
+    expect(builtin).toEqual(['preact']);
+    expect(external).toEqual(['https://cdn.jsdelivr.net/npm/chart.js@4.4.1']);
+  });
+
+  it('lässt eine App ohne Bibliotheken ganz in Ruhe', () => {
+    expect(splitLibs([])).toEqual({ builtin: [], external: [] });
   });
 });
 

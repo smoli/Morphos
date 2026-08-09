@@ -285,6 +285,38 @@ describe('ChatDock', () => {
     wrapper.unmount();
   });
 
+  describe('Framework-Wahl', () => {
+    it('bietet die Wahl beim Anlegen einer neuen App an — und hat Preact vorgehakt', () => {
+      const wrapper = mountDock({ newApp: true, framework: 'preact' });
+
+      const box = wrapper.get('.framework input');
+      expect((box.element as HTMLInputElement).checked).toBe(true);
+      expect(wrapper.get('.framework').text()).toContain('Preact');
+    });
+
+    it('zeigt sie bei einer bestehenden App nicht — die bringt ihre Wahl selbst mit', () => {
+      const wrapper = mountDock({ messages });
+      expect(wrapper.find('.framework').exists()).toBe(false);
+    });
+
+    it('meldet das Abwählen nach oben', async () => {
+      const wrapper = mountDock({ newApp: true, framework: 'preact' });
+
+      await wrapper.get('.framework input').setValue(false);
+
+      expect(wrapper.emitted('update:framework')![0]).toEqual(['vanilla']);
+    });
+
+    it('meldet das erneute Anhaken nach oben', async () => {
+      const wrapper = mountDock({ newApp: true, framework: 'vanilla' });
+      expect((wrapper.get('.framework input').element as HTMLInputElement).checked).toBe(false);
+
+      await wrapper.get('.framework input').setValue(true);
+
+      expect(wrapper.emitted('update:framework')![0]).toEqual(['preact']);
+    });
+  });
+
   describe('Einfügen aus der Zwischenablage (Cmd/Ctrl+V)', () => {
     function pasteEvent(types: string[]) {
       return { clipboardData: { items: types.map((type) => ({ type })) } };

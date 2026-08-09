@@ -176,6 +176,9 @@ async function onIcon(icon: string | null): Promise<void> {
         :activity="store.activity"
         :started-at="store.runStartedAt"
         :queued="queuedHere"
+        :new-app="store.isDraft"
+        :framework="store.newFramework"
+        @update:framework="store.newFramework = $event"
         @submit="onPrompt"
         @keydown.esc.stop="store.closeComposer()"
       />

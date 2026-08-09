@@ -1,9 +1,10 @@
 import { defineStore } from 'pinia';
-import type { AgentEvent, AppData, AppDocs, Attachment, ChatMessage, SourceFile, VersionInfo } from '@/types';
+import type { AgentEvent, AppData, AppDocs, Attachment, ChatMessage, Framework, SourceFile, VersionInfo } from '@/types';
 import { getHost } from '@/services/host';
 import { agentEventLabel } from '@/core/agent';
 import { extractIcon, extractTitle } from '@/core/html';
 import { EMPTY_DOCS, toDocs } from '@/core/docs';
+import { DEFAULT_FRAMEWORK } from '@/core/framework';
 import { DEFAULT_ICON, DEFAULT_NAME, makeAppId } from '@/core/app';
 
 /** Deckel für den mitlaufenden Fortschritt — ein langer Lauf soll nicht wachsen ohne Ende. */
@@ -40,6 +41,12 @@ interface AppState {
    * einem neuen Entwurf und bei einer Rückfrage des LLM.
    */
   composerOpen: boolean;
+  /**
+   * Womit eine NEUE App gebaut werden soll — die Wahl im Composer, die es nur
+   * beim Anlegen gibt (Vorgabe: Preact). Eine bestehende App trägt ihre Wahl in
+   * ihrem eigenen Quelltext; dieser Wert bleibt dann ohne Wirkung.
+   */
+  newFramework: Framework;
   /** Was der Agent im laufenden (bzw. zuletzt gelaufenen) Lauf getan hat. */
   activity: AgentEvent[];
   /** Beginn des laufenden Laufs (ms) — Grundlage der angezeigten Laufzeit; sonst null. */
@@ -77,6 +84,7 @@ export function useAppWindow(instanceId: string) {
     chat: [],
     pendingQuestion: null,
     composerOpen: false,
+    newFramework: DEFAULT_FRAMEWORK,
     activity: [],
     runStartedAt: null,
     runId: null,
@@ -232,7 +240,11 @@ export function useAppWindow(instanceId: string) {
         });
         this.pendingQuestion = null;
 
-        const res = await getHost().generate(text, plainFiles, plainDocs, priorChat, plainAtts, runId);
+        // Die Framework-Wahl geht immer mit; für eine bestehende App entscheidet
+        // ohnehin deren eigener Quelltext (siehe core/framework).
+        const res = await getHost().generate(
+          text, plainFiles, plainDocs, priorChat, plainAtts, runId, this.newFramework,
+        );
         // Abgebrochen: Das (Teil-)Ergebnis wird verworfen und der Wunsch aus dem
         // Dialog genommen — die App bleibt, wie sie war, und der Abbruch selbst
         // ist kein Fehler.

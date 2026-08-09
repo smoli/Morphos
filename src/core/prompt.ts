@@ -1,6 +1,7 @@
-import type { AppDocs, ChatMessage, SourceFile } from '@/types';
+import type { AppDocs, ChatMessage, Framework, SourceFile } from '@/types';
 import { serializeFiles } from './files';
 import { CONCEPT_FILE, EMPTY_DOCS, USERDOC_FILE } from './docs';
+import { PREACT_LIB } from './framework';
 
 /** Für den Prompt aufbereitete Referenzdatei: Text inline, Bild als Pfad. */
 export interface PromptAttachment {
@@ -18,6 +19,11 @@ export interface PromptContext {
   attachments?: PromptAttachment[];
   /** Der aktuelle Stand der beiden Dokumente der App (core/docs). */
   docs?: AppDocs;
+  /**
+   * Womit DIESE App gebaut wird (core/framework). Nur 'preact' fügt überhaupt
+   * etwas hinzu — eine vanilla-App bekommt kein Wort darüber zu lesen.
+   */
+  framework?: Framework;
 }
 
 const MAX_CHAT_MESSAGES = 10;
@@ -111,19 +117,6 @@ export const SYSTEM_PROMPT = [
   '- Zulässig sind NUR die unten unter "FREIGEGEBENE BIBLIOTHEKS-QUELLEN" genannten',
   '  Quellen. Steht dort nichts, sind KEINE Bibliotheken verfügbar: alles selbst schreiben.',
   '',
-  'PREACT + HTM (eingebaut):',
-  '- Für zustandsreiche Apps steht Preact mit htm bereit — statt UI und Zustand von',
-  '  Hand zu bauen. Deklariere im <head> von src/index.html:',
-  '    <meta name="morphos:lib" content="preact">',
-  '- Danach sind global verfügbar: preact (h, render, Fragment, Component),',
-  '  preactHooks (useState, useEffect, useMemo, useRef …) und html — ein Tagged-',
-  '  Template im JSX-Stil (KEIN Build-Schritt, KEIN eval nötig). Beispiel:',
-  '    const { render } = preact; const { useState } = preactHooks;',
-  '    function App(){ const [n,setN]=useState(0);',
-  '      return html`<button onClick=${()=>setN(n+1)}>Klicks: ${n}</button>`; }',
-  '    render(html`<${App} />`, document.getElementById("app"));',
-  '- localStorage und Netzwerk bleiben tabu; Stil weiterhin inline.',
-  '',
   'DATEISYSTEM (optional, für dauerhaftes Speichern):',
   '- Es steht ein globales, asynchrones API bereit: window.morphosFS. Alle Methoden',
   '  liefern ein Promise. Pfade sind relativ zu einem gemeinsamen Datenordner des',
@@ -159,6 +152,31 @@ export const SYSTEM_PROMPT = [
   '- Setze die gewünschte Änderung um und gib die geänderten Dateien vollständig zurück.',
 ].join('\n');
 
+/**
+ * Die Anleitung zu Preact + htm — sie steht NICHT im Systemprompt, sondern geht
+ * nur an Apps, die auch mit Preact gebaut werden. Alle anderen sollen gar nicht
+ * erst auf den Gedanken kommen (siehe core/framework).
+ */
+export const PREACT_GUIDE = [
+  'PREACT + HTM (diese App wird damit gebaut):',
+  '- Baue Oberfläche UND Zustand dieser App mit Preact und htm — nicht von Hand',
+  '  über document.createElement/innerHTML.',
+  '- Fordere die Bibliothek dafür im <head> von src/index.html an:',
+  `    <meta name="morphos:lib" content="${PREACT_LIB}">`,
+  '  Ohne dieses Metatag fehlt sie zur Laufzeit — es MUSS drinstehen. Die Shell',
+  '  bettet Preact, seine Hooks und htm offline ein (kein Build-Schritt, kein eval).',
+  '- Danach sind global verfügbar: preact (h, render, Fragment, Component),',
+  '  preactHooks (useState, useEffect, useMemo, useRef …) und html — ein Tagged-',
+  '  Template im JSX-Stil. Beispiel:',
+  '    const { render } = preact; const { useState } = preactHooks;',
+  '    function App(){ const [n,setN]=useState(0);',
+  '      return html`<button onClick=${()=>setN(n+1)}>Klicks: ${n}</button>`; }',
+  '    render(html`<${App} />`, document.getElementById("app"));',
+  '- Alle übrigen Regeln gelten unverändert: kein localStorage, kein Netzwerk,',
+  '  Stil in eigenen CSS-Dateien des Quelldatei-Satzes.',
+  '',
+].join('\n');
+
 /** Kürzt eine Dialognachricht für den Prompt-Kontext. */
 function clip(text: string): string {
   return text.length > MAX_CHAT_CHARS ? `${text.slice(0, MAX_CHAT_CHARS)} …` : text;
@@ -181,9 +199,9 @@ function docSection(title: string, content: string, missing: string): string[] {
 
 /**
  * Setzt den an das LLM gesendeten Prompt zusammen: freigegebene
- * Bibliotheks-Quellen, bisheriger Dialog, Referenzdateien, die beiden
- * Dokumente der App, der aktuelle Quelldatei-Satz (falls vorhanden) und der
- * neue Wunsch des Anwenders.
+ * Bibliotheks-Quellen, das Framework dieser App (nur wenn eines im Spiel ist),
+ * bisheriger Dialog, Referenzdateien, die beiden Dokumente der App, der
+ * aktuelle Quelldatei-Satz (falls vorhanden) und der neue Wunsch des Anwenders.
  */
 export function buildPrompt(
   userRequest: string,
@@ -200,6 +218,8 @@ export function buildPrompt(
     parts.push('(keine — es sind KEINE Bibliotheken verfügbar)');
   }
   parts.push('');
+
+  if (context.framework === 'preact') parts.push(PREACT_GUIDE);
 
   const chat = context.chat ?? [];
   if (chat.length > 0) {

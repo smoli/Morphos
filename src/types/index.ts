@@ -5,6 +5,12 @@ export interface SourceFile {
 }
 
 /**
+ * Womit eine App ihre Oberfläche baut: von Hand ("vanilla") oder mit der
+ * eingebauten Bibliothek Preact + htm. Siehe core/framework.
+ */
+export type Framework = 'vanilla' | 'preact';
+
+/**
  * Vom LLM gelieferte Änderungen: geänderte/neue Dateien plus gelöschte Pfade,
  * optional eine Mitteilung an den Anwender (Rückfrage oder Erläuterung).
  */
@@ -413,7 +419,9 @@ export interface MorphosHost {
    * `chat` der bisherige Dialog (für den Kontext), `attachments` mitgeschickte
    * Referenzdateien. Zurück kommen Dateiänderungen samt fortgeschriebener
    * Dokumente und/oder eine Rückfrage (`say`). `runId` markiert den Lauf, unter
-   * dem seine Fortschrittsereignisse gemeldet werden.
+   * dem seine Fortschrittsereignisse gemeldet werden. `framework` ist die im
+   * Composer getroffene Wahl für eine NEUE App — eine bestehende bringt ihre
+   * eigene mit (siehe core/framework).
    */
   generate(
     prompt: string,
@@ -422,6 +430,7 @@ export interface MorphosHost {
     chat: ChatMessage[],
     attachments: Attachment[],
     runId?: string,
+    framework?: Framework,
   ): Promise<GenerateResult>;
 
   /**

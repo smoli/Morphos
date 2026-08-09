@@ -5,6 +5,41 @@
  * und bettet sie beim Bündeln inline ein — die laufende App bleibt offline.
  */
 
+/**
+ * Eingebaute Bibliotheken (Tier 0): Sie werden nicht geladen, sondern liegen
+ * der Shell bei (vendored in node_modules) und werden beim Bündeln inline
+ * eingebettet. Eine App fordert sie unter ihrem NAMEN statt einer URL an —
+ * <meta name="morphos:lib" content="preact"> —, deshalb greift für sie weder
+ * Freigabeliste noch Cache. `glue` läuft hinter den Dateien und legt die
+ * globale API zurecht.
+ */
+export const BUILTIN_LIBS: Record<string, { files: string[]; glue: string }> = {
+  // Preact + Hooks + htm: CSP-sauber, denn htm ist ein Tagged-Template-PARSER
+  // (kein eval) und braucht keinen Bündel-Schritt. Globale danach: preact,
+  // preactHooks, html.
+  preact: {
+    files: ['preact/dist/preact.umd.js', 'preact/hooks/dist/hooks.umd.js', 'htm/dist/htm.umd.js'],
+    glue: '\n;window.html = htm.bind(preact.h);\n',
+  },
+};
+
+/** Ist das eine der eingebauten Bibliotheken (und nicht bloß ein Objekt-Erbstück)? */
+export function isBuiltinLib(name: string): boolean {
+  return Object.prototype.hasOwnProperty.call(BUILTIN_LIBS, name);
+}
+
+/**
+ * Teilt die angeforderten Bibliotheken auf: eingebaute (beim Namen genannt)
+ * kommen aus node_modules, alle übrigen sind URLs und laufen über Freigabeliste
+ * und Cache.
+ */
+export function splitLibs(requested: string[]): { builtin: string[]; external: string[] } {
+  return {
+    builtin: requested.filter(isBuiltinLib),
+    external: requested.filter((name) => !isBuiltinLib(name)),
+  };
+}
+
 /** Liest alle per morphos:lib deklarierten Bibliotheks-URLs (dedupliziert). */
 export function extractLibs(html: string): string[] {
   const urls: string[] = [];

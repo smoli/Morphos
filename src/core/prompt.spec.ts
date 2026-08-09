@@ -48,6 +48,13 @@ describe('SYSTEM_PROMPT', () => {
     expect(SYSTEM_PROMPT).toContain('morphos:lib');
   });
 
+  // Preact gilt nur für Apps, die damit gebaut werden — der immer mitlaufende
+  // Systemprompt soll es einer vanilla-App nicht dauernd anpreisen.
+  it('erwähnt Preact mit keinem Wort — das steht nur im Prompt der Apps, die es nutzen', () => {
+    expect(SYSTEM_PROMPT).not.toMatch(/preact/i);
+    expect(SYSTEM_PROMPT).not.toMatch(/htm\b/i);
+  });
+
   it('erlaubt Rückfragen über den SAY-Block', () => {
     expect(SYSTEM_PROMPT).toContain('===MORPHOS:SAY===');
     expect(SYSTEM_PROMPT).toMatch(/Rückfrage/i);
@@ -104,6 +111,21 @@ describe('buildPrompt', () => {
   it('weist ohne Freigaben darauf hin, dass keine Bibliotheken verfügbar sind', () => {
     const p = buildPrompt('x', FILES, []);
     expect(p).toContain('KEINE Bibliotheken');
+  });
+
+  it('legt die Preact-Anleitung bei, wenn die App damit gebaut wird', () => {
+    const p = buildPrompt('Ein Zähler', [], [], { framework: 'preact' });
+    expect(p).toContain('PREACT + HTM');
+    expect(p).toContain('<meta name="morphos:lib" content="preact">');
+    expect(p).toContain('preactHooks');
+    // Vor dem Wunsch — er bleibt das Letzte im Prompt.
+    expect(p.indexOf('PREACT + HTM')).toBeLessThan(p.indexOf('Ein Zähler'));
+  });
+
+  it('schweigt über Preact, wenn die App vanilla ist', () => {
+    expect(buildPrompt('Ein Zähler', [], [], { framework: 'vanilla' })).not.toMatch(/preact/i);
+    // Ohne Angabe erst recht — der Prompt bleibt, wie er war.
+    expect(buildPrompt('Ein Zähler', [], [])).not.toMatch(/preact/i);
   });
 
   it('trimmt den Nutzerwunsch', () => {

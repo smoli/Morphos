@@ -12,7 +12,8 @@ import { extractHtml } from '../src/core/html';
 import { applyChanges, isValidSourcePath, parseLLMOutput } from '../src/core/files';
 import { applyDocs, hasDocChanges, splitDocs, toDocs } from '../src/core/docs';
 import { bundle, ENTRY_FILE } from '../src/core/bundle';
-import { extractLibs } from '../src/core/libs';
+import { BUILTIN_LIBS, extractLibs, isBuiltinLib, splitLibs } from '../src/core/libs';
+import { resolveFramework } from '../src/core/framework';
 import { commitAll, countVersions, ensureRepo, listVersions, restoreTree } from '../src/core/gitstore';
 import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeAppState, writeChat } from '../src/core/appstore';
 import { validateIcon } from '../src/core/icon';
@@ -38,6 +39,7 @@ import type {
   ChatMessage,
   DiskUsageResult,
   FolderResult,
+  Framework,
   FsRequest,
   FsResponse,
   GenerateResult,
@@ -88,28 +90,15 @@ function libCacheDir(): string {
   return path.join(app.getPath('userData'), 'lib-cache');
 }
 
-// TRYOUT (e10, Preact-Variante): eingebaute UI-Bibliothek Preact + htm. CSP-sauber
-// — htm ist ein Tagged-Template-PARSER (kein eval) und braucht keinen Bündel-
-// Schritt, die strikte CSP bleibt also unangetastet. Eine App fordert sie über
-// <meta name="morphos:lib" content="preact"> an; eingebettet werden die vendored
-// UMD-Builds aus node_modules plus etwas Kleber (window.html = htm.bind(preact.h)).
-// Globale danach: preact, preactHooks, html.
-const BUILTIN_LIB_FILES: Record<string, string[]> = {
-  preact: [
-    'preact/dist/preact.umd.js',
-    'preact/hooks/dist/hooks.umd.js',
-    'htm/dist/htm.umd.js',
-  ],
-};
-const BUILTIN_LIB_GLUE: Record<string, string> = {
-  preact: '\n;window.html = htm.bind(preact.h);\n',
-};
-
+/**
+ * Holt eine eingebaute Bibliothek (siehe core/libs BUILTIN_LIBS) aus den
+ * vendored node_modules — sie wird nicht geladen, sondern liegt bei.
+ */
 function readBuiltinLib(name: string): string | null {
-  const files = BUILTIN_LIB_FILES[name];
-  if (!files) return null;
+  const lib = isBuiltinLib(name) ? BUILTIN_LIBS[name] : undefined;
+  if (!lib) return null;
   const parts: string[] = [];
-  for (const rel of files) {
+  for (const rel of lib.files) {
     let src: string | null = null;
     for (const base of [process.cwd(), path.join(__dirname, '..'), path.join(__dirname, '../..')]) {
       try {
@@ -122,7 +111,7 @@ function readBuiltinLib(name: string): string | null {
     if (src === null) return null;
     parts.push(src);
   }
-  parts.push(BUILTIN_LIB_GLUE[name] ?? '');
+  parts.push(lib.glue);
   return parts.join('\n');
 }
 
@@ -366,6 +355,8 @@ function runClaude(
  * (Whitelist + Cache) und zum Artefakt bündeln.
  * Eine reine Rückfrage kommt ohne files/html/docs zurück — es wird nichts
  * committet und auch kein Dokument angefasst.
+ * `requestedFramework` ist die Wahl aus dem Composer; sie zählt nur für eine
+ * NEUE App — eine bestehende bringt ihre eigene mit (siehe core/framework).
  * `onEvent` meldet den Fortschritt des Laufs an das aufrufende Fenster,
  * `runId` macht ihn abbrechbar.
  */
@@ -375,6 +366,7 @@ async function generate(
   currentDocs: AppDocs,
   chat: ChatMessage[],
   attachments: Attachment[],
+  requestedFramework?: Framework,
   onEvent: (event: AgentEvent) => void = () => {},
   runId = '',
 ): Promise<GenerateResult> {
@@ -382,7 +374,8 @@ async function generate(
 
   const prepared = preparePromptAttachments(attachments);
   if (prepared.error) return { ok: false, error: prepared.error };
-  const context: PromptContext = { chat, attachments: prepared.atts, docs: currentDocs };
+  const framework = resolveFramework(current, requestedFramework);
+  const context: PromptContext = { chat, attachments: prepared.atts, docs: currentDocs, framework };
 
   // Bild-Referenzen liest die CLI selbst — Read nur für genau diese Pfade freigeben.
   const extraArgs = prepared.atts
@@ -411,9 +404,7 @@ async function generate(
 
   // Eingebaute Bibliotheken (Preact) vor der Whitelist abfangen und aus
   // node_modules einbetten; der Rest läuft über die freigegebenen Quellen.
-  const requested = extractLibs(entry.content);
-  const builtinNames = requested.filter((n) => n in BUILTIN_LIB_FILES);
-  const externalUrls = requested.filter((n) => !(n in BUILTIN_LIB_FILES));
+  const { builtin: builtinNames, external: externalUrls } = splitLibs(extractLibs(entry.content));
 
   const libs: Record<string, string> = {};
   for (const name of builtinNames) {
@@ -492,6 +483,7 @@ ipcMain.handle('morphos:generate', async (
     chat: ChatMessage[];
     attachments: Attachment[];
     runId?: string;
+    framework?: Framework;
   },
 ): Promise<GenerateResult> => {
   if (!payload?.prompt?.trim()) return { ok: false, error: 'Bitte gib einen Wunsch ein.' };
@@ -505,6 +497,10 @@ ipcMain.handle('morphos:generate', async (
   const attachments = Array.isArray(payload.attachments)
     ? payload.attachments.filter((a) => a && typeof a.path === 'string' && typeof a.name === 'string')
     : [];
+  // Die Framework-Wahl kommt aus dem Composer; alles Unbekannte gilt als
+  // „nicht gewählt“ und läuft damit auf vanilla hinaus.
+  const framework: Framework | undefined =
+    payload.framework === 'preact' || payload.framework === 'vanilla' ? payload.framework : undefined;
   // Der Fortschritt geht an genau das Fenster zurück, das den Lauf gestartet
   // hat — die Lauf-Id ordnet ihn dort dem richtigen App-Fenster zu.
   const runId = typeof payload.runId === 'string' ? payload.runId : '';
@@ -513,7 +509,7 @@ ipcMain.handle('morphos:generate', async (
     if (sender.isDestroyed()) return;
     sender.send('morphos:agentEvent', runId, agentEvent);
   };
-  return generate(payload.prompt, current, docs, chat, attachments, onEvent, runId);
+  return generate(payload.prompt, current, docs, chat, attachments, framework, onEvent, runId);
 });
 
 // Abbruch eines laufenden Agenten: Der Kindprozess zu dieser Lauf-Id wird
