@@ -1,10 +1,10 @@
 ---
 id: c0064
 title: Add a tiling window manager
-status: review
+status: done
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T21:30:51
+status-changed: 2026-08-09T21:40:06
 epic: e09
 depends: [c0065, c0066, c0067, c0068]
 usage-tokens: 15798
@@ -127,3 +127,4 @@ einer Fläche, die kaum die Fuge fasst. Die Rechnung hielt bereits stand.
 - 2026-08-09 status → ready (app)
 - 2026-08-09 status → in-progress (agent)
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)

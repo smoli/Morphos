@@ -1,12 +1,12 @@
 ---
 id: c0071
 title: Distinction for active window
-status: review
+status: done
 ref: c0064
 epic: e09
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T21:37:34
+status-changed: 2026-08-09T21:40:05
 commit: 2cd8727
 usage-tokens: 11663
 usage-cost: 1.880453
@@ -36,3 +36,4 @@ Have this in general not only for tiling mode
 
 - 2026-08-09 status → in-progress (agent)
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)
