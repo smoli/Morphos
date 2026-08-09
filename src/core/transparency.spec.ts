@@ -1,9 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
+  cleanBlur,
+  cleanBlurs,
   cleanTransparency,
   cleanTransparencies,
+  DEFAULT_DOCK_BLUR,
   DEFAULT_DOCK_TRANSPARENCY,
   dockBackgroundCss,
+  dockBlurCss,
+  MAX_DOCK_BLUR,
   transparencyPercent,
 } from './transparency';
 
@@ -67,6 +72,64 @@ describe('dockBackgroundCss', () => {
     expect(dockBackgroundCss('red; background: url(x)' as never)).toBe(
       dockBackgroundCss(DEFAULT_DOCK_TRANSPARENCY),
     );
+  });
+});
+
+describe('cleanBlur', () => {
+  it('nimmt einen Schleier zwischen klar und dicht', () => {
+    expect(cleanBlur(0)).toBe(0);
+    expect(cleanBlur(14)).toBe(14);
+    expect(cleanBlur(MAX_DOCK_BLUR)).toBe(MAX_DOCK_BLUR);
+  });
+
+  it('rundet auf ganze Bildpunkte — der Regler soll nichts Krummes ablegen', () => {
+    expect(cleanBlur(8.4)).toBe(8);
+    expect(cleanBlur(8.6)).toBe(9);
+  });
+
+  it('lehnt ab, was kein Schleier ist', () => {
+    expect(cleanBlur(-1)).toBeNull();
+    expect(cleanBlur(MAX_DOCK_BLUR + 1)).toBeNull();
+    expect(cleanBlur(Number.NaN)).toBeNull();
+    expect(cleanBlur(Number.POSITIVE_INFINITY)).toBeNull();
+    expect(cleanBlur('14')).toBeNull();
+    expect(cleanBlur(null)).toBeNull();
+    expect(cleanBlur(undefined)).toBeNull();
+  });
+});
+
+describe('cleanBlurs', () => {
+  it('tütet die gemerkten Werte je Verzeichnis ein', () => {
+    expect(cleanBlurs({ '/apps': 20, '/andere': 3.4 })).toEqual({ '/apps': 20, '/andere': 3 });
+  });
+
+  it('lässt beschädigte Einträge weg (dort gilt dann die Vorgabe)', () => {
+    expect(cleanBlurs({ '/apps': 'dicht', '/b': 99, '/c': 6 })).toEqual({ '/c': 6 });
+  });
+
+  it('nimmt auch gar nichts an', () => {
+    expect(cleanBlurs(undefined)).toEqual({});
+    expect(cleanBlurs(null)).toEqual({});
+    expect(cleanBlurs('dicht')).toEqual({});
+  });
+});
+
+describe('dockBlurCss', () => {
+  it('macht aus den Bildpunkten den Milchglas-Schleier', () => {
+    expect(dockBlurCss(0)).toBe('blur(0px)');
+    expect(dockBlurCss(14)).toBe('blur(14px)');
+    expect(dockBlurCss(MAX_DOCK_BLUR)).toBe(`blur(${MAX_DOCK_BLUR}px)`);
+  });
+
+  it('nimmt ohne (oder mit unbrauchbarer) Angabe die Vorgabe', () => {
+    const vorgabe = dockBlurCss(DEFAULT_DOCK_BLUR);
+    expect(dockBlurCss(undefined)).toBe(vorgabe);
+    expect(dockBlurCss(null)).toBe(vorgabe);
+    expect(dockBlurCss(-3)).toBe(vorgabe);
+  });
+
+  it('malt nie etwas anderes als einen Schleier (nichts Fremdes gerät in die CSS-Angabe)', () => {
+    expect(dockBlurCss('14px); background: url(x' as never)).toBe(dockBlurCss(DEFAULT_DOCK_BLUR));
   });
 });
 

@@ -16,7 +16,14 @@ import { clampMaxAgents, DEFAULT_MAX_AGENTS } from '@/core/queue';
 import { cleanFavorites, toggleFavorite } from '@/core/favorites';
 import { cleanSessions, sameSession } from '@/core/session';
 import { cleanWallpaper, cleanWallpapers, DEFAULT_WALLPAPER } from '@/core/wallpaper';
-import { cleanTransparencies, cleanTransparency, DEFAULT_DOCK_TRANSPARENCY } from '@/core/transparency';
+import {
+  cleanBlur,
+  cleanBlurs,
+  cleanTransparencies,
+  cleanTransparency,
+  DEFAULT_DOCK_BLUR,
+  DEFAULT_DOCK_TRANSPARENCY,
+} from '@/core/transparency';
 
 interface PendingPermission {
   op: FsOp;
@@ -46,6 +53,8 @@ interface WorkspaceState {
   wallpapers: Record<string, Wallpaper>;
   /** Die Durchsichtigkeit des Docks, je Workspace-Pfad (siehe core/transparency). */
   dockTransparencies: Record<string, number>;
+  /** Der Milchglas-Schleier des Docks, je Workspace-Pfad (siehe core/transparency). */
+  dockBlurs: Record<string, number>;
   /** Aktuell zur Genehmigung anstehende Anfrage (für den Dialog). */
   pendingPermission: PendingPermission | null;
   apps: AppSummary[];
@@ -76,6 +85,7 @@ export const useWorkspaceStore = defineStore('workspace', {
     sessions: {},
     wallpapers: {},
     dockTransparencies: {},
+    dockBlurs: {},
     pendingPermission: null,
     apps: [],
     loading: false,
@@ -113,6 +123,10 @@ export const useWorkspaceStore = defineStore('workspace', {
       (s.folder ? s.dockTransparencies[s.folder] ?? DEFAULT_DOCK_TRANSPARENCY : DEFAULT_DOCK_TRANSPARENCY),
     /** Hat der Anwender hier einen eigenen Wert gewählt? */
     hasDockTransparency: (s): boolean => (s.folder ? s.dockTransparencies[s.folder] !== undefined : false),
+    /** Wie dicht das Milchglas des Docks hier ist — ohne eigenen Wert die Vorgabe. */
+    dockBlur: (s): number => (s.folder ? s.dockBlurs[s.folder] ?? DEFAULT_DOCK_BLUR : DEFAULT_DOCK_BLUR),
+    /** Hat der Anwender hier einen eigenen Schleier gewählt? */
+    hasDockBlur: (s): boolean => (s.folder ? s.dockBlurs[s.folder] !== undefined : false),
   },
 
   actions: {
@@ -132,6 +146,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.sessions = cleanSessions(settings?.sessions);
         this.wallpapers = cleanWallpapers(settings?.wallpapers);
         this.dockTransparencies = cleanTransparencies(settings?.dockTransparencies);
+        this.dockBlurs = cleanBlurs(settings?.dockBlurs);
       } catch {
         this.recentFolders = [];
         this.accessRoots = {};
@@ -144,6 +159,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.sessions = {};
         this.wallpapers = {};
         this.dockTransparencies = {};
+        this.dockBlurs = {};
       }
     },
 
@@ -306,6 +322,28 @@ export const useWorkspaceStore = defineStore('workspace', {
     },
 
     /**
+     * Legt fest, wie dicht das Milchglas des Docks in diesem Verzeichnis ist.
+     * Geprüft wird hier, nicht erst beim Malen: Was `cleanBlur` nicht annimmt,
+     * wird nicht gemerkt (liefert false).
+     */
+    setDockBlur(blur: number): boolean {
+      if (!this.folder) return false;
+      const clean = cleanBlur(blur);
+      if (clean === null) return false;
+      this.dockBlurs = { ...this.dockBlurs, [this.folder]: clean };
+      void this.persistSettings();
+      return true;
+    },
+
+    /** Zurück zur Vorgabe: Dieses Verzeichnis hat dann keinen eigenen Wert mehr. */
+    resetDockBlur(): void {
+      if (!this.folder || this.dockBlurs[this.folder] === undefined) return;
+      const { [this.folder]: _weg, ...rest } = this.dockBlurs;
+      this.dockBlurs = rest;
+      void this.persistSettings();
+    },
+
+    /**
      * Merkt die offenen Fenster dieses Verzeichnisses für den nächsten Start.
      * Eine leere Sitzung wird vergessen — der Desktop öffnet dann schlicht den
      * Launcher.
@@ -446,6 +484,7 @@ export const useWorkspaceStore = defineStore('workspace', {
       const sessions = JSON.parse(JSON.stringify(this.sessions)) as Record<string, SessionWindow[]>;
       const wallpapers = JSON.parse(JSON.stringify(this.wallpapers)) as Record<string, Wallpaper>;
       const dockTransparencies = { ...this.dockTransparencies };
+      const dockBlurs = { ...this.dockBlurs };
       try {
         await getHost().saveSettings({
           recentFolders,
@@ -459,6 +498,7 @@ export const useWorkspaceStore = defineStore('workspace', {
           sessions,
           wallpapers,
           dockTransparencies,
+          dockBlurs,
         });
       } catch {
         /* nicht kritisch */

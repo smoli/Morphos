@@ -170,6 +170,12 @@ export interface Settings {
    * core/transparency).
    */
   dockTransparencies?: Record<string, number>;
+  /**
+   * Wie dicht das Milchglas des Docks ist, je Workspace-Pfad — Bildpunkte
+   * zwischen 0 (klares Glas) und `MAX_DOCK_BLUR`. Was hier fehlt, bekommt die
+   * Vorgabe (siehe core/transparency).
+   */
+  dockBlurs?: Record<string, number>;
 }
 
 /**

@@ -20,7 +20,12 @@ import { setHost } from '@/services/host';
 import { columns, slotPos } from '@/core/arrange';
 import { EXPLORER_ID, SETTINGS_ID, SYSTEM_WINDOWS, systemWindow } from '@/core/system';
 import { DEFAULT_WALLPAPER, wallpaperCss } from '@/core/wallpaper';
-import { DEFAULT_DOCK_TRANSPARENCY, dockBackgroundCss } from '@/core/transparency';
+import {
+  DEFAULT_DOCK_BLUR,
+  DEFAULT_DOCK_TRANSPARENCY,
+  dockBackgroundCss,
+  dockBlurCss,
+} from '@/core/transparency';
 import type { AppData, AppSummary, MorphosHost } from '@/types';
 
 const apps: AppSummary[] = [
@@ -609,6 +614,19 @@ describe('DesktopView', () => {
 
       // … und danach der gewählte.
       expect(wrapper.get('.dock').attributes('style')).toContain(dockBackgroundCss(0.85));
+    });
+
+    it('trägt den Milchglas-Schleier aus den Einstellungen', async () => {
+      const { wrapper } = await mountView();
+      const ws = useWorkspaceStore();
+      // Ohne eigenen Wert die Vorgabe …
+      expect(wrapper.get('.dock').attributes('style')).toContain(dockBlurCss(DEFAULT_DOCK_BLUR));
+
+      ws.setDockBlur(3);
+      await flushPromises();
+
+      // … und danach der gewählte.
+      expect(wrapper.get('.dock').attributes('style')).toContain(dockBlurCss(3));
     });
 
     it('reiht auf: erst die Lieblinge, dann das Laufende', async () => {

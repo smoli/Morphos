@@ -24,7 +24,7 @@ import {
 import { canSwitch, cycleSelection, switcherOrder } from '@/core/switcher';
 import { SETTINGS_ID, SYSTEM_WINDOWS } from '@/core/system';
 import { wallpaperCss } from '@/core/wallpaper';
-import { dockBackgroundCss } from '@/core/transparency';
+import { dockBackgroundCss, dockBlurCss } from '@/core/transparency';
 import { dockEntries, type DockEntry } from '@/core/dock';
 import type { MenuItem } from '@/core/menu';
 import type { DesktopWindow } from '@/stores/desktop';
@@ -554,7 +554,14 @@ function onMenuPick(id: string): void {
 
       <!-- Das Dock: ＋, die Ansichten der Schale, die behaltenen Apps und was
            gerade läuft (core/dock). -->
-      <div v-if="dockVisible" class="dock" :style="{ background: dockBackgroundCss(workspace.dockTransparency) }">
+      <div
+        v-if="dockVisible"
+        class="dock"
+        :style="{
+          background: dockBackgroundCss(workspace.dockTransparency),
+          '--dock-blur': dockBlurCss(workspace.dockBlur),
+        }"
+      >
         <button
           type="button"
           class="dock-item new"
@@ -752,8 +759,9 @@ function onMenuPick(id: string): void {
  * Das Dock wie am Mac: eine schwebende Leiste am unteren Rand, mittig, so
  * breit wie ihr Inhalt. Es trägt nur Glyphen — der Name kommt beim Überfahren.
  *
- * Die Farbe hier ist nur der Rückfall: Wie durchsichtig die Leiste ist, sagen
- * die Einstellungen (core/transparency, oben als `background` angeschrieben).
+ * Farbe und Schleier hier sind nur der Rückfall: Wie durchsichtig die Leiste ist
+ * und wie dicht ihr Milchglas, sagen die Einstellungen (core/transparency) —
+ * oben als `background` und als `--dock-blur` angeschrieben.
  */
 .dock {
   position: absolute;
@@ -767,7 +775,7 @@ function onMenuPick(id: string): void {
   gap: 6px;
   padding: 6px 8px;
   background: rgba(20, 22, 28, 0.5);
-  backdrop-filter: blur(14px);
+  backdrop-filter: var(--dock-blur, blur(14px));
   border: 1px solid var(--border);
   border-radius: 18px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);

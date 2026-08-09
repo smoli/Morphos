@@ -4,7 +4,12 @@ import { createPinia, setActivePinia } from 'pinia';
 import AppearanceSection from './AppearanceSection.vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { setHost } from '@/services/host';
-import { DEFAULT_DOCK_TRANSPARENCY, dockBackgroundCss } from '@/core/transparency';
+import {
+  DEFAULT_DOCK_BLUR,
+  DEFAULT_DOCK_TRANSPARENCY,
+  dockBackgroundCss,
+  dockBlurCss,
+} from '@/core/transparency';
 import type { MorphosHost } from '@/types';
 
 function makeHost(over: Partial<MorphosHost> = {}): MorphosHost {
@@ -91,5 +96,61 @@ describe('AppearanceSection', () => {
     await slider(wrapper).setValue('0.6');
 
     expect(ws.dockTransparencies).toEqual({});
+  });
+
+  /** Der Regler für den Milchglas-Schleier des Docks. */
+  function blurSlider(wrapper: ReturnType<typeof mount>) {
+    return wrapper.get('input[type="range"].blur-level');
+  }
+
+  it('steht anfangs auf der Vorgabe und nennt sie in Bildpunkten', () => {
+    const wrapper = mount(AppearanceSection);
+    expect((blurSlider(wrapper).element as HTMLInputElement).value).toBe(String(DEFAULT_DOCK_BLUR));
+    expect(wrapper.get('.blur-value').text()).toBe('14 px');
+  });
+
+  it('merkt einen geschobenen Schleier im Workspace', async () => {
+    const wrapper = mount(AppearanceSection);
+    const ws = useWorkspaceStore();
+
+    await blurSlider(wrapper).setValue('22');
+
+    expect(ws.dockBlur).toBe(22);
+    expect(ws.hasDockBlur).toBe(true);
+    expect(wrapper.get('.blur-value').text()).toBe('22 px');
+  });
+
+  it('zeigt die Leiste in der Vorschau so matt, wie sie wird', async () => {
+    const wrapper = mount(AppearanceSection);
+    expect(wrapper.get('.dock-preview').attributes('style')).toContain(dockBlurCss(DEFAULT_DOCK_BLUR));
+
+    await blurSlider(wrapper).setValue('0');
+
+    expect(wrapper.get('.dock-preview').attributes('style')).toContain(dockBlurCss(0));
+  });
+
+  it('setzt den Schleier auf die Vorgabe zurück — und bietet das erst an, wenn es etwas zurückzusetzen gibt', async () => {
+    const wrapper = mount(AppearanceSection);
+    const ws = useWorkspaceStore();
+    expect(wrapper.get('.blur-reset').attributes('disabled')).toBeDefined();
+
+    await blurSlider(wrapper).setValue('22');
+    expect(wrapper.get('.blur-reset').attributes('disabled')).toBeUndefined();
+
+    await wrapper.get('.blur-reset').trigger('click');
+
+    expect(ws.dockBlur).toBe(DEFAULT_DOCK_BLUR);
+    expect(ws.hasDockBlur).toBe(false);
+    expect((blurSlider(wrapper).element as HTMLInputElement).value).toBe(String(DEFAULT_DOCK_BLUR));
+  });
+
+  it('rührt den Schleier ohne geöffnetes Verzeichnis nicht an', async () => {
+    const ws = useWorkspaceStore();
+    ws.folder = null;
+    const wrapper = mount(AppearanceSection);
+
+    await blurSlider(wrapper).setValue('22');
+
+    expect(ws.dockBlurs).toEqual({});
   });
 });

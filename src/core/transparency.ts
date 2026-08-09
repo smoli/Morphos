@@ -1,14 +1,17 @@
 /**
- * Wie durchsichtig die Schale ist — heute die schwebende Leiste am unteren Rand
- * (das Dock, c0052). Gemerkt wird der Wert je Arbeitsverzeichnis (siehe
- * stores/workspace), wie der Hintergrund auch.
+ * Wie das Glas der Schale aussieht — heute die schwebende Leiste am unteren
+ * Rand (das Dock, c0052). Zwei Werte, beide je Arbeitsverzeichnis gemerkt
+ * (siehe stores/workspace), wie der Hintergrund auch:
  *
- * Ein Wert ist ein Anteil zwischen 0 (ganz deckend) und 1 (ganz durchsichtig);
- * die Leiste behält dabei ihren Milchglas-Schleier, es geht allein um die
- * Deckkraft ihrer Farbe. `dockBackgroundCss` ist die einzige Stelle, an der aus
- * dem gemerkten Wert eine CSS-Angabe wird — und sie baut sie ausschließlich aus
- * einer geprüften Zahl: Was `cleanTransparency` nicht annimmt, wird gar nicht
- * erst gemalt, sondern durch die Vorgabe ersetzt.
+ * - die **Durchsichtigkeit** (c0060): ein Anteil zwischen 0 (ganz deckend) und
+ *   1 (ganz durchsichtig) — die Deckkraft der Farbe;
+ * - der **Milchglas-Schleier** (c0061): wie stark die Leiste verwischt, was
+ *   hinter ihr liegt, in Bildpunkten von 0 (klares Glas) bis `MAX_DOCK_BLUR`.
+ *
+ * `dockBackgroundCss` und `dockBlurCss` sind die einzigen Stellen, an denen aus
+ * einem gemerkten Wert eine CSS-Angabe wird — und sie bauen sie ausschließlich
+ * aus einer geprüften Zahl: Was `cleanTransparency` bzw. `cleanBlur` nicht
+ * annimmt, wird gar nicht erst gemalt, sondern durch die Vorgabe ersetzt.
  */
 
 /** Die Grundfarbe der Leiste (DesktopView: `.dock`) — nur ihre Deckkraft ändert sich. */
@@ -23,6 +26,21 @@ export const DEFAULT_DOCK_TRANSPARENCY = 0.5;
 
 /** Schrittweite des Reglers in den Einstellungen (5 %). */
 export const TRANSPARENCY_STEP = 0.05;
+
+/**
+ * Der Milchglas-Schleier des Docks, solange der Anwender keinen gewählt hat —
+ * der Wert, mit dem die Leiste seit c0052 gemalt wurde (14 Bildpunkte).
+ */
+export const DEFAULT_DOCK_BLUR = 14;
+
+/**
+ * Dichter als das wird das Glas nicht: Ab hier ist vom Hintergrund ohnehin nur
+ * noch ein Farbschimmer übrig.
+ */
+export const MAX_DOCK_BLUR = 30;
+
+/** Schrittweite des Reglers in den Einstellungen (ein Bildpunkt). */
+export const BLUR_STEP = 1;
 
 /**
  * Tütet einen gemerkten (oder gerade geschobenen) Wert ein: Zurück kommt nur
@@ -59,6 +77,41 @@ export function dockBackgroundCss(level: number | null | undefined): string {
   // Runden, damit aus 1 - 0.28 keine 0.7199999999999999 wird.
   const alpha = Math.round((1 - value) * 100) / 100;
   return `rgba(${DOCK_COLOR}, ${alpha})`;
+}
+
+/**
+ * Tütet einen gemerkten (oder gerade geschobenen) Schleier ein: Zurück kommen
+ * nur ganze Bildpunkte zwischen 0 und `MAX_DOCK_BLUR` — sonst null (dann gilt
+ * die Vorgabe).
+ */
+export function cleanBlur(raw: unknown): number | null {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
+  if (raw < 0 || raw > MAX_DOCK_BLUR) return null;
+  return Math.round(raw);
+}
+
+/**
+ * Die gemerkten Schleier auf brauchbare Einträge eintüten — beschädigte fallen
+ * weg (dort gilt dann die Vorgabe). Wird vom Hauptprozess beim Lesen und
+ * Schreiben der Einstellungen angewandt.
+ */
+export function cleanBlurs(raw: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [folder, value] of Object.entries(raw as Record<string, unknown>)) {
+    const clean = cleanBlur(value);
+    if (clean !== null) out[folder] = clean;
+  }
+  return out;
+}
+
+/**
+ * Die CSS-Angabe für die `backdrop-filter`-Eigenschaft des Docks. Der Wert wird
+ * zuvor geprüft: Was nicht durchkommt, wird zur Vorgabe.
+ */
+export function dockBlurCss(blur: number | null | undefined): string {
+  const value = cleanBlur(blur) ?? DEFAULT_DOCK_BLUR;
+  return `blur(${value}px)`;
 }
 
 /** Der Anteil als ganze Prozent — für die Anzeige neben dem Regler. */

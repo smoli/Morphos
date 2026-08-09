@@ -24,7 +24,7 @@ import { collectDiskUsage } from '../src/core/diskusage';
 import { cleanFavorites } from '../src/core/favorites';
 import { cleanSessions } from '../src/core/session';
 import { cleanWallpapers } from '../src/core/wallpaper';
-import { cleanTransparencies } from '../src/core/transparency';
+import { cleanBlurs, cleanTransparencies } from '../src/core/transparency';
 import { resolveLibs } from './libcache';
 import type { PromptAttachment, PromptContext } from '../src/core/prompt';
 import type {
@@ -142,6 +142,7 @@ function readSettings(): Settings {
     const sessions = cleanSessions(parsed.sessions);
     const wallpapers = cleanWallpapers(parsed.wallpapers);
     const dockTransparencies = cleanTransparencies(parsed.dockTransparencies);
+    const dockBlurs = cleanBlurs(parsed.dockBlurs);
     return {
       recentFolders: recent,
       accessRoots,
@@ -154,6 +155,7 @@ function readSettings(): Settings {
       sessions,
       wallpapers,
       dockTransparencies,
+      dockBlurs,
     };
   } catch {
     return {
@@ -168,6 +170,7 @@ function readSettings(): Settings {
       sessions: {},
       wallpapers: {},
       dockTransparencies: {},
+      dockBlurs: {},
     };
   }
 }
@@ -596,6 +599,7 @@ ipcMain.handle('morphos:saveSettings', async (_e, settings: Settings): Promise<S
       sessions: cleanSessions(settings?.sessions),
       wallpapers: cleanWallpapers(settings?.wallpapers),
       dockTransparencies: cleanTransparencies(settings?.dockTransparencies),
+      dockBlurs: cleanBlurs(settings?.dockBlurs),
     };
     fs.writeFileSync(settingsFile(), JSON.stringify(clean, null, 2), 'utf8');
     return { ok: true };
