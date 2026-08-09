@@ -44,6 +44,21 @@ function expectNoOverlap(tree: TileTree | null, box: Rect = area, gap = GAP): vo
   }
 }
 
+/**
+ * Lückenlos: Kacheln und Fugen ergeben zusammen genau die Fläche. Da sich keine
+ * zwei Kacheln überlappen und jede Fuge zwischen den Hälften ihrer Teilung
+ * liegt, heißt gleiche Fläche hier: der Verbund legt das Rechteck exakt aus —
+ * es bleibt kein Rest frei, und nichts steht über den Rand hinaus.
+ */
+function expectFillsArea(tree: TileTree | null, box: Rect = area, gap = GAP): void {
+  expectNoOverlap(tree, box, gap);
+  const tiles = Object.values(computeRects(tree, box, gap));
+  const fugen = gapBands(tree, box, gap).map((g) => g.band);
+  for (const band of fugen) expect(inside(band, box)).toBe(true);
+  const belegt = [...tiles, ...fugen].reduce((sum, r) => sum + r.w * r.h, 0);
+  expect(belegt).toBe(box.w * box.h);
+}
+
 describe('computeRects', () => {
   it('gibt für einen leeren Baum nichts zurück', () => {
     expect(computeRects(null, area, GAP)).toEqual({});
@@ -381,6 +396,61 @@ describe('mapLeaves', () => {
   it('gibt nichts zurück, wenn kein Blatt bleibt', () => {
     expect(mapLeaves(tree, () => null)).toBeNull();
     expect(mapLeaves(null, (id) => id)).toBeNull();
+  });
+});
+
+/**
+ * Der Kachel-Modus als Ganzes (c0064): Was die Oberfläche auch anstellt — der
+ * Verbund bleibt überschneidungsfrei UND lückenlos. Die Einzelschritte prüfen
+ * die Abschnitte oben; hier zählt, dass die Fläche danach immer noch aufgeht.
+ */
+describe('Der Verbund füllt die Fläche', () => {
+  it('gibt einer einzelnen Kachel die ganze Fläche', () => {
+    expectFillsArea(leaf('a'));
+  });
+
+  it('legt eine verschachtelte Anordnung lückenlos aus', () => {
+    expectFillsArea(
+      split(
+        'row',
+        split('column', leaf('a'), leaf('b'), 0.3),
+        split('column', leaf('c'), split('row', leaf('d'), leaf('e'), 0.7), 0.6),
+      ),
+    );
+  });
+
+  it('bleibt lückenlos, während Fenster dazukommen und wieder gehen', () => {
+    let tree: TileTree | null = null;
+    let focus: string | null = null;
+    for (let i = 0; i < 12; i += 1) {
+      focus = `w${i}`;
+      tree = insertLeaf(tree, i === 0 ? null : `w${i - 1}`, focus, area, GAP);
+      expectFillsArea(tree);
+    }
+    for (const id of ['w3', 'w0', 'w11', 'w7']) {
+      tree = removeLeaf(tree, id);
+      expectFillsArea(tree);
+    }
+    expect(leafIds(tree)).toHaveLength(8);
+  });
+
+  it('bleibt lückenlos, wenn an einer Fuge gezogen wird — bis an die Mindestgröße', () => {
+    const tree = split('row', leaf('a'), split('column', leaf('b'), leaf('c')));
+    for (const ratio of [0.01, 0.25, 0.5, 0.75, 0.99]) {
+      expectFillsArea(setRatio(tree, [], ratio, area, GAP));
+      expectFillsArea(setRatio(tree, ['b'], ratio, area, GAP));
+    }
+  });
+
+  it('bleibt lückenlos, wenn zwei Kacheln die Plätze tauschen', () => {
+    const tree = split('row', leaf('a'), split('column', leaf('b'), leaf('c'), 0.2));
+    expectFillsArea(swapLeaves(tree, 'a', 'c'));
+  });
+
+  it('geht auch auf einer Fläche auf, die kaum die Fuge fasst', () => {
+    const eng: Rect = { x: 12, y: 8, w: 8, h: 100 };
+    expectFillsArea(split('row', leaf('a'), leaf('b')), eng);
+    expectFillsArea(split('column', leaf('a'), leaf('b')), { x: 0, y: 0, w: 100, h: 8 });
   });
 });
 
