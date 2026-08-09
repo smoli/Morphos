@@ -11,6 +11,7 @@ import ChatDock from '@/components/ChatDock.vue';
 import BusyDot from '@/components/BusyDot.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import IconDialog from '@/components/IconDialog.vue';
+import ContextMenu from '@/components/ContextMenu.vue';
 import LauncherOverlay from '@/components/LauncherOverlay.vue';
 import SwitcherOverlay from '@/components/SwitcherOverlay.vue';
 import { useShellStore } from '@/stores/shell';
@@ -25,6 +26,7 @@ import {
 import { canSwitch, cycleSelection, switcherOrder } from '@/core/switcher';
 import { EXPLORER_ID, SYSTEM_WINDOWS, systemWindow } from '@/core/system';
 import { wallpaperCss } from '@/core/wallpaper';
+import type { MenuItem } from '@/core/menu';
 import type { DesktopWindow } from '@/stores/desktop';
 import {
   arrangeIcons,
@@ -141,6 +143,14 @@ function tileStyle(pos: IconPos | undefined) {
   };
 }
 
+// Die Kachel unter dem Mauszeiger (oder mit der Tastatur angesteuert): Nur sie
+// zeigt ihre Nebensachen — die Versionszahl —, sonst bleibt das Icon ein Icon.
+const hoverId = ref<string | null>(null);
+
+function leaveTile(appId: string): void {
+  if (hoverId.value === appId) hoverId.value = null;
+}
+
 const dragId = ref<string | null>(null);
 const dragPos = ref<IconPos | null>(null);
 let dragStart: { x: number; y: number; base: IconPos } | null = null;
@@ -223,6 +233,9 @@ function openApp(app: AppSummary): void {
     swallowClick = false;
     return;
   }
+  launchApp(app);
+}
+function launchApp(app: AppSummary): void {
   desktop.openApp(app.id, { title: app.name, icon: app.icon });
 }
 function newApp(): void {
@@ -362,6 +375,61 @@ async function applyIcon(icon: string | null): Promise<void> {
   if (!id) return;
   if (await setAppIcon(id, icon)) iconAppId.value = null;
 }
+
+// ---- Kontextmenü: die Aktionen einer App (siehe components/ContextMenu) ----
+
+// Was gerade aufgeklappt ist: die Stelle, die Einträge und die gemeinte App.
+const menu = ref<{ x: number; y: number; appId: string; items: MenuItem[] } | null>(null);
+
+/** Der Eintrag „im Dock behalten“ — er kennt beide Richtungen. */
+function dockItem(appId: string): MenuItem {
+  return workspace.isFavorite(appId)
+    ? { id: 'undock', label: 'Aus dem Dock entfernen', icon: '📌' }
+    : { id: 'dock', label: 'Im Dock behalten', icon: '📌' };
+}
+
+/** Rechtsklick auf eine Kachel: alles, was sich mit dieser App tun lässt. */
+function openIconMenu(e: MouseEvent, app: AppSummary): void {
+  menu.value = {
+    x: e.clientX,
+    y: e.clientY,
+    appId: app.id,
+    items: [
+      { id: 'open', label: 'Öffnen', icon: '↗' },
+      { id: 'icon', label: 'Icon ändern', icon: '⚙' },
+      dockItem(app.id),
+      { id: 'delete', label: 'Löschen', icon: '🗑', danger: true, separator: true },
+    ],
+  };
+}
+
+/** Rechtsklick im Dock: dort geht es nur ums Behalten (Entwürfe haben keine App). */
+function openDockMenu(e: MouseEvent, w: DesktopWindow): void {
+  if (!w.appId) return;
+  menu.value = { x: e.clientX, y: e.clientY, appId: w.appId, items: [dockItem(w.appId)] };
+}
+
+function onMenuPick(id: string): void {
+  const picked = menu.value;
+  menu.value = null;
+  if (!picked) return;
+  const app = workspace.apps.find((a) => a.id === picked.appId) ?? null;
+  switch (id) {
+    case 'open':
+      if (app) launchApp(app);
+      break;
+    case 'icon':
+      iconAppId.value = picked.appId;
+      break;
+    case 'dock':
+    case 'undock':
+      workspace.toggleFavorite(picked.appId);
+      break;
+    case 'delete':
+      if (app) void removeApp(app.id, app.name);
+      break;
+  }
+}
 </script>
 
 <template>
@@ -419,23 +487,24 @@ async function applyIcon(icon: string | null): Promise<void> {
             class="tile-wrap"
             :class="{ dragging: dragId === app.id }"
             :style="tileStyle(positions[app.id])"
+            @mouseenter="hoverId = app.id"
+            @mouseleave="leaveTile(app.id)"
+            @focusin="hoverId = app.id"
+            @focusout="leaveTile(app.id)"
           >
             <button
               type="button"
               class="tile"
               @mousedown="startTileDrag($event, app.id)"
               @click="openApp(app)"
+              @contextmenu.prevent="openIconMenu($event, app)"
               :title="app.name"
             >
-              <AppIcon class="icon" :icon="app.icon" :size="42" />
+              <AppIcon class="icon" :icon="app.icon" :size="48" />
               <span class="name">{{ app.name }}</span>
-              <span class="meta">{{ app.versions }} Version(en)</span>
+              <span v-if="hoverId === app.id" class="meta">{{ app.versions }} Version(en)</span>
             </button>
             <BusyDot v-if="agents.isBusy(app.id)" class="tile-busy" />
-            <span class="tile-actions">
-              <button type="button" class="act" title="Icon ändern" @click.stop="iconAppId = app.id">⚙</button>
-              <button type="button" class="act del" title="Löschen" @click.stop="removeApp(app.id, app.name)">🗑</button>
-            </span>
           </div>
           <p v-if="!workspace.loading && workspace.apps.length === 0" class="hint" :style="{ top: hintTop }">
             Noch keine Apps in diesem Verzeichnis. Beschreibe unten, was deine erste App sein soll —
@@ -494,6 +563,7 @@ async function applyIcon(icon: string | null): Promise<void> {
           class="dock-item"
           :title="w.title"
           @click="desktop.restoreWindow(w.instanceId)"
+          @contextmenu.prevent="openDockMenu($event, w)"
         >
           <AppIcon :icon="w.icon" :size="16" />
           <span class="dock-name">{{ w.title }}</span>
@@ -525,6 +595,16 @@ async function applyIcon(icon: string | null): Promise<void> {
       :custom="iconApp.iconCustom"
       @close="iconAppId = null"
       @apply="applyIcon"
+    />
+
+    <!-- Das Kontextmenü einer Kachel bzw. eines Dock-Eintrags — über allem. -->
+    <ContextMenu
+      v-if="menu"
+      :items="menu.items"
+      :x="menu.x"
+      :y="menu.y"
+      @pick="onMenuPick"
+      @close="menu = null"
     />
   </div>
 </template>
@@ -591,89 +671,79 @@ async function applyIcon(icon: string | null): Promise<void> {
 }
 .tile-wrap.dragging .tile {
   cursor: grabbing;
-  border-color: var(--accent);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  opacity: 0.75;
 }
+/*
+ * Ein Schreibtisch-Symbol, kein Kärtchen: kein Rahmen, kein Grund — nur die
+ * Glyphe mit dem Namen darunter (c0055).
+ */
 .tile {
+  position: relative;
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
+  background: none;
+  border: none;
   color: var(--text);
-  border-radius: 16px;
+  border-radius: 12px;
   cursor: grab;
-  padding: 12px;
+  padding: 14px 4px;
   /* Beim Ziehen soll kein Text markiert werden. */
   user-select: none;
-  transition: border-color 0.15s;
 }
-.tile:hover {
-  border-color: var(--accent);
+.tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 .tile.new {
   cursor: pointer;
-}
-.tile.new {
-  border-style: dashed;
   color: var(--muted);
 }
 .icon {
-  font-size: 42px;
+  font-size: 48px;
   line-height: 1;
+  /* Auch eine helle Glyphe hebt sich so von jedem Hintergrund ab. */
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
 }
+/*
+ * Der Name liegt ohne Kachel direkt auf dem Hintergrund — über einem hellen
+ * Bild bliebe heller Text sonst unlesbar. Ein schmaler dunkler Schleier plus
+ * harter Schatten trägt ihn über jedem Hintergrund (c0041).
+ */
 .name {
-  font-size: 14px;
-  font-weight: 600;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: rgba(10, 12, 16, 0.55);
+  font-size: 12px;
+  font-weight: 500;
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100%;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
+/* Nebensache, nur beim Überfahren — und außerhalb des Flusses, damit beim
+   Erscheinen nichts springt. */
 .meta {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
   font-size: 11px;
   color: var(--muted);
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
-/* Arbeitsanzeige der Kachel — links oben, gegenüber dem Löschknopf. */
+/* Arbeitsanzeige der Kachel — links oben, neben der Glyphe. */
 .tile-busy {
   position: absolute;
   top: 10px;
   left: 10px;
-}
-.tile-actions {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  display: flex;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-.tile-wrap:hover .tile-actions,
-.tile-actions:focus-within {
-  opacity: 1;
-}
-.act {
-  background: rgba(15, 17, 21, 0.7);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  border-radius: 8px;
-  padding: 3px 6px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.act:hover {
-  border-color: var(--accent);
-  color: var(--text);
-}
-.del:hover {
-  border-color: var(--danger);
-  color: #ffb3b3;
 }
 .hint {
   position: absolute;

@@ -13,6 +13,7 @@ import type {
 import { getHost } from '@/services/host';
 import { decideOutcome, effectivePermission } from '@/core/permissions';
 import { clampMaxAgents, DEFAULT_MAX_AGENTS } from '@/core/queue';
+import { cleanFavorites, toggleFavorite } from '@/core/favorites';
 import { cleanSessions, sameSession } from '@/core/session';
 import { cleanWallpaper, cleanWallpapers, DEFAULT_WALLPAPER } from '@/core/wallpaper';
 
@@ -36,6 +37,8 @@ interface WorkspaceState {
   maxAgents: number;
   /** Frei abgelegte Kachel-Positionen, je Workspace-Pfad, je App-Id. */
   iconPositions: Record<string, Record<string, IconPos>>;
+  /** Die im Dock behaltenen Apps, je Workspace-Pfad (siehe core/favorites). */
+  favorites: Record<string, string[]>;
   /** Die zuletzt offenen Fenster, je Workspace-Pfad (siehe core/session). */
   sessions: Record<string, SessionWindow[]>;
   /** Der Hintergrund der Desktop-Fläche, je Workspace-Pfad (siehe core/wallpaper). */
@@ -66,6 +69,7 @@ export const useWorkspaceStore = defineStore('workspace', {
     uiMode: 'windows',
     maxAgents: DEFAULT_MAX_AGENTS,
     iconPositions: {},
+    favorites: {},
     sessions: {},
     wallpapers: {},
     pendingPermission: null,
@@ -88,6 +92,12 @@ export const useWorkspaceStore = defineStore('workspace', {
     hasIconLayout(): boolean {
       return Object.keys(this.iconLayout).length > 0;
     },
+    /** Die im Dock behaltenen Apps des aktuellen Verzeichnisses, in ihrer Reihenfolge. */
+    favoriteIds: (s): string[] => (s.folder ? s.favorites[s.folder] ?? [] : []),
+    /** Wird diese App im Dock behalten? */
+    isFavorite(): (appId: string) => boolean {
+      return (appId: string) => this.favoriteIds.includes(appId);
+    },
     /** Die gemerkte Sitzung des aktuellen Verzeichnisses (hinten → vorn). */
     session: (s): SessionWindow[] => (s.folder ? s.sessions[s.folder] ?? [] : []),
     /** Der Hintergrund des aktuellen Verzeichnisses — ohne eigenen die Vorgabe. */
@@ -109,6 +119,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.maxAgents = clampMaxAgents(settings?.maxAgents);
         this.iconPositions =
           settings?.iconPositions && typeof settings.iconPositions === 'object' ? settings.iconPositions : {};
+        this.favorites = cleanFavorites(settings?.favorites);
         this.sessions = cleanSessions(settings?.sessions);
         this.wallpapers = cleanWallpapers(settings?.wallpapers);
       } catch {
@@ -119,6 +130,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.uiMode = 'windows';
         this.maxAgents = DEFAULT_MAX_AGENTS;
         this.iconPositions = {};
+        this.favorites = {};
         this.sessions = {};
         this.wallpapers = {};
       }
@@ -206,6 +218,35 @@ export const useWorkspaceStore = defineStore('workspace', {
       if (!current || !(appId in current)) return;
       const { [appId]: _weg, ...rest } = current;
       this.iconPositions = { ...this.iconPositions, [this.folder]: rest };
+      void this.persistSettings();
+    },
+
+    /**
+     * Nimmt eine App ins Dock — oder wieder heraus. Gemerkt wird je Workspace;
+     * ein Verzeichnis ohne Lieblinge steht gar nicht erst in den Einstellungen.
+     */
+    toggleFavorite(appId: string): void {
+      if (!this.folder) return;
+      this.writeFavorites(toggleFavorite(this.favorites[this.folder] ?? [], appId));
+    },
+
+    /** Vergisst eine App unter den Lieblingen (es gibt sie nicht mehr). */
+    forgetFavorite(appId: string): void {
+      if (!this.folder) return;
+      const current = this.favorites[this.folder];
+      if (!current || !current.includes(appId)) return;
+      this.writeFavorites(current.filter((id) => id !== appId));
+    },
+
+    /** Schreibt die Lieblinge des aktuellen Verzeichnisses (leer = vergessen). */
+    writeFavorites(ids: string[]): void {
+      if (!this.folder) return;
+      if (ids.length === 0) {
+        const { [this.folder]: _weg, ...rest } = this.favorites;
+        this.favorites = rest;
+      } else {
+        this.favorites = { ...this.favorites, [this.folder]: ids };
+      }
       void this.persistSettings();
     },
 
@@ -346,6 +387,7 @@ export const useWorkspaceStore = defineStore('workspace', {
       try {
         await getHost().deleteApp(this.folder, id);
         this.forgetIconPosition(id);
+        this.forgetFavorite(id);
         await this.refresh();
       } catch (err) {
         this.error = err instanceof Error ? err.message : String(err);
@@ -367,6 +409,7 @@ export const useWorkspaceStore = defineStore('workspace', {
       const uiMode = this.uiMode;
       const maxAgents = this.maxAgents;
       const iconPositions = JSON.parse(JSON.stringify(this.iconPositions)) as Record<string, Record<string, IconPos>>;
+      const favorites = JSON.parse(JSON.stringify(this.favorites)) as Record<string, string[]>;
       const sessions = JSON.parse(JSON.stringify(this.sessions)) as Record<string, SessionWindow[]>;
       const wallpapers = JSON.parse(JSON.stringify(this.wallpapers)) as Record<string, Wallpaper>;
       try {
@@ -378,6 +421,7 @@ export const useWorkspaceStore = defineStore('workspace', {
           uiMode,
           maxAgents,
           iconPositions,
+          favorites,
           sessions,
           wallpapers,
         });

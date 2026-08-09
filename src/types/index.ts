@@ -150,6 +150,11 @@ export interface Settings {
    */
   iconPositions?: Record<string, Record<string, IconPos>>;
   /**
+   * Die im Dock behaltenen Apps je Workspace-Pfad, in der Reihenfolge, in der
+   * der Anwender sie dazugenommen hat (siehe core/favorites).
+   */
+  favorites?: Record<string, string[]>;
+  /**
    * Die zuletzt offenen App-Fenster je Workspace-Pfad, von hinten nach vorn.
    * Beim nächsten Start kommt der Desktop damit zurück (siehe core/session).
    */

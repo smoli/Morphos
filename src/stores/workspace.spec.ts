@@ -53,7 +53,7 @@ describe('useWorkspaceStore', () => {
     expect(ws.folder).toBe('/neu');
     expect(ws.recentFolders[0]).toBe('/neu');
     expect(ws.apps).toHaveLength(2);
-    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows', maxAgents: 2, iconPositions: {}, sessions: {}, wallpapers: {} });
+    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows', maxAgents: 2, iconPositions: {}, favorites: {}, sessions: {}, wallpapers: {} });
     expect(host.listApps).toHaveBeenCalledWith('/neu');
   });
 
@@ -384,6 +384,67 @@ describe('useWorkspaceStore', () => {
       await ws.removeApp('a-1');
 
       expect(ws.iconLayout).toEqual({ 'b-2': { x: 10, y: 10 } });
+    });
+  });
+
+  describe('Lieblings-Apps (im Dock behalten)', () => {
+    it('lädt die gemerkten Lieblinge des Workspace', async () => {
+      setHost(makeHost({
+        loadSettings: vi.fn(async () => ({
+          recentFolders: [],
+          accessRoots: {},
+          favorites: { '/apps': ['a-1'], '/andere': ['x-9'] },
+        })),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.init();
+      expect(ws.favoriteIds).toEqual([]); // noch kein Ordner geöffnet
+      await ws.openFolder('/apps');
+      expect(ws.favoriteIds).toEqual(['a-1']);
+      expect(ws.isFavorite('a-1')).toBe(true);
+      expect(ws.isFavorite('b-2')).toBe(false);
+    });
+
+    it('nimmt eine App je Workspace dazu und wieder heraus und speichert sie', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      ws.toggleFavorite('a-1');
+
+      expect(ws.favoriteIds).toEqual(['a-1']);
+      expect(host.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ favorites: { '/apps': ['a-1'] } }),
+      );
+
+      ws.toggleFavorite('a-1');
+
+      expect(ws.favoriteIds).toEqual([]);
+      expect(host.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ favorites: {} }),
+      );
+    });
+
+    it('rührt ohne geöffneten Ordner nichts an', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      ws.toggleFavorite('a-1');
+      expect(ws.favorites).toEqual({});
+    });
+
+    it('vergisst die gelöschte App, lässt andere Verzeichnisse stehen', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      ws.favorites = { '/andere': ['a-1'] };
+      await ws.openFolder('/apps');
+      ws.toggleFavorite('a-1');
+      ws.toggleFavorite('b-2');
+
+      await ws.removeApp('a-1');
+
+      expect(ws.favoriteIds).toEqual(['b-2']);
+      expect(ws.favorites['/andere']).toEqual(['a-1']);
     });
   });
 

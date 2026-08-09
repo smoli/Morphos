@@ -21,6 +21,7 @@ import { FILE_SCHEME, parseRange, resolveFileRequest } from '../src/core/filelin
 import { streamMimeType } from '../src/core/preview';
 import { FolderWatchers } from '../src/core/watch';
 import { collectDiskUsage } from '../src/core/diskusage';
+import { cleanFavorites } from '../src/core/favorites';
 import { cleanSessions } from '../src/core/session';
 import { cleanWallpapers } from '../src/core/wallpaper';
 import { resolveLibs } from './libcache';
@@ -98,9 +99,21 @@ function readSettings(): Settings {
     const uiMode = parsed.uiMode === 'single' ? 'single' : 'windows';
     const maxAgents = clampMaxAgents(parsed.maxAgents);
     const iconPositions = cleanIconPositions(parsed.iconPositions);
+    const favorites = cleanFavorites(parsed.favorites);
     const sessions = cleanSessions(parsed.sessions);
     const wallpapers = cleanWallpapers(parsed.wallpapers);
-    return { recentFolders: recent, accessRoots, permissions, libWhitelist, uiMode, maxAgents, iconPositions, sessions, wallpapers };
+    return {
+      recentFolders: recent,
+      accessRoots,
+      permissions,
+      libWhitelist,
+      uiMode,
+      maxAgents,
+      iconPositions,
+      favorites,
+      sessions,
+      wallpapers,
+    };
   } catch {
     return {
       recentFolders: [],
@@ -110,6 +123,7 @@ function readSettings(): Settings {
       uiMode: 'windows',
       maxAgents: DEFAULT_MAX_AGENTS,
       iconPositions: {},
+      favorites: {},
       sessions: {},
       wallpapers: {},
     };
@@ -522,6 +536,7 @@ ipcMain.handle('morphos:saveSettings', async (_e, settings: Settings): Promise<S
       uiMode: settings?.uiMode === 'single' ? 'single' : 'windows',
       maxAgents: clampMaxAgents(settings?.maxAgents),
       iconPositions: cleanIconPositions(settings?.iconPositions),
+      favorites: cleanFavorites(settings?.favorites),
       sessions: cleanSessions(settings?.sessions),
       wallpapers: cleanWallpapers(settings?.wallpapers),
     };

@@ -8,6 +8,7 @@ import AppWindow from '@/components/AppWindow.vue';
 import SystemWindow from '@/components/SystemWindow.vue';
 import ExplorerPanel from '@/components/ExplorerPanel.vue';
 import IconDialog from '@/components/IconDialog.vue';
+import ContextMenu from '@/components/ContextMenu.vue';
 import LauncherOverlay from '@/components/LauncherOverlay.vue';
 import SwitcherOverlay from '@/components/SwitcherOverlay.vue';
 import { useWorkspaceStore } from '@/stores/workspace';
@@ -91,6 +92,25 @@ describe('DesktopView', () => {
     });
     await flushPromises();
     return { wrapper, router };
+  }
+
+  /** Die Kachel-Hülle einer App auf dem Desktop. */
+  function tileWrap(wrapper: VueWrapper, name: string) {
+    return wrapper.findAll('.tile-wrap').find((t) => t.text().includes(name))!;
+  }
+
+  /** Rechtsklick auf die Kachel einer App — ihr Kontextmenü klappt auf. */
+  async function openIconMenu(wrapper: VueWrapper, name: string) {
+    await tileWrap(wrapper, name).get('.tile').trigger('contextmenu', { clientX: 200, clientY: 150 });
+    await flushPromises();
+    return wrapper.getComponent(ContextMenu);
+  }
+
+  /** Einen Eintrag des offenen Kontextmenüs wählen. */
+  async function pickMenu(wrapper: VueWrapper, label: string) {
+    const item = wrapper.findAll('.ctx-item').find((i) => i.text().includes(label))!;
+    await item.trigger('click');
+    await flushPromises();
   }
 
   it('zeigt eine Kachel je App plus „Neue App“', async () => {
@@ -235,20 +255,19 @@ describe('DesktopView', () => {
   });
 
   describe('Icon einer App', () => {
-    /** Öffnet den Icon-Dialog über die Kachel der genannten App. */
+    /** Öffnet den Icon-Dialog über das Kontextmenü der genannten App. */
     async function openIconDialog(wrapper: VueWrapper) {
-      const tile = wrapper.findAll('.tile-wrap').find((t) => t.text().includes('Rechner'))!;
-      await tile.get('[title="Icon ändern"]').trigger('click');
-      await flushPromises();
+      await openIconMenu(wrapper, 'Rechner');
+      await pickMenu(wrapper, 'Icon ändern');
       return wrapper.getComponent(IconDialog);
     }
 
-    it('trägt auf der Kachel ein Zahnrad (Einstellungen), keine Palette', async () => {
+    it('trägt im Kontextmenü ein Zahnrad (Einstellungen), keine Palette', async () => {
       const { wrapper } = await mountView();
-      const tile = wrapper.findAll('.tile-wrap').find((t) => t.text().includes('Rechner'))!;
-      const button = tile.get('[title="Icon ändern"]');
-      expect(button.text()).toBe('⚙');
-      expect(button.text()).not.toContain('🎨');
+      await openIconMenu(wrapper, 'Rechner');
+      const entry = wrapper.findAll('.ctx-item').find((i) => i.text().includes('Icon ändern'))!;
+      expect(entry.get('.ctx-icon').text()).toBe('⚙');
+      expect(entry.text()).not.toContain('🎨');
     });
 
     it('zeigt ein Bild-Icon als Bild — auf der Kachel und an der Promptleiste', async () => {
@@ -324,6 +343,121 @@ describe('DesktopView', () => {
 
       expect(wrapper.findComponent(IconDialog).exists()).toBe(true);
       expect(useWorkspaceStore().error).toBe('Das Bild ist zu groß.');
+    });
+  });
+
+  describe('Desktop-Icons wie am Schreibtisch', () => {
+    it('zeigt die Kachel rahmenlos — nur Glyphe und Name', async () => {
+      const { wrapper } = await mountView();
+      const wrap = tileWrap(wrapper, 'Rechner');
+      const tile = wrap.get('.tile');
+
+      expect(tile.text()).toContain('🧮');
+      expect(tile.get('.name').text()).toBe('Rechner');
+      // Keine Knöpfe mehr auf der Kachel — die Aktionen stehen im Kontextmenü.
+      expect(wrap.find('.tile-actions').exists()).toBe(false);
+      expect(wrap.find('[title="Löschen"]').exists()).toBe(false);
+      expect(wrap.find('[title="Icon ändern"]').exists()).toBe(false);
+    });
+
+    it('zeigt die Version(en) erst beim Überfahren', async () => {
+      const { wrapper } = await mountView();
+      const wrap = tileWrap(wrapper, 'Rechner');
+      expect(wrap.find('.meta').exists()).toBe(false);
+
+      await wrap.trigger('mouseenter');
+      expect(wrap.get('.meta').text()).toBe('3 Version(en)');
+      // Und nur bei dieser Kachel.
+      expect(tileWrap(wrapper, 'Editor').find('.meta').exists()).toBe(false);
+
+      await wrap.trigger('mouseleave');
+      expect(wrap.find('.meta').exists()).toBe(false);
+    });
+
+    it('öffnet auf Rechtsklick ein Kontextmenü mit allen Aktionen', async () => {
+      const { wrapper } = await mountView();
+      expect(wrapper.findComponent(ContextMenu).exists()).toBe(false);
+
+      const menu = await openIconMenu(wrapper, 'Rechner');
+
+      expect(menu.props('x')).toBe(200);
+      expect(menu.props('y')).toBe(150);
+      expect(wrapper.findAll('.ctx-item').map((i) => i.get('.ctx-label').text())).toEqual([
+        'Öffnen',
+        'Icon ändern',
+        'Im Dock behalten',
+        'Löschen',
+      ]);
+    });
+
+    it('öffnet die App über „Öffnen“ und schließt dabei das Menü', async () => {
+      const { wrapper } = await mountView();
+      await openIconMenu(wrapper, 'Rechner');
+
+      await pickMenu(wrapper, 'Öffnen');
+
+      expect(useDesktopStore().windows.map((w) => w.appId)).toEqual(['rechner-1']);
+      expect(wrapper.findComponent(ContextMenu).exists()).toBe(false);
+    });
+
+    it('löscht eine App über das Menü — erst nach Rückfrage', async () => {
+      const host = makeHost();
+      setHost(host);
+      const { wrapper } = await mountView();
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+      await openIconMenu(wrapper, 'Rechner');
+      await pickMenu(wrapper, 'Löschen');
+      expect(confirmSpy).toHaveBeenCalled();
+      expect(host.deleteApp).not.toHaveBeenCalled();
+
+      confirmSpy.mockReturnValue(true);
+      await openIconMenu(wrapper, 'Rechner');
+      await pickMenu(wrapper, 'Löschen');
+      expect(host.deleteApp).toHaveBeenCalledWith('/apps', 'rechner-1');
+      confirmSpy.mockRestore();
+    });
+
+    it('behält eine App im Dock und nimmt sie wieder heraus', async () => {
+      const { wrapper } = await mountView();
+      const ws = useWorkspaceStore();
+
+      await openIconMenu(wrapper, 'Rechner');
+      await pickMenu(wrapper, 'Im Dock behalten');
+      expect(ws.favoriteIds).toEqual(['rechner-1']);
+
+      // Beim nächsten Mal steht dort der umgekehrte Weg.
+      await openIconMenu(wrapper, 'Rechner');
+      await pickMenu(wrapper, 'Aus dem Dock entfernen');
+      expect(ws.favoriteIds).toEqual([]);
+    });
+
+    it('bietet dieselbe Dock-Aktion auch am Dock-Eintrag an', async () => {
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      const instanceId = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      desktop.minimizeWindow(instanceId);
+      await flushPromises();
+
+      await wrapper.get('.dock-item').trigger('contextmenu', { clientX: 40, clientY: 700 });
+      await flushPromises();
+
+      expect(wrapper.findAll('.ctx-item').map((i) => i.get('.ctx-label').text())).toEqual([
+        'Im Dock behalten',
+      ]);
+      await pickMenu(wrapper, 'Im Dock behalten');
+      expect(useWorkspaceStore().favoriteIds).toEqual(['rechner-1']);
+    });
+
+    it('schließt das Menü mit Escape, ohne etwas zu tun', async () => {
+      const { wrapper } = await mountView();
+      await openIconMenu(wrapper, 'Rechner');
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      await flushPromises();
+
+      expect(wrapper.findComponent(ContextMenu).exists()).toBe(false);
+      expect(useDesktopStore().windows).toHaveLength(0);
     });
   });
 
