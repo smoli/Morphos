@@ -7,6 +7,8 @@ depends: [c0039]
 created: 2026-08-08
 updated: 2026-08-09
 status-changed: 2026-08-09T00:09:51
+usage-tokens: 39754
+usage-cost: 5.005897
 ---
 
 ## What

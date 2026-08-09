@@ -1,11 +1,13 @@
 ---
 id: c0047
 title: "File-Explorer: system window in the desktop manager"
-status: in-progress
+status: review
 epic: e09
 created: 2026-08-08
 updated: 2026-08-09
-status-changed: 2026-08-09T00:20:42
+status-changed: 2026-08-09T00:33:03
+usage-tokens: 58130
+usage-cost: 7.187773
 ---
 
 ## What
@@ -66,3 +68,4 @@ of the explorer builds on.
   `openSystem()`/`activeAppId` in the desktop store, WindowFrame split into
   chrome + AppWindow + SystemWindow, ExplorerPanel placeholder, entry points on
   the desktop and in the launcher — 803 tests green, typecheck clean
+- 2026-08-09 status → review (agent)
