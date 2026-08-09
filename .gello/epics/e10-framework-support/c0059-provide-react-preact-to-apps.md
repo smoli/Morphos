@@ -1,10 +1,10 @@
 ---
 id: c0059
 title: Provide React/Preact to apps (no-eval alternative)
-status: in-progress
+status: review
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T19:33:06
+status-changed: 2026-08-09T19:43:21
 epic: e10
 ---
 
@@ -147,3 +147,4 @@ Preact + htm stood up on `desktop` as a built-in (opt-in via
   Store, Preload, main, Prompt); Preact-Anleitung aus dem SYSTEM_PROMPT gelöst.
   Tests: framework (12), libs (+4), prompt (+3), ChatDock (+4), AppWindow (+3),
   app-Store (+3) — 1200 grün, typecheck und build sauber.
+- 2026-08-09 status → review (agent)
