@@ -43,6 +43,14 @@ const movable = computed(() => !full.value && !props.tiled);
 // Gekachelt trägt die Titelleiste das Fenster auf eine andere Kachel (c0067).
 const swappable = computed(() => !full.value && !!props.tiled);
 
+/**
+ * Das Fenster, das der Anwender gerade bedient (c0071). Es trägt als einziges
+ * volle Farbe — die anderen treten zurück. Das ist nicht nur Zierde: Wohin ein
+ * neues Fenster gekachelt wird und worauf die Fenster-Kürzel zielen, entscheidet
+ * genau dieses hier (stores/desktop → activeId).
+ */
+const active = computed(() => desktop.activeId === props.win.instanceId);
+
 // Dieses Fenster hängt gerade am Zeiger …
 const swapping = computed(() => desktop.tileSwap?.id === props.win.instanceId);
 // … bzw. auf dieser Kachel würde es landen (der Hinweis liegt über ihr).
@@ -158,7 +166,7 @@ function stopInteraction(): void {
 <template>
   <section
     class="window-frame"
-    :class="{ full, tiled: !!tile, swapping }"
+    :class="{ full, tiled: !!tile, swapping, active }"
     :style="frameStyle"
     @mousedown="focus"
   >
@@ -227,6 +235,32 @@ function stopInteraction(): void {
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   pointer-events: auto;
+}
+/*
+ * Vorn und hinten (c0071): Das aktive Fenster trägt einen farbigen Rand und
+ * wirft den tieferen Schatten; die anderen treten zurück — blasser Rand,
+ * flacherer Schatten, ruhigere Titelleiste. So ist auch bei lückenlos
+ * gekachelter Fläche zu sehen, welches Fenster die Tastatur meint.
+ */
+.window-frame.active {
+  border-color: rgba(108, 140, 255, 0.7);
+  box-shadow: 0 0 0 1px rgba(108, 140, 255, 0.35), 0 18px 48px rgba(0, 0, 0, 0.55);
+}
+.window-frame:not(.active) {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+/* Zurückgetreten: die Leiste ohne eigenen Ton, ihre Schrift gedämpft. */
+.window-frame:not(.active) .titlebar {
+  background: var(--panel);
+}
+.window-frame:not(.active) .w-title {
+  color: var(--muted);
+}
+/* Auch das Icon, das ein Aufsatz mitbringt (:slotted), tritt mit zurück. */
+.window-frame:not(.active) .w-icon,
+.window-frame:not(.active) :slotted(.w-icon),
+.window-frame:not(.active) .w-actions {
+  opacity: 0.7;
 }
 /*
  * Gekachelt: Der Baum teilt die Fläche lückenlos auf — eine Mindestgröße dürfte

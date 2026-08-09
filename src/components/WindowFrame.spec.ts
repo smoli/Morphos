@@ -61,6 +61,59 @@ describe('WindowFrame', () => {
     expect(desktop.focusedId).toBe(win.instanceId);
   });
 
+  describe('Marke des aktiven Fensters (c0071)', () => {
+    it('markiert den Rahmen, der vorn liegt', () => {
+      const { wrapper } = mountFrame();
+      expect(wrapper.get('.window-frame').classes()).toContain('active');
+    });
+
+    it('gibt die Marke ab, sobald ein anderes Fenster nach vorn kommt — und holt sie zurück', async () => {
+      const { wrapper, desktop } = mountFrame();
+
+      desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });
+      await wrapper.vm.$nextTick();
+      expect(wrapper.get('.window-frame').classes()).not.toContain('active');
+
+      await wrapper.trigger('mousedown');
+      expect(wrapper.get('.window-frame').classes()).toContain('active');
+    });
+
+    it('trägt keine Marke, wenn das Fenster minimiert wartet', async () => {
+      const { wrapper } = mountFrame();
+
+      await wrapper.get('.w-min').trigger('click');
+      expect(wrapper.get('.window-frame').classes()).not.toContain('active');
+    });
+
+    it('markiert auch gekachelt nur die Kachel, die den Anwender bedient', async () => {
+      useWorkspaceStore().uiMode = 'tiles';
+      const desktop = useDesktopStore();
+      desktop.setTileArea({ x: 0, y: 0, w: 1000, h: 600 });
+      const a = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      const b = desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });
+      const frames = [a, b].map((id) =>
+        mount(WindowFrame, { props: { win: desktop.find(id)!, tiled: true } }),
+      );
+
+      expect(frames[0].get('.window-frame').classes()).not.toContain('active');
+      expect(frames[1].get('.window-frame').classes()).toContain('active');
+
+      await frames[0].trigger('mousedown');
+      expect(frames[0].get('.window-frame').classes()).toContain('active');
+      expect(frames[1].get('.window-frame').classes()).not.toContain('active');
+    });
+
+    it('trägt im Einzel-Modus keine Marke, solange der Desktop davor liegt', async () => {
+      useWorkspaceStore().uiMode = 'single';
+      const { wrapper, desktop } = mountFrame({ single: true });
+      expect(wrapper.get('.window-frame').classes()).toContain('active');
+
+      desktop.showDesktop();
+      await wrapper.vm.$nextTick();
+      expect(wrapper.get('.window-frame').classes()).not.toContain('active');
+    });
+  });
+
   it('minimiert, maximiert und schließt über die Fensterknöpfe', async () => {
     const { wrapper, desktop, win } = mountFrame();
 
