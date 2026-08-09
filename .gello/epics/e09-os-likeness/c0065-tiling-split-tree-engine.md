@@ -1,11 +1,13 @@
 ---
 id: c0065
 title: "Tiling: split-tree engine (dwindle)"
-status: review
+status: done
 epic: e09
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T19:32:39
+status-changed: 2026-08-09T19:39:27
+usage-tokens: 26275
+usage-cost: 1.508654
 ---
 
 ## What
@@ -61,3 +63,4 @@ Nulländerung denselben Baum zurück.
 - 2026-08-09 status → ready (app)
 - 2026-08-09 status → in-progress (agent)
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)

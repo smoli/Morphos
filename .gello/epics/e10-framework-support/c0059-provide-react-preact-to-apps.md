@@ -1,12 +1,11 @@
 ---
 id: c0059
 title: Provide React/Preact to apps (no-eval alternative)
-status: ready
+status: in-progress
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T19:13:36
+status-changed: 2026-08-09T19:33:06
 epic: e10
-order: 70
 ---
 
 ## What
@@ -115,3 +114,4 @@ Preact + htm stood up on `desktop` as a built-in (opt-in via
   einer neuen App (Vorgabe an), pro App gemerkt. What/AC auf Umsetzung
   umgeschrieben — Implementierung durch anderen Agenten.
 - 2026-08-09 status → ready (app)
+- 2026-08-09 status → in-progress (agent)
