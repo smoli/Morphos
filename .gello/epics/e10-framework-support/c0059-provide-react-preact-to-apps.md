@@ -87,6 +87,34 @@ Open questions:
 - Contrast with c0058: that spike relaxed the CSP to get Vue templates cheaply;
   this path keeps the CSP strict. Cross-reference both when deciding.
 
+### Umsetzung (2026-08-09)
+
+- **`src/core/framework.ts`** (neu) ist die eine Stelle, die die Frage
+  beantwortet: `resolveFramework(files, requested)`. Eine **bestehende** App
+  bringt ihre Wahl in ihrem eigenen Quelltext mit — `detectFramework` liest sie
+  am `<meta name="morphos:lib" content="preact">` in `src/index.html` ab. Nur
+  eine **neue** App (leerer Dateisatz) nimmt die Wahl aus dem Composer. Es wird
+  also **nichts mitgeführt und nichts persistiert**; das Erinnern fällt ab.
+- **Composer**: `ChatDock` bekommt `newApp` + `framework` und meldet
+  `update:framework`; `AppWindow` bindet das an `store.isDraft` bzw.
+  `store.newFramework` (Vorgabe `preact`, `newDraft` setzt zurück). Bei einer
+  bestehenden App wird der Haken gar nicht erst gerendert.
+- **Weg des Werts**: `stores/app.generate` → `MorphosHost.generate(…, framework)`
+  → Preload → `morphos:generate` → `main.generate` → `resolveFramework` →
+  `PromptContext.framework` → `buildPrompt`.
+- **Prompt**: Der Preact-Abschnitt ist aus `SYSTEM_PROMPT` heraus und liegt als
+  `PREACT_GUIDE` in `core/prompt`; `buildPrompt` legt ihn **nur** bei
+  `framework === 'preact'` bei. Eine vanilla-App liest das Wort „Preact“ nirgends.
+- **Einbetten**: unverändert über das Metatag — die Tabelle der eingebauten
+  Bibliotheken ist aus `electron/main` nach `core/libs` gezogen (`BUILTIN_LIBS`,
+  `splitLibs`, `isBuiltinLib`), damit der Weg „Metatag → eingebettet“ testbar ist;
+  `main` liest nur noch die Dateien aus `node_modules`. (`isBuiltinLib` prüft
+  jetzt `hasOwnProperty` — ein `content="constructor"` galt vorher als eingebaut.)
+- Verifiziert über **Tests** (1200 grün), `vue-tsc` und `vite build`; nicht
+  von Hand in der laufenden App nachgespielt (dafür bräuchte es Workspace +
+  Claude CLI). Das Preact-Laufzeitverhalten selbst ist unter „Verified“ bereits
+  im Browser bestätigt.
+
 ## Verified (tryout on `desktop`, 2026-08-09, commit 9a76f4e)
 
 Preact + htm stood up on `desktop` as a built-in (opt-in via
@@ -115,3 +143,7 @@ Preact + htm stood up on `desktop` as a built-in (opt-in via
   umgeschrieben — Implementierung durch anderen Agenten.
 - 2026-08-09 status → ready (app)
 - 2026-08-09 status → in-progress (agent)
+- 2026-08-09 Toggle + Verdrahtung umgesetzt (core/framework, ChatDock, AppWindow,
+  Store, Preload, main, Prompt); Preact-Anleitung aus dem SYSTEM_PROMPT gelöst.
+  Tests: framework (12), libs (+4), prompt (+3), ChatDock (+4), AppWindow (+3),
+  app-Store (+3) — 1200 grün, typecheck und build sauber.
