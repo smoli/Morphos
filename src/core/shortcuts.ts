@@ -10,6 +10,10 @@
  *   und ⌘/Strg + M gehören dem Wirtsfenster von Electron — sie schlössen bzw.
  *   minimierten Morphos selbst. Die Fensterbefehle des Desktops tragen darum
  *   zusätzlich die Umschalttaste.
+ * - Ein Kürzel darf eine zweite Taste führen (`also`), wenn die erste dem
+ *   Betriebssystem gehören kann: Strg/⌘ + Leertaste öffnet die App-Suche wie die
+ *   Suche eines Betriebssystems — unter macOS nimmt sich Spotlight aber
+ *   ⌘ + Leertaste, darum bleibt Strg/⌘ + K der zweite Weg ins Startmenü.
  * - Wo getippt wird, gilt kein Kürzel (siehe `isTypingTarget`): Weder der Chat
  *   einer App noch ein Eingabefeld noch eine laufende App im iframe soll
  *   Tastendrücke an die Schale verlieren. Escape ist die Ausnahme — es schließt
@@ -32,6 +36,8 @@ export interface Shortcut {
   label: string;
   /** Die Taste zu Strg/⌘, kleingeschrieben. */
   key: string;
+  /** Eine zweite Taste, die dasselbe auslöst — mit denselben Haltetasten. */
+  also?: string;
   /** Zusätzlich die Umschalttaste? */
   shift: boolean;
   /** Wie es sich schreibt: „Strg/⌘ + ⇧ + W“. */
@@ -39,7 +45,7 @@ export interface Shortcut {
 }
 
 export const SHORTCUTS: readonly Shortcut[] = [
-  { id: 'launcher', label: 'Apps suchen (Startmenü)', key: 'k', shift: false, keys: 'Strg/⌘ + K' },
+  { id: 'launcher', label: 'Apps suchen (Startmenü)', key: ' ', also: 'k', shift: false, keys: 'Strg/⌘ + Leertaste oder K' },
   { id: 'new-app', label: 'Neue App', key: 'n', shift: false, keys: 'Strg/⌘ + N' },
   { id: 'settings', label: 'Einstellungen', key: ',', shift: false, keys: 'Strg/⌘ + ,' },
   { id: 'close-window', label: 'Fenster schließen', key: 'w', shift: true, keys: 'Strg/⌘ + ⇧ + W' },
@@ -64,7 +70,7 @@ export interface KeyChord {
 export function matchShortcut(e: KeyChord): ShortcutId | null {
   if (e.altKey || !(e.ctrlKey || e.metaKey)) return null;
   const key = e.key.toLowerCase();
-  const hit = SHORTCUTS.find((s) => s.key === key && s.shift === !!e.shiftKey);
+  const hit = SHORTCUTS.find((s) => (s.key === key || s.also === key) && s.shift === !!e.shiftKey);
   return hit ? hit.id : null;
 }
 

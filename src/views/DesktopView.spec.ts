@@ -1335,6 +1335,17 @@ describe('DesktopView', () => {
       expect(wrapper.findAllComponents(LauncherOverlay)).toHaveLength(1);
     });
 
+    it('öffnet das Startmenü mit Strg/⌘ + Leertaste', async () => {
+      const { wrapper } = await mountView();
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', ctrlKey: true }));
+      await flushPromises();
+      expect(wrapper.findComponent(LauncherOverlay).exists()).toBe(true);
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', metaKey: true }));
+      await flushPromises();
+      expect(wrapper.findAllComponents(LauncherOverlay)).toHaveLength(1);
+    });
+
     it('öffnet die getippte App mit der Eingabetaste und schließt sich dabei', async () => {
       const { wrapper } = await mountView();
       const desktop = useDesktopStore();

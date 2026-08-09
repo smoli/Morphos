@@ -24,8 +24,10 @@ describe('core/shortcuts', () => {
       }
     });
 
-    it('vergibt keine Tastenkombination doppelt', () => {
-      const combos = SHORTCUTS.map((s) => `${s.shift ? 'shift+' : ''}${s.key}`);
+    it('vergibt keine Tastenkombination doppelt — Zweittasten mitgezählt', () => {
+      const combos = SHORTCUTS.flatMap((s) =>
+        [s.key, ...(s.also ? [s.also] : [])].map((k) => `${s.shift ? 'shift+' : ''}${k}`),
+      );
       expect(new Set(combos).size).toBe(combos.length);
     });
 
@@ -34,6 +36,21 @@ describe('core/shortcuts', () => {
       expect(matchShortcut(press('k', { metaKey: true }))).toBe('launcher');
       expect(matchShortcut(press('n', { ctrlKey: true }))).toBe('new-app');
       expect(matchShortcut(press(',', { metaKey: true }))).toBe('settings');
+    });
+
+    it('öffnet das Startmenü mit der Leertaste — wie die Suche eines Betriebssystems', () => {
+      expect(matchShortcut(press(' ', { ctrlKey: true }))).toBe('launcher');
+      expect(matchShortcut(press(' ', { metaKey: true }))).toBe('launcher');
+      // Die Leertaste allein schreibt weiterhin ein Leerzeichen.
+      expect(matchShortcut(press(' '))).toBeNull();
+      expect(matchShortcut(press(' ', { ctrlKey: true, shiftKey: true }))).toBeNull();
+      expect(matchShortcut(press(' ', { ctrlKey: true, altKey: true }))).toBeNull();
+    });
+
+    it('lässt Strg/⌘ + K als zweiten Weg ins Startmenü bestehen', () => {
+      // Unter macOS greift sich das System ⌘ + Leertaste für seine eigene Suche.
+      expect(matchShortcut(press('k', { ctrlKey: true }))).toBe('launcher');
+      expect(matchShortcut(press('k', { metaKey: true }))).toBe('launcher');
     });
 
     it('nimmt die Taste unabhängig von der Groß-/Kleinschreibung', () => {
@@ -63,7 +80,7 @@ describe('core/shortcuts', () => {
     });
 
     it('nennt zu jedem Kürzel seine Schreibweise', () => {
-      expect(shortcutKeys('launcher')).toBe('Strg/⌘ + K');
+      expect(shortcutKeys('launcher')).toBe('Strg/⌘ + Leertaste oder K');
       expect(shortcutKeys('close-window')).toBe('Strg/⌘ + ⇧ + W');
       expect(shortcutKeys('composer')).toBe('Strg/⌘ + ⇧ + C');
     });

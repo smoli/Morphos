@@ -26,7 +26,8 @@ import { SHORTCUTS, SWITCHER_KEYS } from '@/core/shortcuts';
     <p class="hint foot">
       ⌘/Strg + W und ⌘/Strg + M gehören dem Programmfenster selbst — die Fensterbefehle des
       Desktops tragen darum zusätzlich die Umschalttaste. Unter macOS nimmt sich das System
-      ⌘ + Tab für den Programmwechsel; dort führt Strg + Tab durch die Fenster.
+      ⌘ + Tab für den Programmwechsel; dort führt Strg + Tab durch die Fenster. Ebenso gehört
+      ⌘ + Leertaste dort der Suche des Systems — ins Startmenü führt darum auch Strg/⌘ + K.
     </p>
   </section>
 </template>
