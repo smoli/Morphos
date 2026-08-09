@@ -29,24 +29,31 @@ card is now about the **toggle + wiring**, not the plumbing.
 
 ## Acceptance criteria
 
-- [ ] **Preact + htm** available as a shipped built-in (opt-in via
-      `morphos:lib content="preact"`), inlined when used; a sample app renders and
-      updates reactively under the **unchanged strict CSP** (no `'unsafe-eval'`).
-- [ ] Confirmed that htm's tagged-template rendering needs **no eval and no build
-      step** (works as-is in the sandbox).
-- [ ] React proper is either (a) prototyped with a **build-time JSX transform**,
-      or (b) explicitly deferred in favour of Preact+htm; if React ships without
-      the transform, it's the `createElement`/no-JSX form.
-- [ ] `SYSTEM_PROMPT` documents the chosen authoring model (opt-in, mount
-      contract, still no network/localStorage).
-- [ ] A representative app is built with **Preact+htm** and compared to the Vue
-      spike (c0058) and vanilla for generation quality/efficiency and output size;
-      findings recorded.
-- [ ] A **which-framework recommendation** is recorded across c0058 (Vue) and this
-      card — adopt one, both, or neither, with the reason.
-- [ ] Opt-in detection + built-in inlining covered by unit tests.
+- [ ] A **framework toggle** („Preact“) appears in the composer **only when
+      creating a new app**, and is **on by default**.
+- [ ] Toggle **on** → the new app is generated **with Preact + htm** (the `preact`
+      built-in is inlined and the prompt instructs the agent to build UI and state
+      with Preact); **off** → plain vanilla JS, no Preact.
+- [ ] The framework is **remembered per app**: follow-up edits to an existing app
+      continue in its style (Preact if its source already uses `preact`, otherwise
+      vanilla) **without** re-toggling.
+- [ ] The always-on `SYSTEM_PROMPT` **no longer nags** about Preact; the Preact
+      authoring guidance is added to the prompt **only when the app uses Preact**
+      (new-app toggle on, or an existing app already using it).
+- [ ] The toggle state flows **renderer → generate → prompt** (host/preload/main
+      signature carries it); generation is unchanged when off / for vanilla apps.
+- [ ] Preact stays **opt-in** — an app that doesn't use it gets nothing inlined.
+- [ ] Tests cover: the toggle shows only for a new app and defaults on; „on“
+      yields Preact guidance + inlining; an existing Preact app keeps Preact on
+      follow-ups; „off“ / vanilla adds nothing.
 
 ## Discussion
+
+**Decision (2026-08-09): adopt Preact + htm; Vue (c0058) not chosen.** Preact+htm
+keeps the strict CSP (no eval) and needs no bundler compiler, and it's verified
+working (see „Verified“). Made **optional via a new-app toggle, on by default**, so
+it's the default without prompt-nagging, and **remembered per app** for follow-up
+edits. → c0058 (Vue) can be closed as not-adopted.
 
 Motivation (2026-08-09): the React family can avoid the CSP relaxation the Vue
 spike needed.
@@ -103,3 +110,6 @@ Preact + htm stood up on `desktop` as a built-in (opt-in via
 - 2026-08-09 Preact+htm als eingebaute Bibliothek auf desktop erprobt (9a76f4e);
   im Browser verifiziert: rendert + reagiert unter strikter CSP, keine eval-/CSP-
   Verletzung. Ergebnis in „Verified“ festgehalten.
+- 2026-08-09 Entscheidung: Preact übernommen; optional per Toggle beim Anlegen
+  einer neuen App (Vorgabe an), pro App gemerkt. What/AC auf Umsetzung
+  umgeschrieben — Implementierung durch anderen Agenten.
