@@ -14,12 +14,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "ls .gello/epics/e09-os-likeness/ && find src -type f | head -80"
+        "arg": "sed -n 195,240p src/types/index.ts"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T19:27:42",
+  "updated": "2026-08-09T19:28:26",
   "pickupDelay": 10,
   "owned": [
     "c0029",

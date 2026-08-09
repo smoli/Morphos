@@ -1,10 +1,10 @@
 ---
 id: c0063
 title: Add option to put dock at the sides and the top
-status: review
+status: done
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T19:26:40
+status-changed: 2026-08-09T19:28:26
 epic: e09
 usage-tokens: 50862
 usage-cost: 7.240838
@@ -88,3 +88,4 @@ und Ausblenden (c0062) auch.
   Segment-Auswahl im Bereich „Das Dock“, Leiste und Randstreifen an alle vier
   Ränder gebracht, Fläche rückt für ein Dock links/rechts/oben ein
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)
