@@ -1,10 +1,10 @@
 ---
 id: c0057
 title: represent file explorer and settings like regular apps
-status: in-progress
+status: review
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T10:17:59
+status-changed: 2026-08-09T10:21:05
 epic: e09
 ---
 
@@ -82,3 +82,7 @@ minimize, maximize, switcher, session restore).
 - 2026-08-09 status → in-progress (agent)
 - 2026-08-09 Einstellungen als System-Fenster (SettingsPanel, shell-Store weg),
   feste Dock-Plätze in core/dock, System-Fenster in der Sitzung
+- 2026-08-09 Die Arbeit lag zunächst auf `spike/vue-in-apps` (dort war der
+  Zweig beim Committen); auf `desktop` übernommen als 101c27b — ohne den
+  CSP-Spike. Tests, Typprüfung und Build dort erneut grün.
+- 2026-08-09 status → review (agent)
