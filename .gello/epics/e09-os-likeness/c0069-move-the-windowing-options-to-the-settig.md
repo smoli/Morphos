@@ -1,10 +1,10 @@
 ---
 id: c0069
 title: Move the windowing options to the settigns dialog
-status: review
+status: done
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T20:00:50
+status-changed: 2026-08-09T20:21:49
 commit: ac5731c
 epic: e09
 usage-tokens: 16960
@@ -54,3 +54,4 @@ Kopfleiste — er gehört zu den Einstellungen. Er zieht in den Bereich
   „Der Desktop“) verlegt, Namen/Erklärungen nach core/uimode, README nachgezogen
   (1226 Tests grün, typecheck + lint + build sauber) — ac5731c
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)

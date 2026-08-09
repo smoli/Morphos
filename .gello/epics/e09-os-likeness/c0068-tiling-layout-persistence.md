@@ -1,12 +1,14 @@
 ---
 id: c0068
 title: "Tiling: per-workspace layout persistence"
-status: review
+status: done
 epic: e09
 depends: [c0066]
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T20:44:25
+status-changed: 2026-08-09T21:26:11
+usage-tokens: 55685
+usage-cost: 5.624972
 ---
 
 ## What
@@ -60,3 +62,4 @@ später auf „Kacheln“, steht die Anordnung sofort.
   Einstellungen, Merken/Wiederherstellen im Desktop-Store; 1298 Tests grün,
   vue-tsc sauber
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)

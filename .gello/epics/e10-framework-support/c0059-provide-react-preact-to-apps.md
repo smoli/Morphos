@@ -1,10 +1,10 @@
 ---
 id: c0059
 title: Provide React/Preact to apps (no-eval alternative)
-status: review
+status: done
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T19:43:21
+status-changed: 2026-08-09T20:21:47
 epic: e10
 usage-tokens: 42444
 usage-cost: 7.250566
@@ -150,3 +150,4 @@ Preact + htm stood up on `desktop` as a built-in (opt-in via
   Tests: framework (12), libs (+4), prompt (+3), ChatDock (+4), AppWindow (+3),
   app-Store (+3) — 1200 grün, typecheck und build sauber.
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)

@@ -1,13 +1,12 @@
 ---
 id: c0064
 title: Add a tiling window manager
-status: ready
+status: in-progress
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T19:13:23
+status-changed: 2026-08-09T21:26:18
 epic: e09
 depends: [c0065, c0066, c0067, c0068]
-order: 60
 ---
 
 ## Breakdown
@@ -90,3 +89,4 @@ Open questions for planning:
 
 - 2026-08-09 status → discuss (app)
 - 2026-08-09 status → ready (app)
+- 2026-08-09 status → in-progress (agent)

@@ -1,12 +1,14 @@
 ---
 id: c0067
 title: "Tiling: gap-drag resize + swap-drag"
-status: review
+status: done
 epic: e09
 depends: [c0066]
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T20:33:50
+status-changed: 2026-08-09T21:26:13
+usage-tokens: 53261
+usage-cost: 6.364165
 ---
 
 ## What
@@ -72,3 +74,4 @@ keine eigene Geometrie an:
   Tragen an der Titelleiste im WindowFrame (1255 Tests grün, typecheck + build
   sauber)
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)

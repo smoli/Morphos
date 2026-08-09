@@ -1,12 +1,12 @@
 ---
 id: c0066
 title: "Tiling: Kacheln mode + tree-derived rendering"
-status: review
+status: done
 epic: e09
 depends: [c0065]
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T19:55:13
+status-changed: 2026-08-09T20:21:48
 usage-tokens: 45957
 usage-cost: 6.679163
 ---
@@ -77,3 +77,4 @@ Fenster/Einzeln in der Kopfleiste. Was er umfasst:
   tree-derived Geometrie im WindowFrame, Fläche + Umschalten in DesktopView
   (1224 Tests grün, typecheck + build sauber)
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)
