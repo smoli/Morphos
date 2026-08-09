@@ -37,50 +37,50 @@ text editor); this is a viewer + manager. The listing updates **live**.
 
 Window & modes:
 
-- [ ] Opens as a **window in the desktop window manager**: focus, z-order,
+- [x] Opens as a **window in the desktop window manager**: focus, z-order,
       minimize/maximize, dock entry, and app-switcher — like an app window.
-- [ ] Honors the desktop **mode switch**: floating in windowed mode, full-screen
+- [x] Honors the desktop **mode switch**: floating in windowed mode, full-screen
       (with „← Desktop“) in single mode.
-- [ ] Opening it again **focuses the existing** explorer window (single instance),
+- [x] Opening it again **focuses the existing** explorer window (single instance),
       not a duplicate; there is a clear entry point (desktop / launcher / dock).
 
 Browsing (confined + live):
 
-- [ ] Lists the **data folder** and subfolders with breadcrumb navigation and
+- [x] Lists the **data folder** and subfolders with breadcrumb navigation and
       **cannot navigate above** the data root (scoped fs); empty/prompt state when
       no data folder is configured.
-- [ ] The listing **auto-refreshes** when files change (main-process watch,
+- [x] The listing **auto-refreshes** when files change (main-process watch,
       debounced); watching stops when the window closes.
 
 Preview:
 
-- [ ] Passive types preview richly: **images**, **video**, **audio**,
+- [x] Passive types preview richly: **images**, **video**, **audio**,
       **markdown** (escape-first `core/markdown`), **JSON** (pretty-printed +
       syntax-highlighted), **text**.
-- [ ] **HTML/SVG** preview inside a **sandboxed iframe** (allow-scripts, no
+- [x] **HTML/SVG** preview inside a **sandboxed iframe** (allow-scripts, no
       same-origin, CSP) — the same isolation as generated apps; no untrusted file
       runs in the trusted renderer.
-- [ ] Large/binary media load via a **scoped stream** (custom protocol or blob),
+- [x] Large/binary media load via a **scoped stream** (custom protocol or blob),
       not by inlining the whole file; oversized text/JSON is capped with a notice.
-- [ ] Unknown/unpreviewable types show file info (name, size, type) without
+- [x] Unknown/unpreviewable types show file info (name, size, type) without
       trying to render.
 
 Management (full, confined, user-driven):
 
-- [ ] **Create folder**, **rename**, **move**, and **copy/paste** work within the
+- [x] **Create folder**, **rename**, **move**, and **copy/paste** work within the
       data folder; every operation is confined to the root (source **and**
       destination validated).
-- [ ] **Delete** moves items to a recoverable **waste bin** (hidden trash area
+- [x] **Delete** moves items to a recoverable **waste bin** (hidden trash area
       inside the data folder), not a permanent delete; the user can **restore**
       from or **empty** the trash (empty = permanent, with confirmation).
-- [ ] Destructive actions (delete, empty trash, overwrite on move/copy) ask for
+- [x] Destructive actions (delete, empty trash, overwrite on move/copy) ask for
       **confirmation**; the trash is excluded from the normal listing.
-- [ ] Explorer operations are **user actions** (trusted shell), not app fs
+- [x] Explorer operations are **user actions** (trusted shell), not app fs
       requests — they do not trigger the app permission dialog.
 
 Tests:
 
-- [ ] Path confinement for move/copy (source + destination), trash round-trip
+- [x] Path confinement for move/copy (source + destination), trash round-trip
       (delete → restore), and preview type-detection are covered by unit tests;
       the window + previews by component tests (sandboxed iframe for HTML, escaped
       JSON/text).
