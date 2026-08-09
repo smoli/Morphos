@@ -16,6 +16,7 @@ import { clampMaxAgents, DEFAULT_MAX_AGENTS } from '@/core/queue';
 import { cleanFavorites, toggleFavorite } from '@/core/favorites';
 import { cleanSessions, sameSession } from '@/core/session';
 import { cleanWallpaper, cleanWallpapers, DEFAULT_WALLPAPER } from '@/core/wallpaper';
+import { cleanTransparencies, cleanTransparency, DEFAULT_DOCK_TRANSPARENCY } from '@/core/transparency';
 
 interface PendingPermission {
   op: FsOp;
@@ -43,6 +44,8 @@ interface WorkspaceState {
   sessions: Record<string, SessionWindow[]>;
   /** Der Hintergrund der Desktop-Fläche, je Workspace-Pfad (siehe core/wallpaper). */
   wallpapers: Record<string, Wallpaper>;
+  /** Die Durchsichtigkeit des Docks, je Workspace-Pfad (siehe core/transparency). */
+  dockTransparencies: Record<string, number>;
   /** Aktuell zur Genehmigung anstehende Anfrage (für den Dialog). */
   pendingPermission: PendingPermission | null;
   apps: AppSummary[];
@@ -72,6 +75,7 @@ export const useWorkspaceStore = defineStore('workspace', {
     favorites: {},
     sessions: {},
     wallpapers: {},
+    dockTransparencies: {},
     pendingPermission: null,
     apps: [],
     loading: false,
@@ -104,6 +108,11 @@ export const useWorkspaceStore = defineStore('workspace', {
     wallpaper: (s): Wallpaper => (s.folder ? s.wallpapers[s.folder] ?? DEFAULT_WALLPAPER : DEFAULT_WALLPAPER),
     /** Hat der Anwender hier einen eigenen Hintergrund gewählt? */
     hasWallpaper: (s): boolean => (s.folder ? s.wallpapers[s.folder] !== undefined : false),
+    /** Wie durchsichtig das Dock hier ist — ohne eigenen Wert die Vorgabe. */
+    dockTransparency: (s): number =>
+      (s.folder ? s.dockTransparencies[s.folder] ?? DEFAULT_DOCK_TRANSPARENCY : DEFAULT_DOCK_TRANSPARENCY),
+    /** Hat der Anwender hier einen eigenen Wert gewählt? */
+    hasDockTransparency: (s): boolean => (s.folder ? s.dockTransparencies[s.folder] !== undefined : false),
   },
 
   actions: {
@@ -122,6 +131,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.favorites = cleanFavorites(settings?.favorites);
         this.sessions = cleanSessions(settings?.sessions);
         this.wallpapers = cleanWallpapers(settings?.wallpapers);
+        this.dockTransparencies = cleanTransparencies(settings?.dockTransparencies);
       } catch {
         this.recentFolders = [];
         this.accessRoots = {};
@@ -133,6 +143,7 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.favorites = {};
         this.sessions = {};
         this.wallpapers = {};
+        this.dockTransparencies = {};
       }
     },
 
@@ -269,6 +280,28 @@ export const useWorkspaceStore = defineStore('workspace', {
       if (!this.folder || !this.wallpapers[this.folder]) return;
       const { [this.folder]: _weg, ...rest } = this.wallpapers;
       this.wallpapers = rest;
+      void this.persistSettings();
+    },
+
+    /**
+     * Legt fest, wie durchsichtig das Dock in diesem Verzeichnis ist. Geprüft
+     * wird hier, nicht erst beim Malen: Was `cleanTransparency` nicht annimmt,
+     * wird nicht gemerkt (liefert false).
+     */
+    setDockTransparency(level: number): boolean {
+      if (!this.folder) return false;
+      const clean = cleanTransparency(level);
+      if (clean === null) return false;
+      this.dockTransparencies = { ...this.dockTransparencies, [this.folder]: clean };
+      void this.persistSettings();
+      return true;
+    },
+
+    /** Zurück zur Vorgabe: Dieses Verzeichnis hat dann keinen eigenen Wert mehr. */
+    resetDockTransparency(): void {
+      if (!this.folder || this.dockTransparencies[this.folder] === undefined) return;
+      const { [this.folder]: _weg, ...rest } = this.dockTransparencies;
+      this.dockTransparencies = rest;
       void this.persistSettings();
     },
 
@@ -412,6 +445,7 @@ export const useWorkspaceStore = defineStore('workspace', {
       const favorites = JSON.parse(JSON.stringify(this.favorites)) as Record<string, string[]>;
       const sessions = JSON.parse(JSON.stringify(this.sessions)) as Record<string, SessionWindow[]>;
       const wallpapers = JSON.parse(JSON.stringify(this.wallpapers)) as Record<string, Wallpaper>;
+      const dockTransparencies = { ...this.dockTransparencies };
       try {
         await getHost().saveSettings({
           recentFolders,
@@ -424,6 +458,7 @@ export const useWorkspaceStore = defineStore('workspace', {
           favorites,
           sessions,
           wallpapers,
+          dockTransparencies,
         });
       } catch {
         /* nicht kritisch */

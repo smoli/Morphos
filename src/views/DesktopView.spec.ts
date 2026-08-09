@@ -20,6 +20,7 @@ import { setHost } from '@/services/host';
 import { columns, slotPos } from '@/core/arrange';
 import { EXPLORER_ID, SETTINGS_ID, SYSTEM_WINDOWS, systemWindow } from '@/core/system';
 import { DEFAULT_WALLPAPER, wallpaperCss } from '@/core/wallpaper';
+import { DEFAULT_DOCK_TRANSPARENCY, dockBackgroundCss } from '@/core/transparency';
 import type { AppData, AppSummary, MorphosHost } from '@/types';
 
 const apps: AppSummary[] = [
@@ -582,6 +583,21 @@ describe('DesktopView', () => {
       expect(rule).not.toMatch(/overflow[a-z-]*:\s*(auto|scroll)/);
       // Passt nicht alles in eine Reihe, bricht das Dock um, statt zu rollen.
       expect(rule).toMatch(/flex-wrap:\s*wrap/);
+    });
+
+    it('ist so durchsichtig, wie es die Einstellungen sagen', async () => {
+      const { wrapper } = await mountView();
+      const ws = useWorkspaceStore();
+      // Ohne eigenen Wert die Vorgabe …
+      expect(wrapper.get('.dock').attributes('style')).toContain(
+        dockBackgroundCss(DEFAULT_DOCK_TRANSPARENCY),
+      );
+
+      ws.setDockTransparency(0.85);
+      await flushPromises();
+
+      // … und danach der gewählte.
+      expect(wrapper.get('.dock').attributes('style')).toContain(dockBackgroundCss(0.85));
     });
 
     it('reiht auf: erst die Lieblinge, dann das Laufende', async () => {

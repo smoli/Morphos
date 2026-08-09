@@ -164,6 +164,12 @@ export interface Settings {
    * bekommt die Vorgabe (siehe core/wallpaper).
    */
   wallpapers?: Record<string, Wallpaper>;
+  /**
+   * Wie durchsichtig das Dock ist, je Workspace-Pfad — ein Anteil zwischen 0
+   * (deckend) und 1 (durchsichtig). Was hier fehlt, bekommt die Vorgabe (siehe
+   * core/transparency).
+   */
+  dockTransparencies?: Record<string, number>;
 }
 
 /**

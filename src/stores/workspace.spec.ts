@@ -3,6 +3,7 @@ import { setActivePinia, createPinia } from 'pinia';
 import { useWorkspaceStore } from './workspace';
 import { setHost } from '@/services/host';
 import { DEFAULT_WALLPAPER } from '@/core/wallpaper';
+import { DEFAULT_DOCK_TRANSPARENCY } from '@/core/transparency';
 import type { MorphosHost, AppSummary, Settings } from '@/types';
 
 const apps: AppSummary[] = [
@@ -53,7 +54,7 @@ describe('useWorkspaceStore', () => {
     expect(ws.folder).toBe('/neu');
     expect(ws.recentFolders[0]).toBe('/neu');
     expect(ws.apps).toHaveLength(2);
-    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows', maxAgents: 2, iconPositions: {}, favorites: {}, sessions: {}, wallpapers: {} });
+    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows', maxAgents: 2, iconPositions: {}, favorites: {}, sessions: {}, wallpapers: {}, dockTransparencies: {} });
     expect(host.listApps).toHaveBeenCalledWith('/neu');
   });
 
@@ -542,6 +543,98 @@ describe('useWorkspaceStore', () => {
       await ws.init();
       await ws.openFolder('/apps');
       expect(ws.wallpaper).toEqual(DEFAULT_WALLPAPER);
+    });
+  });
+
+  describe('Durchsichtigkeit des Docks', () => {
+    it('lädt den gemerkten Wert des Workspace', async () => {
+      setHost(makeHost({
+        loadSettings: vi.fn(async () => ({
+          recentFolders: [],
+          accessRoots: {},
+          dockTransparencies: { '/apps': 0.6, '/andere': 0.1 },
+        })),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.init();
+      expect(ws.dockTransparency).toBe(DEFAULT_DOCK_TRANSPARENCY); // noch kein Ordner geöffnet
+      await ws.openFolder('/apps');
+      expect(ws.dockTransparency).toBe(0.6);
+      expect(ws.hasDockTransparency).toBe(true);
+    });
+
+    it('gilt die Vorgabe, solange keiner gewählt ist', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+      expect(ws.dockTransparency).toBe(DEFAULT_DOCK_TRANSPARENCY);
+      expect(ws.hasDockTransparency).toBe(false);
+    });
+
+    it('merkt einen gewählten Wert je Workspace und speichert ihn', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(ws.setDockTransparency(0.653)).toBe(true);
+
+      expect(ws.dockTransparency).toBe(0.65); // beim Merken schon gerundet
+      expect(host.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ dockTransparencies: { '/apps': 0.65 } }),
+      );
+    });
+
+    it('nimmt keinen unbrauchbaren Wert an', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+      const calls = (host.saveSettings as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      expect(ws.setDockTransparency(1.4)).toBe(false);
+
+      expect(ws.hasDockTransparency).toBe(false);
+      expect((host.saveSettings as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(calls);
+    });
+
+    it('rührt ohne geöffneten Ordner nichts an', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      expect(ws.setDockTransparency(0.5)).toBe(false);
+      expect(ws.dockTransparencies).toEqual({});
+    });
+
+    it('setzt nur den aktuellen Workspace auf die Vorgabe zurück', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      ws.dockTransparencies = { '/andere': 0.1 };
+      await ws.openFolder('/apps');
+      ws.setDockTransparency(0.8);
+
+      ws.resetDockTransparency();
+
+      expect(ws.dockTransparency).toBe(DEFAULT_DOCK_TRANSPARENCY);
+      expect(ws.hasDockTransparency).toBe(false);
+      expect(host.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ dockTransparencies: { '/andere': 0.1 } }),
+      );
+    });
+
+    it('überlebt beschädigte Einstellungen (dann gilt die Vorgabe)', async () => {
+      setHost(makeHost({
+        // Beschädigte Einstellungen von der Platte — der Typ lügt hier absichtlich.
+        loadSettings: vi.fn(async () => ({
+          recentFolders: [],
+          accessRoots: {},
+          dockTransparencies: { '/apps': 'viel' },
+        } as unknown as Settings)),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.init();
+      await ws.openFolder('/apps');
+      expect(ws.dockTransparency).toBe(DEFAULT_DOCK_TRANSPARENCY);
     });
   });
 

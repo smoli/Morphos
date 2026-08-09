@@ -12,6 +12,7 @@ import LibrariesSection from './LibrariesSection.vue';
 import ShortcutsSection from './ShortcutsSection.vue';
 import TelemetrySection from './TelemetrySection.vue';
 import WallpaperSection from './WallpaperSection.vue';
+import AppearanceSection from './AppearanceSection.vue';
 
 export interface SettingsSection {
   /** Stabiler Schlüssel (auch für „zuletzt offener Bereich“ o. Ä.). */
@@ -30,6 +31,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { id: 'permissions', label: 'Berechtigungen', icon: '🔐', component: PermissionsSection },
   { id: 'libs', label: 'Bibliotheken', icon: '📦', component: LibrariesSection },
   { id: 'wallpaper', label: 'Hintergrund', icon: '🖼', component: WallpaperSection },
+  { id: 'appearance', label: 'Darstellung', icon: '🪟', component: AppearanceSection },
   { id: 'shortcuts', label: 'Tastenkürzel', icon: '⌨️', component: ShortcutsSection },
   { id: 'telemetry', label: 'Telemetrie', icon: '📊', component: TelemetrySection },
 ];
