@@ -16,6 +16,7 @@ import { commitAll, countVersions, ensureRepo, listVersions, restoreTree } from 
 import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeAppState, writeChat } from '../src/core/appstore';
 import { validateIcon } from '../src/core/icon';
 import { runFs } from '../src/core/fsaccess';
+import { FolderWatchers } from '../src/core/watch';
 import { collectDiskUsage } from '../src/core/diskusage';
 import { cleanSessions } from '../src/core/session';
 import { cleanWallpapers } from '../src/core/wallpaper';
@@ -40,9 +41,15 @@ import type {
   Settings,
   SourceFile,
   VersionInfo,
+  WatchResult,
 } from '../src/types';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/** Die laufenden Ordner-Beobachtungen des Datei-Explorers (siehe core/watch). */
+const folderWatchers = new FolderWatchers();
+/** webContents, für die schon aufgeräumt wird, wenn sie verschwinden. */
+const watchedSenders = new Set<number>();
 
 // Von vite-plugin-electron gesetzt: URL des Dev-Servers bzw. Ausgabeverzeichnisse.
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
@@ -514,6 +521,38 @@ ipcMain.handle('morphos:fs', async (_e, root: string, req: FsRequest): Promise<F
   if (!isApprovedRoot(root)) return { ok: false, error: 'Dieser Datenordner ist nicht freigegeben.' };
   return runFs(root, req);
 });
+
+/**
+ * Mitlaufende Beobachtung eines Ordners im Datenordner — für den
+ * Datei-Explorer. Beobachtet wird allein hier (siehe core/watch), eingegrenzt
+ * auf denselben freigegebenen Datenordner wie jeder Dateizugriff; im Renderer
+ * kommt nur die Meldung an, dass neu zu lesen ist.
+ */
+ipcMain.handle('morphos:watch', (e, root: string, relPath: string): WatchResult => {
+  if (!root || typeof root !== 'string') return { ok: false, error: 'Kein Datenordner festgelegt.' };
+  if (!isApprovedRoot(root)) return { ok: false, error: 'Dieser Datenordner ist nicht freigegeben.' };
+
+  const sender = e.sender;
+  try {
+    const id = folderWatchers.start(sender.id, root, String(relPath ?? ''), (watchId) => {
+      if (!sender.isDestroyed()) sender.send('morphos:watchChanged', watchId);
+    });
+    if (id === null) return { ok: false, error: 'Zugriff außerhalb des Datenordners ist nicht erlaubt.' };
+    // Kein Beobachter überlebt sein Fenster — auch nicht ohne Abmeldung.
+    if (!watchedSenders.has(sender.id)) {
+      watchedSenders.add(sender.id);
+      sender.once('destroyed', () => {
+        watchedSenders.delete(sender.id);
+        folderWatchers.stopAll(sender.id);
+      });
+    }
+    return { ok: true, id };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle('morphos:unwatch', (_e, id: string): boolean => folderWatchers.stop(String(id)));
 
 /**
  * Platzbedarf eines Arbeitsverzeichnisses (Telemetrie). Gemessen wird allein

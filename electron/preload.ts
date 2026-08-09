@@ -16,6 +16,7 @@ import type {
   Settings,
   SourceFile,
   VersionInfo,
+  WatchResult,
 } from '../src/types';
 
 // Sichere, minimale Brücke zwischen Renderer und Hauptprozess (window.morphos).
@@ -72,6 +73,22 @@ contextBridge.exposeInMainWorld('morphos', {
     ipcRenderer.invoke('morphos:revertApp', folder, id, sha),
 
   fs: (root: string, req: FsRequest): Promise<FsResponse> => ipcRenderer.invoke('morphos:fs', root, req),
+
+  // Mitlaufende Beobachtung eines Ordners im Datenordner (Datei-Explorer): Der
+  // Hauptprozess beobachtet, hier kommt nur „da hat sich etwas getan“ an.
+  // Zurück kommt die Abmeldefunktion; scheitert die Anmeldung, ist sie leer.
+  watchFolder: async (root: string, path: string, onChange: () => void): Promise<() => void> => {
+    const res: WatchResult = await ipcRenderer.invoke('morphos:watch', root, path);
+    if (!res.ok) return () => {};
+    const handler = (_e: unknown, id: string): void => {
+      if (id === res.id) onChange();
+    };
+    ipcRenderer.on('morphos:watchChanged', handler);
+    return () => {
+      ipcRenderer.removeListener('morphos:watchChanged', handler);
+      void ipcRenderer.invoke('morphos:unwatch', res.id);
+    };
+  },
 
   // Platzbedarf der Apps und des Datenordners — gerechnet wird im Hauptprozess.
   diskUsage: (folder: string): Promise<DiskUsageResult> => ipcRenderer.invoke('morphos:diskUsage', folder),

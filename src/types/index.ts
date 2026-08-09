@@ -280,6 +280,14 @@ export type DiskUsageResult =
   | { ok: true; usage: DiskUsage }
   | { ok: false; error: string };
 
+/**
+ * Ergebnis der Anmeldung einer Ordner-Beobachtung: die Kennung des Beobachters
+ * oder der Grund, warum nicht beobachtet wird (siehe core/watch).
+ */
+export type WatchResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string };
+
 /** Ergebnis eines Speichervorgangs. */
 export interface SaveResult {
   ok: boolean;
@@ -391,6 +399,16 @@ export interface MorphosHost {
    * im Hauptprozess strikt auf diesen Ordner eingegrenzt.
    */
   fs(root: string, req: FsRequest): Promise<FsResponse>;
+
+  /**
+   * Lässt einen Ordner im Datenordner vom Hauptprozess beobachten und ruft
+   * `onChange` auf, wenn sich dort etwas getan hat (gebündelt, siehe
+   * core/watch). `path` ist relativ zu `root` und wird wie jeder Pfad
+   * eingegrenzt. Zurück kommt die Abmeldefunktion — sie beendet die
+   * Beobachtung; ohne sie endet sie spätestens mit dem Fenster. Optional: im
+   * Renderer-Test fehlt die Anbindung, dann läuft die Ansicht eben nicht mit.
+   */
+  watchFolder?(root: string, path: string, onChange: () => void): Promise<() => void>;
 
   /**
    * Ermittelt den Platzbedarf eines Arbeitsverzeichnisses: je App ihr Ordner
