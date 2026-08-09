@@ -1,12 +1,14 @@
 ---
 id: c0060
 title: make it transparent
-status: in-progress
+status: done
 ref: c0052
 epic: e09
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T14:09:28
+status-changed: 2026-08-09T14:18:44
+usage-tokens: 33113
+usage-cost: 4.505545
 ---
 
 # make it transparent
@@ -65,3 +67,5 @@ Arbeitsverzeichnis, wie der Hintergrund auch.
 - 2026-08-09 core/transparency + Spec (rot → grün), Dock nimmt seine Farbe aus
   den Einstellungen, Vorgabe auf 50 %, neuer Bereich „Darstellung“ mit Regler
   und Vorschau
+- 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)
