@@ -110,4 +110,17 @@ describe('dispatchFsRequest', () => {
       ['delete', 'exists', 'list', 'mkdir', 'read', 'stat', 'write'].sort(),
     );
   });
+
+  // Verwalten und Papierkorb (c0050) sind Sache des Anwenders in der Schale —
+  // eine App kann sie nicht anfragen, auch nicht mit erteilter Berechtigung.
+  it('kennt die Verwaltungs-Operationen der Schale nicht', async () => {
+    const host = vi.fn(async (): Promise<FsResponse> => ({ ok: true }));
+    const authorize = vi.fn(async () => true);
+    for (const op of ['move', 'copy', 'rename', 'trash', 'restore', 'emptyTrash']) {
+      const res = await dispatchFsRequest({ op: op as never, path: 'x' }, '/daten', host, authorize);
+      expect(res.ok).toBe(false);
+    }
+    expect(host).not.toHaveBeenCalled();
+    expect(authorize).not.toHaveBeenCalled();
+  });
 });

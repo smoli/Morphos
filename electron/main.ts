@@ -16,7 +16,7 @@ import { extractLibs } from '../src/core/libs';
 import { commitAll, countVersions, ensureRepo, listVersions, restoreTree } from '../src/core/gitstore';
 import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeAppState, writeChat } from '../src/core/appstore';
 import { validateIcon } from '../src/core/icon';
-import { resolveWithin, runFs } from '../src/core/fsaccess';
+import { resolveWithin, runFs, runShellFs } from '../src/core/fsaccess';
 import { FILE_SCHEME, parseRange, resolveFileRequest } from '../src/core/filelink';
 import { streamMimeType } from '../src/core/preview';
 import { FolderWatchers } from '../src/core/watch';
@@ -42,6 +42,8 @@ import type {
   IconResult,
   SaveResult,
   Settings,
+  ShellFsRequest,
+  ShellFsResponse,
   SourceFile,
   VersionInfo,
   WatchResult,
@@ -537,6 +539,22 @@ ipcMain.handle('morphos:fs', async (_e, root: string, req: FsRequest): Promise<F
   if (!isApprovedRoot(root)) return { ok: false, error: 'Dieser Datenordner ist nicht freigegeben.' };
   return runFs(root, req);
 });
+
+/**
+ * Verwalten im Datenordner — anlegen, umbenennen, verschieben, kopieren und der
+ * Papierkorb (core/fsaccess: runShellFs). Ein eigener Kanal, weil das keine
+ * App-Anfrage ist: Die erzeugten Apps erreichen nur `morphos:fs`, und dort ist
+ * der Papierkorb ausgenommen. Freigegebener Datenordner und Eingrenzung jedes
+ * Pfades gelten hier genauso.
+ */
+ipcMain.handle(
+  'morphos:shellFs',
+  async (_e, root: string, req: ShellFsRequest): Promise<ShellFsResponse> => {
+    if (!root || typeof root !== 'string') return { ok: false, error: 'Kein Datenordner festgelegt.' };
+    if (!isApprovedRoot(root)) return { ok: false, error: 'Dieser Datenordner ist nicht freigegeben.' };
+    return runShellFs(root, req);
+  },
+);
 
 /**
  * Mitlaufende Beobachtung eines Ordners im Datenordner — für den

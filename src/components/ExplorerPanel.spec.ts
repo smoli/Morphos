@@ -5,7 +5,7 @@ import ExplorerPanel from './ExplorerPanel.vue';
 import { setHost } from '@/services/host';
 import { useShellStore } from '@/stores/shell';
 import { useWorkspaceStore } from '@/stores/workspace';
-import type { FsEntry, FsRequest, MorphosHost } from '@/types';
+import type { FsEntry, FsRequest, MorphosHost, ShellFsRequest, ShellFsResponse, TrashEntry } from '@/types';
 
 // Ein kleiner Datenordner: Pfad → Einträge. `.trash` gehört nicht in die Liste.
 let tree: Record<string, FsEntry[]>;
@@ -19,6 +19,18 @@ const fs = vi.fn(async (_root: string, req: FsRequest) => {
   if (req.op !== 'list') return { ok: false as const, error: 'unerwartet' };
   const entries = tree[req.path];
   return entries ? { ok: true as const, result: entries } : { ok: false as const, error: 'Nicht gefunden' };
+});
+
+/** Der Papierkorb der Attrappe und die Antwort auf den nächsten Verwaltungsauftrag. */
+let trash: TrashEntry[];
+let shellAnswer: ShellFsResponse;
+/** Rückfrage und Eingabe beim Anwender — in der Schale `window.confirm`/`prompt`. */
+let asked: ReturnType<typeof vi.fn>;
+let typed: ReturnType<typeof vi.fn>;
+
+const shellFs = vi.fn(async (_root: string, req: ShellFsRequest): Promise<ShellFsResponse> => {
+  if (req.op === 'trashList') return { ok: true, result: trash };
+  return shellAnswer;
 });
 
 /** Die zuletzt angemeldete Rückmeldung des Ordner-Beobachters. */
@@ -39,12 +51,19 @@ beforeEach(() => {
     ],
     notizen: [{ name: 'heute.txt', path: 'notizen/heute.txt', isDir: false }],
   };
+  trash = [];
+  shellAnswer = { ok: true };
   fs.mockClear();
+  shellFs.mockClear();
   watchFolder.mockClear();
   stopWatch.mockClear();
   onChanged = null;
   setActivePinia(createPinia());
-  setHost({ fs, watchFolder } as unknown as MorphosHost);
+  setHost({ fs, shellFs, watchFolder } as unknown as MorphosHost);
+  asked = vi.fn(() => true);
+  typed = vi.fn(() => 'Neuer Name');
+  vi.stubGlobal('confirm', asked);
+  vi.stubGlobal('prompt', typed);
 });
 
 /** Öffnet den Explorer — mit Datenordner, sofern nicht anders gewünscht. */
@@ -178,5 +197,161 @@ describe('ExplorerPanel', () => {
     onChanged!();
     await flushPromises();
     expect(leer.get('.ex-error').text()).toContain('Nicht gefunden');
+  });
+});
+
+// Verwalten im Datenordner (c0050) — jede Aktion geht über `shellFs`, also über
+// die eingegrenzten Schalen-Operationen, nie über den App-Weg.
+describe('ExplorerPanel: verwalten', () => {
+  /** Wählt einen Eintrag der Liste aus (Reihenfolge: notizen, bild.png, liste.txt). */
+  async function select(wrapper: Awaited<ReturnType<typeof open>>, at: number) {
+    await wrapper.findAll('.entry')[at].trigger('click');
+    await flushPromises();
+  }
+
+  it('legt einen Ordner im offenen Ordner an', async () => {
+    const wrapper = await open();
+    await wrapper.get('.ex-new').trigger('click');
+    await flushPromises();
+
+    expect(typed).toHaveBeenCalled();
+    expect(shellFs).toHaveBeenCalledWith('/daten', { op: 'newFolder', path: '', to: 'Neuer Name' });
+    // Danach wird neu gelesen — die Liste zeigt, was wirklich da ist.
+    expect(fs).toHaveBeenLastCalledWith('/daten', { op: 'list', path: '' });
+  });
+
+  it('legt nichts an, wenn der Anwender abbricht', async () => {
+    typed.mockReturnValue(null);
+    const wrapper = await open();
+    await wrapper.get('.ex-new').trigger('click');
+    await flushPromises();
+    expect(shellFs).not.toHaveBeenCalled();
+  });
+
+  it('benennt den ausgewählten Eintrag um', async () => {
+    const wrapper = await open();
+    expect(wrapper.get('.ex-rename').attributes('disabled')).toBeDefined();
+
+    await select(wrapper, 2);
+    await wrapper.get('.ex-rename').trigger('click');
+    await flushPromises();
+    expect(shellFs).toHaveBeenCalledWith('/daten', { op: 'rename', path: 'liste.txt', to: 'Neuer Name' });
+  });
+
+  it('kopiert einen Eintrag in einen anderen Ordner', async () => {
+    const wrapper = await open();
+    expect(wrapper.get('.ex-paste').attributes('disabled')).toBeDefined();
+
+    await select(wrapper, 1);
+    await wrapper.get('.ex-copy').trigger('click');
+    expect(wrapper.get('.ex-clip').text()).toContain('bild.png');
+
+    await wrapper.findAll('.entry')[0].trigger('dblclick');
+    await flushPromises();
+    await wrapper.get('.ex-paste').trigger('click');
+    await flushPromises();
+
+    expect(shellFs).toHaveBeenCalledWith('/daten', { op: 'copy', path: 'bild.png', to: 'notizen' });
+    // Kopiertes bleibt gemerkt — es lässt sich mehrfach einfügen.
+    expect(wrapper.get('.ex-paste').attributes('disabled')).toBeUndefined();
+  });
+
+  it('verschiebt Ausgeschnittenes und vergisst es danach', async () => {
+    const wrapper = await open();
+    await select(wrapper, 1);
+    await wrapper.get('.ex-cut').trigger('click');
+    await wrapper.get('.ex-paste').trigger('click');
+    await flushPromises();
+
+    expect(shellFs).toHaveBeenCalledWith('/daten', { op: 'move', path: 'bild.png', to: '' });
+    expect(wrapper.get('.ex-paste').attributes('disabled')).toBeDefined();
+  });
+
+  it('überschreibt erst nach Rückfrage — und bei einem Nein gar nicht', async () => {
+    const wrapper = await open();
+    await select(wrapper, 1);
+    await wrapper.get('.ex-copy').trigger('click');
+
+    asked.mockReturnValue(false);
+    shellFs.mockImplementationOnce(async () => ({ ok: false, error: '„bild.png“ gibt es dort bereits.', code: 'exists' }));
+    await wrapper.get('.ex-paste').trigger('click');
+    await flushPromises();
+    expect(asked).toHaveBeenCalledTimes(1);
+    expect(shellFs).toHaveBeenCalledTimes(1);
+
+    asked.mockReturnValue(true);
+    shellFs.mockImplementationOnce(async () => ({ ok: false, error: '„bild.png“ gibt es dort bereits.', code: 'exists' }));
+    await wrapper.get('.ex-paste').trigger('click');
+    await flushPromises();
+    expect(shellFs).toHaveBeenLastCalledWith('/daten', {
+      op: 'copy',
+      path: 'bild.png',
+      to: '',
+      overwrite: true,
+    });
+  });
+
+  it('legt den ausgewählten Eintrag nach Rückfrage in den Papierkorb', async () => {
+    const wrapper = await open();
+    await select(wrapper, 2);
+
+    asked.mockReturnValue(false);
+    await wrapper.get('.ex-delete').trigger('click');
+    await flushPromises();
+    expect(shellFs).not.toHaveBeenCalled();
+
+    asked.mockReturnValue(true);
+    await wrapper.get('.ex-delete').trigger('click');
+    await flushPromises();
+    expect(shellFs).toHaveBeenCalledWith('/daten', { op: 'trash', path: 'liste.txt' });
+  });
+
+  it('zeigt den Papierkorb und holt daraus zurück', async () => {
+    trash = [{ id: 'weg.txt', name: 'weg.txt', from: 'notizen/weg.txt', deletedAt: 1_700_000_000_000, isDir: false }];
+    const wrapper = await open();
+    await wrapper.get('.ex-trash-toggle').trigger('click');
+    await flushPromises();
+
+    expect(shellFs).toHaveBeenCalledWith('/daten', { op: 'trashList', path: '' });
+    const item = wrapper.get('.trash-item');
+    expect(item.text()).toContain('weg.txt');
+    expect(item.text()).toContain('notizen/weg.txt');
+
+    await wrapper.get('.trash-restore').trigger('click');
+    await flushPromises();
+    expect(shellFs).toHaveBeenCalledWith('/daten', { op: 'restore', path: 'weg.txt' });
+  });
+
+  it('leert den Papierkorb nur nach Rückfrage', async () => {
+    trash = [{ id: 'weg.txt', name: 'weg.txt', from: 'weg.txt', deletedAt: 1, isDir: false }];
+    const wrapper = await open();
+    await wrapper.get('.ex-trash-toggle').trigger('click');
+    await flushPromises();
+    shellFs.mockClear();
+
+    asked.mockReturnValue(false);
+    await wrapper.get('.ex-empty-trash').trigger('click');
+    await flushPromises();
+    expect(shellFs).not.toHaveBeenCalled();
+
+    asked.mockReturnValue(true);
+    await wrapper.get('.ex-empty-trash').trigger('click');
+    await flushPromises();
+    expect(shellFs).toHaveBeenCalledWith('/daten', { op: 'emptyTrash', path: '' });
+  });
+
+  it('meldet, woran eine Aktion gescheitert ist', async () => {
+    shellAnswer = { ok: false, error: 'Der Name enthält unerlaubte Zeichen.' };
+    const wrapper = await open();
+    await wrapper.get('.ex-new').trigger('click');
+    await flushPromises();
+    expect(wrapper.get('.ex-error').text()).toContain('unerlaubte Zeichen');
+  });
+
+  it('verwaltet nicht ohne Anbindung — dann bleibt der Explorer eine Ansicht', async () => {
+    setHost({ fs, watchFolder } as unknown as MorphosHost);
+    const wrapper = await open();
+    expect(wrapper.find('.ex-actions').exists()).toBe(false);
+    expect(wrapper.find('.ex-trash-toggle').exists()).toBe(false);
   });
 });

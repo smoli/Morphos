@@ -14,6 +14,8 @@ import type {
   IconResult,
   SaveResult,
   Settings,
+  ShellFsRequest,
+  ShellFsResponse,
   SourceFile,
   VersionInfo,
   WatchResult,
@@ -73,6 +75,12 @@ contextBridge.exposeInMainWorld('morphos', {
     ipcRenderer.invoke('morphos:revertApp', folder, id, sha),
 
   fs: (root: string, req: FsRequest): Promise<FsResponse> => ipcRenderer.invoke('morphos:fs', root, req),
+
+  // Verwalten im Datenordner auf Geheiß des Anwenders (Datei-Explorer):
+  // anlegen, umbenennen, verschieben, kopieren, Papierkorb. Eigener Kanal, weil
+  // das keine App-Anfrage ist — erreichbar nur aus der Schale.
+  shellFs: (root: string, req: ShellFsRequest): Promise<ShellFsResponse> =>
+    ipcRenderer.invoke('morphos:shellFs', root, req),
 
   // Mitlaufende Beobachtung eines Ordners im Datenordner (Datei-Explorer): Der
   // Hauptprozess beobachtet, hier kommt nur „da hat sich etwas getan“ an.

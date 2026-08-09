@@ -6,8 +6,7 @@
  * und nur die: Gelesen wird über `getHost().fs`, das im Hauptprozess strikt auf
  * den Datenordner eingegrenzt wird (core/fsaccess) — über die Wurzel hinaus
  * führt kein Weg, auch nicht über die Wegmarken. Verborgenes (alles mit
- * führendem Punkt, künftig auch der Papierkorb) bleibt draußen; siehe
- * core/explorer.
+ * führendem Punkt, auch der Papierkorb) bleibt draußen; siehe core/explorer.
  *
  * Die Liste läuft mit: Der Hauptprozess beobachtet den offenen Ordner
  * (core/watch) und meldet gebündelt, wenn sich dort etwas getan hat — dann wird
@@ -15,8 +14,13 @@
  * Fenster endet er.
  *
  * Die ausgewählte Datei zeigt daneben ihre Vorschau (FilePreview) — passives
- * escape-first in der Schale, aktives HTML/SVG in einer Sandbox. Verwalten und
- * Papierkorb kommen in c0050.
+ * escape-first in der Schale, aktives HTML/SVG in einer Sandbox.
+ *
+ * Verwaltet wird über `getHost().shellFs` (c0050): anlegen, umbenennen,
+ * verschieben, kopieren und löschen. Löschen heißt hier: in den Papierkorb —
+ * `.trash` im Datenordner, verborgen vor der Liste und vor den Apps; von dort
+ * kommt alles zurück, bis der Anwender den Korb ausdrücklich leert. Jedes
+ * Überschreiben und jedes endgültige Löschen fragt vorher nach.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { getHost } from '@/services/host';
@@ -25,7 +29,7 @@ import { explorerEntries, type SortOrder } from '@/core/explorer';
 import { useShellStore } from '@/stores/shell';
 import { useWorkspaceStore } from '@/stores/workspace';
 import FilePreview from './FilePreview.vue';
-import type { FsEntry } from '@/types';
+import type { FsEntry, ShellFsRequest, ShellFsResponse, TrashEntry } from '@/types';
 
 const workspace = useWorkspaceStore();
 const shell = useShellStore();
@@ -44,8 +48,21 @@ const order = ref<SortOrder>('asc');
 const items = computed(() => explorerEntries(entries.value, order.value));
 const crumbs = computed(() => breadcrumbs(dir.value));
 
+/** Der ausgewählte Eintrag — Grundlage jeder Verwaltungs-Aktion. */
+const current = computed(() => items.value.find((e) => e.name === selected.value) ?? null);
+
 /** Die ausgewählte Datei — Ordner bekommen keine Vorschau, sie werden geöffnet. */
-const preview = computed(() => items.value.find((e) => e.name === selected.value && !e.isDir) ?? null);
+const preview = computed(() => (current.value && !current.value.isDir ? current.value : null));
+
+/** Was in den Papierkorb gewandert ist (nur in der Papierkorb-Ansicht geladen). */
+const trash = ref<TrashEntry[]>([]);
+const showTrash = ref(false);
+
+/** Der gemerkte Eintrag fürs Einfügen — `cut` heißt: verschieben statt kopieren. */
+const clip = ref<{ path: string; name: string; cut: boolean } | null>(null);
+
+/** Ohne Anbindung (Renderer-Test) zeigt der Explorer nur an, statt zu verwalten. */
+const canManage = ref(false);
 
 /** Der laufende Beobachter des offenen Ordners (null = keiner). */
 let stopWatch: (() => void) | null = null;
@@ -111,7 +128,120 @@ async function go(next: string): Promise<void> {
   dir.value = next;
   selected.value = '';
   error.value = '';
+  showTrash.value = false;
   await Promise.all([list(), rewatch()]);
+}
+
+/**
+ * Ein Verwaltungsauftrag an die Schale. Liegt am Ziel schon etwas, entscheidet
+ * der Anwender — erst danach wird überschrieben. Ein Fehler landet in der
+ * Fußzeile, wo auch die Lesefehler stehen.
+ */
+async function manage(req: ShellFsRequest): Promise<ShellFsResponse | null> {
+  const base = root.value;
+  const run = getHost().shellFs;
+  if (!base || !run) return null;
+  error.value = '';
+
+  let res: ShellFsResponse;
+  try {
+    res = await run(base, req);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : String(err);
+    return null;
+  }
+  if (!res.ok && res.code === 'exists' && !req.overwrite) {
+    if (!window.confirm(`${res.error} Soll es überschrieben werden?`)) return null;
+    return manage({ ...req, overwrite: true });
+  }
+  if (!res.ok) error.value = res.error;
+  return res;
+}
+
+/** Der Name, den eine geglückte Operation hinterlassen hat (für die Auswahl). */
+function tail(res: ShellFsResponse | null): string {
+  const rel = res?.ok ? String(res.result ?? '') : '';
+  return rel.slice(rel.lastIndexOf('/') + 1);
+}
+
+/** Nach jeder Änderung: neu lesen — und den Papierkorb mit, wenn er offen ist. */
+async function after(res: ShellFsResponse | null): Promise<void> {
+  if (!res?.ok) return;
+  await list();
+  if (showTrash.value) await loadTrash();
+}
+
+async function loadTrash(): Promise<void> {
+  const res = await manage({ op: 'trashList', path: '' });
+  trash.value = res?.ok ? ((res.result as TrashEntry[]) ?? []) : [];
+}
+
+async function newFolder(): Promise<void> {
+  const name = window.prompt('Name des neuen Ordners', 'Neuer Ordner');
+  if (name === null) return;
+  const res = await manage({ op: 'newFolder', path: dir.value, to: name });
+  if (res?.ok) selected.value = tail(res);
+  await after(res);
+}
+
+async function renameSelected(): Promise<void> {
+  const entry = current.value;
+  if (!entry) return;
+  const name = window.prompt(`„${entry.name}“ umbenennen in`, entry.name);
+  if (name === null || name === entry.name) return;
+  const res = await manage({ op: 'rename', path: entry.path, to: name });
+  if (res?.ok) selected.value = tail(res);
+  await after(res);
+}
+
+/** Merkt den ausgewählten Eintrag fürs Einfügen — kopieren oder verschieben. */
+function remember(cut: boolean): void {
+  const entry = current.value;
+  if (entry) clip.value = { path: entry.path, name: entry.name, cut };
+}
+
+async function paste(): Promise<void> {
+  const source = clip.value;
+  if (!source) return;
+  const res = await manage({ op: source.cut ? 'move' : 'copy', path: source.path, to: dir.value });
+  if (res?.ok) {
+    selected.value = tail(res);
+    // Ausgeschnittenes gibt es nur einmal — danach ist die Merkstelle leer.
+    if (source.cut) clip.value = null;
+  }
+  await after(res);
+}
+
+async function trashSelected(): Promise<void> {
+  const entry = current.value;
+  if (!entry) return;
+  if (!window.confirm(`„${entry.name}“ in den Papierkorb legen?`)) return;
+  const res = await manage({ op: 'trash', path: entry.path });
+  if (res?.ok) selected.value = '';
+  await after(res);
+}
+
+async function toggleTrash(): Promise<void> {
+  showTrash.value = !showTrash.value;
+  if (showTrash.value) await loadTrash();
+}
+
+async function restore(item: TrashEntry): Promise<void> {
+  await after(await manage({ op: 'restore', path: item.id }));
+}
+
+/** Der einzige Weg, an dem nichts zurückkommt — also mit Rückfrage. */
+async function emptyTrash(): Promise<void> {
+  const count = trash.value.length;
+  if (!count) return;
+  const what = count === 1 ? 'Ein Eintrag wird' : `${count} Einträge werden`;
+  if (!window.confirm(`${what} endgültig gelöscht. Das lässt sich nicht rückgängig machen.`)) return;
+  await after(await manage({ op: 'emptyTrash', path: '' }));
+}
+
+/** Wann etwas gelöscht wurde — kurz und lesbar. */
+function when(ms: number): string {
+  return ms ? new Date(ms).toLocaleString('de-DE') : '';
 }
 
 function onEntry(entry: FsEntry): void {
@@ -127,10 +257,22 @@ function toggleOrder(): void {
   order.value = order.value === 'asc' ? 'desc' : 'asc';
 }
 
-// Ein neu festgelegter (oder gewechselter) Datenordner fängt oben wieder an.
-watch(root, () => void go(''));
+// Ein neu festgelegter (oder gewechselter) Datenordner fängt oben wieder an —
+// und was aus dem alten gemerkt war, gilt dort nicht mehr.
+watch(root, () => {
+  clip.value = null;
+  trash.value = [];
+  void go('');
+});
 
-onMounted(() => void go(''));
+onMounted(() => {
+  try {
+    canManage.value = typeof getHost().shellFs === 'function';
+  } catch {
+    canManage.value = false;
+  }
+  void go('');
+});
 onBeforeUnmount(() => {
   alive = false;
   stopWatch?.();
@@ -164,7 +306,34 @@ onBeforeUnmount(() => {
         <button type="button" class="ex-refresh" title="Neu einlesen" @click="list">↻</button>
       </div>
 
-      <div class="ex-main">
+      <div v-if="canManage" class="ex-actions">
+        <button type="button" class="ex-new" @click="newFolder">＋ Ordner</button>
+        <button type="button" class="ex-rename" :disabled="!current" @click="renameSelected">Umbenennen</button>
+        <button type="button" class="ex-copy" :disabled="!current" @click="remember(false)">Kopieren</button>
+        <button type="button" class="ex-cut" :disabled="!current" @click="remember(true)">Ausschneiden</button>
+        <button type="button" class="ex-paste" :disabled="!clip" :title="clip ? `„${clip.name}“ hier einfügen` : ''" @click="paste">
+          Einfügen
+        </button>
+        <button type="button" class="ex-delete" :disabled="!current" @click="trashSelected">Löschen</button>
+        <span class="ex-spacer"></span>
+        <button type="button" class="ex-trash-toggle" :class="{ on: showTrash }" @click="toggleTrash">
+          🗑 Papierkorb
+        </button>
+      </div>
+
+      <div v-if="showTrash" class="ex-main">
+        <ul class="ex-list ex-trash">
+          <li v-if="!trash.length" class="ex-empty">Der Papierkorb ist leer.</li>
+          <li v-for="item in trash" :key="item.id" class="trash-item">
+            <span class="entry-icon">{{ item.isDir ? '📁' : '📄' }}</span>
+            <span class="entry-name">{{ item.name }}</span>
+            <span class="trash-from">aus /{{ item.from }} · {{ when(item.deletedAt) }}</span>
+            <button type="button" class="trash-restore" @click="restore(item)">Wiederherstellen</button>
+          </li>
+        </ul>
+      </div>
+
+      <div v-else class="ex-main">
         <ul class="ex-list">
           <li v-if="loading && !items.length" class="ex-empty">Wird gelesen …</li>
           <li v-else-if="!items.length" class="ex-empty">Dieser Ordner ist leer.</li>
@@ -186,7 +355,16 @@ onBeforeUnmount(() => {
 
       <footer class="ex-status">
         <span v-if="error" class="ex-error">{{ error }}</span>
-        <span v-else class="ex-count">{{ items.length }} {{ items.length === 1 ? 'Eintrag' : 'Einträge' }}</span>
+        <template v-else-if="showTrash">
+          <span class="ex-count">{{ trash.length }} {{ trash.length === 1 ? 'Eintrag' : 'Einträge' }} im Papierkorb</span>
+          <button type="button" class="ex-empty-trash" :disabled="!trash.length" @click="emptyTrash">
+            Papierkorb leeren
+          </button>
+        </template>
+        <template v-else>
+          <span class="ex-count">{{ items.length }} {{ items.length === 1 ? 'Eintrag' : 'Einträge' }}</span>
+          <span v-if="clip" class="ex-clip">{{ clip.cut ? 'Ausgeschnitten' : 'Kopiert' }}: {{ clip.name }}</span>
+        </template>
       </footer>
     </template>
 
@@ -309,10 +487,87 @@ onBeforeUnmount(() => {
   color: var(--muted);
   font-size: 12px;
 }
+.ex-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ex-actions button {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ex-actions button:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.ex-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.ex-trash-toggle.on {
+  color: #fff;
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.trash-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 13px;
+  user-select: none;
+}
+.trash-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.trash-from {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+}
+.trash-restore,
+.ex-empty-trash {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.trash-restore:hover,
+.ex-empty-trash:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.ex-empty-trash:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 .ex-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 11px;
   color: var(--muted);
   min-height: 14px;
+}
+.ex-clip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
 }
 .ex-error {
   color: #ffb3b3;

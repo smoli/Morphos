@@ -235,6 +235,51 @@ export type FsResponse =
   | { ok: true; result?: FsResult }
   | { ok: false; error: string };
 
+/**
+ * Die Verwaltungs-Operationen der Schale: anlegen, umbenennen, verschieben,
+ * kopieren und der Papierkorb. Sie sind ausdrücklich KEINE FsOp — eine erzeugte
+ * App kann sie nicht anfragen (siehe core/appfs: ALLOWED_OPS), sie geschehen
+ * allein auf Geheiß des Anwenders im Datei-Explorer.
+ */
+export type ShellFsOp =
+  | 'newFolder'
+  | 'rename'
+  | 'move'
+  | 'copy'
+  | 'trash'
+  | 'trashList'
+  | 'restore'
+  | 'emptyTrash';
+
+/** Ein Verwaltungsauftrag; alle Pfade sind relativ zum Datenordner. */
+export interface ShellFsRequest {
+  op: ShellFsOp;
+  /** Die Quelle bzw. der betroffene Eintrag (bei `restore`: die Papierkorb-Id). */
+  path: string;
+  /** Das Ziel: der neue Name (`rename`) bzw. der Zielordner (`move`, `copy`). */
+  to?: string;
+  /** Nur nach Rückfrage beim Anwender: ein vorhandenes Ziel überschreiben. */
+  overwrite?: boolean;
+}
+
+/** Ein Eintrag im Papierkorb (siehe core/trash). */
+export interface TrashEntry {
+  id: string;
+  name: string;
+  from: string;
+  deletedAt: number;
+  isDir: boolean;
+}
+
+/**
+ * Antwort auf einen Verwaltungsauftrag. `code: 'exists'` heißt: Am Ziel liegt
+ * schon etwas — die Schale fragt dann nach und wiederholt mit `overwrite`.
+ */
+export type ShellFsResult = string | TrashEntry[] | number | null;
+export type ShellFsResponse =
+  | { ok: true; result?: ShellFsResult }
+  | { ok: false; error: string; code?: 'exists' };
+
 /** Die Dateidialoge, die die Shell für eine App zeichnet. */
 export type DialogKind = 'open' | 'save' | 'directory';
 
@@ -399,6 +444,15 @@ export interface MorphosHost {
    * im Hauptprozess strikt auf diesen Ordner eingegrenzt.
    */
   fs(root: string, req: FsRequest): Promise<FsResponse>;
+
+  /**
+   * Führt eine Verwaltungs-Operation des ANWENDERS im Datenordner aus — anlegen,
+   * umbenennen, verschieben, kopieren, Papierkorb (core/fsaccess: runShellFs).
+   * Dieselbe Eingrenzung wie jeder Dateizugriff, aber kein App-Weg dorthin: Der
+   * Datei-Explorer ruft das, eine erzeugte App kann es nicht anfragen. Optional:
+   * im Renderer-Test fehlt die Anbindung, dann verwaltet der Explorer nicht.
+   */
+  shellFs?(root: string, req: ShellFsRequest): Promise<ShellFsResponse>;
 
   /**
    * Lässt einen Ordner im Datenordner vom Hauptprozess beobachten und ruft
