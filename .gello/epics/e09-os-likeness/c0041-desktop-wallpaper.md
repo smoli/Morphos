@@ -1,12 +1,12 @@
 ---
 id: c0041
 title: Desktop wallpaper
-status: review
+status: done
 epic: e09
 depends: [c0039]
 created: 2026-08-08
 updated: 2026-08-09
-status-changed: 2026-08-09T00:09:51
+status-changed: 2026-08-09T07:00:26
 usage-tokens: 39754
 usage-cost: 5.005897
 ---
@@ -60,3 +60,4 @@ Bühne (`pointer-events: none`), sodass Kacheln und Fenster unberührt bleiben.
   „Hintergrund“ in den Einstellungen + Ebene auf dem Desktop; 34 neue Tests
   (Kern, Store, Bereich, Desktop), Gesamtsuite 737 grün, `vue-tsc` sauber
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)
