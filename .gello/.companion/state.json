@@ -1,6 +1,8 @@
 {
   "status": "running",
-  "ready": [],
+  "ready": [
+    "c0061"
+  ],
   "waiting": [],
   "runs": [
     {
@@ -8,12 +10,12 @@
       "phase": "running",
       "activity": {
         "name": "Read",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/src/stores/desktop.ts"
+        "arg": "/Users/stephan/WebstormProjects/Morphos/src/views/DesktopView.spec.ts"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T14:18:53",
+  "updated": "2026-08-09T14:19:25",
   "pickupDelay": 10,
   "owned": [
     "c0029",
