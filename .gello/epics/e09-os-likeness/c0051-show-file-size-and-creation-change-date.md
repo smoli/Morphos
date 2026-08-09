@@ -1,12 +1,14 @@
 ---
 id: c0051
 title: Show file size and creation/change date
-status: review
+status: done
 ref: c0048
 epic: e09
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T07:49:55
+status-changed: 2026-08-09T07:50:52
+usage-tokens: 36247
+usage-cost: 4.453967
 ---
 
 ## What
@@ -69,3 +71,4 @@ figures in the preview header of the selected file.
   Prompt/README nachgezogen — 941 Tests grün (13 neu), Typecheck und Build sauber
   (nur Tests, die Oberfläche selbst nicht im laufenden Electron angesehen)
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)

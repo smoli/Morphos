@@ -4,7 +4,7 @@ title: Make the dock OSX like
 status: discuss
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T07:49:18
+status-changed: 2026-08-09T07:51:10
 epic: e09
 ---
 
@@ -61,6 +61,8 @@ Open questions for planning:
 
 ## Log
 
+- 2026-08-09 status → discuss (app)
+- 2026-08-09 status → ready (app)
 - 2026-08-09 status → discuss (app)
 - 2026-08-09 status → ready (app)
 - 2026-08-09 status → discuss (app)

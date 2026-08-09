@@ -1,12 +1,12 @@
 ---
 id: c0050
 title: "File-Explorer: file management + waste bin"
-status: review
+status: done
 epic: e09
 depends: [c0048]
 created: 2026-08-08
 updated: 2026-08-09
-status-changed: 2026-08-09T07:39:53
+status-changed: 2026-08-09T07:50:47
 usage-tokens: 57889
 usage-cost: 5.088954
 ---
@@ -83,3 +83,4 @@ data root; operations are user actions in the trusted shell, not app fs requests
   Papierkorb-Ansicht im ExplorerPanel — 928 Tests grün (47 neu), Typecheck und
   Build sauber
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)

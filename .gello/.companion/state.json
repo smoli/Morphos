@@ -1,21 +1,19 @@
 {
   "status": "running",
-  "ready": [
-    "c0038"
-  ],
+  "ready": [],
   "waiting": [],
   "runs": [
     {
-      "cardId": "c0051",
+      "cardId": "c0038",
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "git commit -F - <<'MSG'\nc0051: Was eine Datei außer ihrem Namen zu sagen hat\n\nDie Liste des Explorers zeigt jetzt zu jedem Eintrag seine Größe und seine\nbeiden Zeitpunkte — geändert und erstellt. Die Angaben kommen mit der Liste,\nnicht mit einem stat je Eintrag: runFs misst beim Auflisten gleich mit\n(measure), ein Gang statt N Rückfragen über den IPC-Kanal. Gemessen wird mit\nlstat, denn ein Symlink soll sich selbst beschreiben und nichts über ein Ziel\nverraten, das außerhalb des Datenordners liegen mag. Was sich nicht lesen lässt\n— der Eintrag ist inzwischen weg, die Rechte fehlen — bleibt ohne Angaben; der\nName allein ist der Liste immer noch etwas wert.\n\nUnbekannt ist nicht null. Ein Ordner bekommt keine Größe (die Zahl des\nDateisystems gilt seinem Verzeichniseintrag, nicht seinem Inhalt), ein fehlender\nZeitpunkt wird nicht zum 1.1.1970 — nicht jedes Dateisystem kennt eine\nGeburtsstunde. Beides schreibt core/explorer als Strich, rein und geprüft, und\nformatWhen dient nun auch der Papierkorb-Ansicht, die ihr eigenes when\nlosgeworden ist, sowie dem Kopf der Vorschau.\n\nSortiert wird an den Spaltenköpfen statt am einen Knopf in der Leiste: derselbe\nKopf dreht die Richtung, ein anderer fängt so an, wie man ihn liest — Namen von\nA an, Größe und Datum mit dem Größten und Jüngsten oben. Ordner bleiben in jeder\nOrdnung über den Dateien, und bei Gleichstand entscheidet der Name, damit die\nListe beim Umsortieren nicht zufällig springt.\n\nsize, modified und created sind in FsEntry optional — eine Liste ohne sie bleibt\ngültig, der Dateidialog fragt gar nicht danach. In FsStatInfo steht created fest\nneben den übrigen Feldern. Das app-seitige API bekommt die Felder mit (Prompt\nund README); erfragen konnte eine App sie über stat ohnehin, jetzt stehen sie\nschon in der Liste.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nMSG"
+        "arg": "grep -H \"^status:\" .gello/epics/e09-os-likeness/c004[789]*.md .gello/epics/e09-os-likeness/c0050*.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T07:50:39",
+  "updated": "2026-08-09T07:51:10",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -42,6 +40,7 @@
     "c0048",
     "c0049",
     "c0050",
-    "c0051"
+    "c0051",
+    "c0038"
   ]
 }
