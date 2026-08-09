@@ -1,12 +1,14 @@
 ---
 id: c0048
 title: "File-Explorer: browse + live watch"
-status: in-progress
+status: done
 epic: e09
 depends: [c0047]
 created: 2026-08-08
 updated: 2026-08-09
-status-changed: 2026-08-09T07:01:12
+status-changed: 2026-08-09T07:12:24
+usage-tokens: 33789
+usage-cost: 3.360524
 ---
 
 ## What
@@ -64,3 +66,5 @@ listing primitives from the file-dialog work (`core/dialog.ts`, `getHost().fs`).
   `morphos:watch`/`unwatch` + `host.watchFolder`, ExplorerPanel filled with
   breadcrumbs, sorting, live refresh and the no-data-folder prompt — 827 tests
   green (24 new), typecheck and build clean
+- 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)

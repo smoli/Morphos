@@ -1,13 +1,12 @@
 ---
 id: c0049
 title: "File-Explorer: content previews"
-status: ready
+status: in-progress
 epic: e09
 depends: [c0048]
 created: 2026-08-08
-updated: 2026-08-08
-status-changed: 2026-08-08T23:18:16
-order: 130
+updated: 2026-08-09
+status-changed: 2026-08-09T07:12:30
 ---
 
 ## What
@@ -39,3 +38,4 @@ the trusted renderer.
 
 - 2026-08-08 created from the c0038 File-Explorer breakdown
 - 2026-08-08 status → ready (app)
+- 2026-08-09 status → in-progress (agent)
