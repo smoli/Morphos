@@ -1,12 +1,12 @@
 ---
 id: c0051
 title: Show file size and creation/change date
-status: in-progress
+status: review
 ref: c0048
 epic: e09
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T07:40:25
+status-changed: 2026-08-09T07:49:55
 ---
 
 ## What
@@ -61,3 +61,11 @@ figures in the preview header of the selected file.
 ## Log
 
 - 2026-08-09 status → in-progress (agent)
+- 2026-08-09 Was/Akzeptanzkriterien zur Karte ergänzt (sie kam als reiner Titel)
+- 2026-08-09 implemented: `size`/`modified`/`created` in `FsEntry` und `created`
+  in `FsStatInfo`, `measure` (lstat) beim Auflisten in `core/fsaccess`,
+  `sizeLabel`/`formatWhen`/Sortierung nach Spalte in `core/explorer`, sortierbare
+  Spaltenköpfe und Spalten im ExplorerPanel, Zeitpunkte im Vorschau-Kopf,
+  Prompt/README nachgezogen — 941 Tests grün (13 neu), Typecheck und Build sauber
+  (nur Tests, die Oberfläche selbst nicht im laufenden Electron angesehen)
+- 2026-08-09 status → review (agent)

@@ -9,13 +9,13 @@
       "cardId": "c0051",
       "phase": "running",
       "activity": {
-        "name": "Edit",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e09-os-likeness/c0051-show-file-size-and-creation-change-date.md"
+        "name": "Bash",
+        "arg": "git show --stat e603c9a | head -30"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T07:49:20",
+  "updated": "2026-08-09T07:50:05",
   "pickupDelay": 10,
   "owned": [
     "c0029",
