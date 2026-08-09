@@ -72,23 +72,30 @@ export const CSP_META =
   ].join('; ') +
   '">';
 
-/** Fügt CSP und Bridge-SDK (<script>) in ein HTML-Dokument ein (einmalig). */
-export function injectBridge(html: string): string {
-  if (!html) return html;
-  if (html.includes('data-morphos-bridge')) return html;
-  const script = `${CSP_META}<script data-morphos-bridge>${BRIDGE_SDK}</script>`;
-
+/**
+ * Setzt einen Schnipsel so weit vorn wie möglich in ein Dokument: in den Kopf,
+ * sonst hinter <html>, sonst ganz nach vorn. Wichtig für die CSP — sie gilt erst
+ * für alles, was NACH ihr kommt.
+ */
+export function insertIntoHead(html: string, snippet: string): string {
   const head = html.match(/<head[^>]*>/i);
   if (head && head.index !== undefined) {
     const at = head.index + head[0].length;
-    return html.slice(0, at) + script + html.slice(at);
+    return html.slice(0, at) + snippet + html.slice(at);
   }
   const htmlTag = html.match(/<html[^>]*>/i);
   if (htmlTag && htmlTag.index !== undefined) {
     const at = htmlTag.index + htmlTag[0].length;
-    return html.slice(0, at) + script + html.slice(at);
+    return html.slice(0, at) + snippet + html.slice(at);
   }
-  return script + html;
+  return snippet + html;
+}
+
+/** Fügt CSP und Bridge-SDK (<script>) in ein HTML-Dokument ein (einmalig). */
+export function injectBridge(html: string): string {
+  if (!html) return html;
+  if (html.includes('data-morphos-bridge')) return html;
+  return insertIntoHead(html, `${CSP_META}<script data-morphos-bridge>${BRIDGE_SDK}</script>`);
 }
 
 /** Die erlaubten Dateisystem-Operationen (Whitelist). */

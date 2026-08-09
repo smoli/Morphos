@@ -1,6 +1,7 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, protocol, shell } from 'electron';
 import type { OpenDialogOptions } from 'electron';
 import { spawn } from 'node:child_process';
+import { Readable } from 'node:stream';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +16,9 @@ import { extractLibs } from '../src/core/libs';
 import { commitAll, countVersions, ensureRepo, listVersions, restoreTree } from '../src/core/gitstore';
 import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeAppState, writeChat } from '../src/core/appstore';
 import { validateIcon } from '../src/core/icon';
-import { runFs } from '../src/core/fsaccess';
+import { resolveWithin, runFs } from '../src/core/fsaccess';
+import { FILE_SCHEME, parseRange, resolveFileRequest } from '../src/core/filelink';
+import { streamMimeType } from '../src/core/preview';
 import { FolderWatchers } from '../src/core/watch';
 import { collectDiskUsage } from '../src/core/diskusage';
 import { cleanSessions } from '../src/core/session';
@@ -56,6 +59,19 @@ const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const RENDERER_DIST = path.join(__dirname, '../dist');
 
 let mainWindow: BrowserWindow | null = null;
+
+/**
+ * Das eigene Schema für den Dateistrom der Vorschau (siehe core/filelink) — es
+ * MUSS angemeldet sein, bevor Electron bereit ist, daher hier beim Laden.
+ * `stream` erlaubt Teilanfragen: Video und Ton lassen sich spulen, ohne dass
+ * die Datei je vollständig durch den Speicher wandert.
+ */
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: FILE_SCHEME,
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+  },
+]);
 
 // ---- Persistenz: Einstellungen (userData) + Apps (frei gewähltes Verzeichnis) ----
 
@@ -728,7 +744,68 @@ app.on('web-contents-created', (_e, contents) => {
   });
 });
 
+/**
+ * Beantwortet die Stromanfragen der Vorschau (`morphos-file://`). Geprüft wird
+ * genau wie bei jedem anderen Dateizugriff: freigegebener Datenordner, Pfad
+ * eingegrenzt, kein Symlink hinaus (core/filelink + core/fsaccess). Ausgeliefert
+ * wird gestreamt — nichts davon geht durch den IPC-Kanal.
+ *
+ * Die erzeugten Apps kommen hier nicht an: Ihre CSP lässt Ressourcen nur als
+ * data:/blob: zu, dieses Schema also nicht. Der Strom gehört der Schale.
+ */
+function registerFileStream(): void {
+  protocol.handle(FILE_SCHEME, (request) => {
+    const target = resolveFileRequest(request.url, isApprovedRoot, resolveWithin);
+    if (!target) {
+      return new Response('Zugriff außerhalb des Datenordners ist nicht erlaubt.', { status: 403 });
+    }
+    try {
+      return streamFile(target, request.headers.get('range'));
+    } catch (err) {
+      return new Response(err instanceof Error ? err.message : String(err), { status: 404 });
+    }
+  });
+}
+
+/**
+ * Liefert eine Datei stückweise aus. Die Teilanfrage wird SELBST beantwortet
+ * (206 samt Content-Range): Electrons file:-Loader kürzt zwar den Inhalt, meldet
+ * aber 200 ohne Bereichsangabe — ein Abspieler hielte das Bruchstück dann für
+ * die ganze Datei und könnte nicht spulen.
+ */
+function streamFile(target: string, rangeHeader: string | null): Response {
+  const stat = fs.statSync(target);
+  if (stat.isDirectory()) return new Response('Ordner haben keinen Inhalt.', { status: 404 });
+
+  const type = streamMimeType(path.basename(target));
+  // nosniff: Was als octet-stream hinausgeht, darf Chromium nicht zu HTML erraten.
+  const headers: Record<string, string> = {
+    'Content-Type': type,
+    'Accept-Ranges': 'bytes',
+    'X-Content-Type-Options': 'nosniff',
+  };
+
+  const range = rangeHeader ? parseRange(rangeHeader, stat.size) : null;
+  if (rangeHeader && !range) {
+    return new Response(null, { status: 416, headers: { ...headers, 'Content-Range': `bytes */${stat.size}` } });
+  }
+  if (stat.size === 0) return new Response(null, { status: 200, headers: { ...headers, 'Content-Length': '0' } });
+
+  const start = range ? range.start : 0;
+  const end = range ? range.end : stat.size - 1;
+  const body = Readable.toWeb(fs.createReadStream(target, { start, end })) as ReadableStream<Uint8Array>;
+  return new Response(body, {
+    status: range ? 206 : 200,
+    headers: {
+      ...headers,
+      'Content-Length': String(end - start + 1),
+      ...(range ? { 'Content-Range': `bytes ${start}-${end}/${stat.size}` } : {}),
+    },
+  });
+}
+
 void app.whenReady().then(() => {
+  registerFileStream();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

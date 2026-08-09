@@ -14,8 +14,9 @@
  * neu gelesen. Mit dem Ordnerwechsel wandert der Beobachter mit, mit dem
  * Fenster endet er.
  *
- * Vorschauen des ausgewählten Eintrags kommen in c0049, Verwalten und
- * Papierkorb in c0050.
+ * Die ausgewählte Datei zeigt daneben ihre Vorschau (FilePreview) — passives
+ * escape-first in der Schale, aktives HTML/SVG in einer Sandbox. Verwalten und
+ * Papierkorb kommen in c0050.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { getHost } from '@/services/host';
@@ -23,6 +24,7 @@ import { breadcrumbs, parentDir } from '@/core/dialog';
 import { explorerEntries, type SortOrder } from '@/core/explorer';
 import { useShellStore } from '@/stores/shell';
 import { useWorkspaceStore } from '@/stores/workspace';
+import FilePreview from './FilePreview.vue';
 import type { FsEntry } from '@/types';
 
 const workspace = useWorkspaceStore();
@@ -41,6 +43,9 @@ const order = ref<SortOrder>('asc');
 
 const items = computed(() => explorerEntries(entries.value, order.value));
 const crumbs = computed(() => breadcrumbs(dir.value));
+
+/** Die ausgewählte Datei — Ordner bekommen keine Vorschau, sie werden geöffnet. */
+const preview = computed(() => items.value.find((e) => e.name === selected.value && !e.isDir) ?? null);
 
 /** Der laufende Beobachter des offenen Ordners (null = keiner). */
 let stopWatch: (() => void) | null = null;
@@ -159,21 +164,25 @@ onBeforeUnmount(() => {
         <button type="button" class="ex-refresh" title="Neu einlesen" @click="list">↻</button>
       </div>
 
-      <ul class="ex-list">
-        <li v-if="loading && !items.length" class="ex-empty">Wird gelesen …</li>
-        <li v-else-if="!items.length" class="ex-empty">Dieser Ordner ist leer.</li>
-        <li
-          v-for="entry in items"
-          :key="entry.path"
-          class="entry"
-          :class="{ dir: entry.isDir, active: entry.name === selected }"
-          @click="onEntry(entry)"
-          @dblclick="onEntryOpen(entry)"
-        >
-          <span class="entry-icon">{{ entry.isDir ? '📁' : '📄' }}</span>
-          <span class="entry-name">{{ entry.name }}</span>
-        </li>
-      </ul>
+      <div class="ex-main">
+        <ul class="ex-list">
+          <li v-if="loading && !items.length" class="ex-empty">Wird gelesen …</li>
+          <li v-else-if="!items.length" class="ex-empty">Dieser Ordner ist leer.</li>
+          <li
+            v-for="entry in items"
+            :key="entry.path"
+            class="entry"
+            :class="{ dir: entry.isDir, active: entry.name === selected }"
+            @click="onEntry(entry)"
+            @dblclick="onEntryOpen(entry)"
+          >
+            <span class="entry-icon">{{ entry.isDir ? '📁' : '📄' }}</span>
+            <span class="entry-name">{{ entry.name }}</span>
+          </li>
+        </ul>
+
+        <FilePreview v-if="preview && root" :key="preview.path" :root="root" :entry="preview" class="ex-preview" />
+      </div>
 
       <footer class="ex-status">
         <span v-if="error" class="ex-error">{{ error }}</span>
@@ -248,8 +257,19 @@ onBeforeUnmount(() => {
   color: var(--text);
   border-color: var(--accent);
 }
+.ex-main {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+  min-height: 0;
+}
+.ex-preview {
+  flex: 1.2;
+  min-width: 0;
+}
 .ex-list {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
   margin: 0;
   padding: 4px;

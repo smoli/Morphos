@@ -11,6 +11,11 @@ import type { FsEntry, FsRequest, MorphosHost } from '@/types';
 let tree: Record<string, FsEntry[]>;
 
 const fs = vi.fn(async (_root: string, req: FsRequest) => {
+  // Was die Vorschau der ausgewählten Datei braucht (siehe FilePreview).
+  if (req.op === 'stat') {
+    return { ok: true as const, result: { exists: true, isDir: false, size: 7, modified: 0 } };
+  }
+  if (req.op === 'read') return { ok: true as const, result: 'inhalt' };
   if (req.op !== 'list') return { ok: false as const, error: 'unerwartet' };
   const entries = tree[req.path];
   return entries ? { ok: true as const, result: entries } : { ok: false as const, error: 'Nicht gefunden' };
@@ -134,6 +139,34 @@ describe('ExplorerPanel', () => {
     wrapper.unmount();
     await flushPromises();
     expect(stopWatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('zeigt die Vorschau der ausgewählten Datei — für Ordner keine', async () => {
+    const wrapper = await open();
+    expect(wrapper.find('.ex-preview').exists()).toBe(false);
+
+    // ['notizen', 'bild.png', 'liste.txt'] — erst die Datei, dann der Ordner.
+    await wrapper.findAll('.entry')[2].trigger('click');
+    await flushPromises();
+    const preview = wrapper.get('.ex-preview');
+    expect(preview.text()).toContain('liste.txt');
+    expect(preview.get('.pv-text').text()).toBe('inhalt');
+
+    await wrapper.findAll('.entry')[0].trigger('click');
+    await flushPromises();
+    expect(wrapper.find('.ex-preview').exists()).toBe(false);
+  });
+
+  it('nimmt die Vorschau mit, wenn die Datei verschwindet', async () => {
+    const wrapper = await open();
+    await wrapper.findAll('.entry')[2].trigger('click');
+    await flushPromises();
+    expect(wrapper.find('.ex-preview').exists()).toBe(true);
+
+    tree[''] = tree[''].filter((e) => e.name !== 'liste.txt');
+    onChanged!();
+    await flushPromises();
+    expect(wrapper.find('.ex-preview').exists()).toBe(false);
   });
 
   it('zeigt einen leeren Ordner als solchen und meldet Fehler', async () => {

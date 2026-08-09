@@ -58,6 +58,23 @@ function escapesViaSymlink(root: string, target: string): boolean {
   return !staysWithin(base, real);
 }
 
+/**
+ * Der vollständig geprüfte, absolute Zielpfad einer Anfrage: lexikalisch
+ * eingegrenzt UND real aufgelöst (kein Symlink führt hinaus). Null heißt: Der
+ * Zugriff wird verweigert. Die eine Stelle, an der ein Pfad aus dem Renderer zu
+ * einem Pfad auf der Platte wird — auch für den Dateistrom (core/filelink).
+ */
+export function resolveWithin(root: string, relPath: string): string | null {
+  const target = confineWithin(root, relPath);
+  if (target === null) return null;
+  try {
+    return escapesViaSymlink(root, target) ? null : target;
+  } catch {
+    // Kaputte Symlinks o. Ä.: Was sich nicht auflösen lässt, wird nicht gereicht.
+    return null;
+  }
+}
+
 function ok(result?: FsResult): FsResponse {
   return { ok: true, result };
 }
@@ -70,11 +87,10 @@ function deny(): FsResponse {
 
 /** Führt eine einzelne, auf den Zugriffsordner eingegrenzte Operation aus. */
 export function runFs(root: string, req: FsRequest): FsResponse {
-  const target = confineWithin(root, req.path);
+  const target = resolveWithin(root, req.path);
   if (target === null) return deny();
 
   try {
-    if (escapesViaSymlink(root, target)) return deny();
     switch (req.op) {
       case 'read':
         return ok(fs.readFileSync(target, 'utf8'));

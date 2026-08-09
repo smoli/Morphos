@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { confineWithin, runFs } from './fsaccess';
+import { confineWithin, resolveWithin, runFs } from './fsaccess';
 
 describe('confineWithin', () => {
   const root = path.resolve('/data/workspace');
@@ -31,6 +31,39 @@ describe('confineWithin', () => {
     const q = confineWithin(root, '/etc/passwd');
     expect(q).not.toBeNull();
     expect(q!.startsWith(root)).toBe(true);
+  });
+});
+
+// Der geprüfte Zielpfad — auch der Dateistrom des Explorers geht hier durch.
+describe('resolveWithin', () => {
+  let root: string;
+  let outside: string;
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'morphos-res-'));
+    outside = fs.mkdtempSync(path.join(os.tmpdir(), 'morphos-res-out-'));
+  });
+  afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  });
+
+  it('liefert den absoluten Pfad innerhalb des Ordners', () => {
+    fs.writeFileSync(path.join(root, 'bild.png'), 'x');
+    expect(resolveWithin(root, 'bild.png')).toBe(path.join(root, 'bild.png'));
+  });
+
+  it('verweigert Traversal und Symlinks nach außen', () => {
+    fs.writeFileSync(path.join(outside, 'geheim.txt'), 'x');
+    fs.symlinkSync(outside, path.join(root, 'link'));
+    expect(resolveWithin(root, '../geheim.txt')).toBeNull();
+    expect(resolveWithin(root, 'link/geheim.txt')).toBeNull();
+  });
+
+  it('verweigert, was sich nicht auflösen lässt (kaputter Symlink)', () => {
+    fs.symlinkSync(path.join(outside, 'gibt-es-nicht'), path.join(root, 'tot'));
+    fs.rmSync(outside, { recursive: true, force: true });
+    expect(resolveWithin(root, 'tot')).toBeNull();
   });
 });
 

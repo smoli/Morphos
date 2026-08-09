@@ -10,7 +10,8 @@
  * ```Codeblöcke```, # Überschriften, -/* Listen, 1. Listen.
  */
 
-function escapeHtml(s: string): string {
+/** Macht Text ungefährlich, bevor daraus HTML wird — die eine Stelle dafür. */
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
