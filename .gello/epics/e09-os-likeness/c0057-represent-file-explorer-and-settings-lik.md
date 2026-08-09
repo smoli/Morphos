@@ -6,6 +6,8 @@ created: 2026-08-09
 updated: 2026-08-09
 status-changed: 2026-08-09T10:21:05
 epic: e09
+usage-tokens: 8462
+usage-cost: 4.572894
 ---
 
 # represent file explorer and settings like regular apps
