@@ -10,19 +10,22 @@ epic: e10
 
 ## What
 
-Alternative to **c0058** (Vue): give generated apps a React-family option that
-keeps the **strict CSP intact** — no `'unsafe-eval'`. Two flavors:
+**Decision: adopt Preact + htm** (over Vue / c0058 — it keeps the strict CSP with
+no `'unsafe-eval'` and needs no bundler compiler; already verified CSP-clean, see
+„Verified“ below).
 
-- **Preact + htm** — `htm` turns tagged-template literals into vnodes at runtime
-  with a *parser* (no `eval`) and **no build step**; JSX-like ergonomics, ~4–5 KB.
-  The cleanest fit: strict CSP untouched, no bundler compiler.
-- **React (+ ReactDOM) with JSX** — needs a **build-time** JSX→`createElement`
-  transform in the shell's bundler (comparable to Vue's build-time compile); no
-  `eval`. Without it, plain `React.createElement` is eval-free but verbose.
+Make it **optional per app via a toggle in the composer**, shown **only when
+creating a new app**, and **on by default** — so the agent uses Preact without the
+user having to ask for it in the prompt each time. When the toggle is **off**, the
+app is plain vanilla JS.
 
-Delivery: **shipped built-in** (vendored), opt-in via
-`morphos:lib content="preact"` / `"react"`. Goal: compare against the Vue spike
-to decide which framework story (if any) to adopt.
+The choice is **remembered per app**: follow-up edits continue in the app's
+existing style (Preact if it already uses it, otherwise vanilla) without
+re-toggling. Preact stays **opt-in** — apps that don't use it get nothing inlined.
+
+Delivery is already in place (shipped built-in `preact`, inlined via
+`morphos:lib content="preact"`; globals `preact` / `preactHooks` / `html`). This
+card is now about the **toggle + wiring**, not the plumbing.
 
 ## Acceptance criteria
 
