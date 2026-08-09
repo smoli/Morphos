@@ -1,10 +1,10 @@
 ---
 id: c0055
 title: Make Desktop icons more desktop icon-like
-status: discuss
+status: in-progress
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T07:19:32
+status-changed: 2026-08-09T07:59:09
 epic: e09
 ---
 
@@ -50,3 +50,5 @@ Open questions for planning:
 ## Log
 
 - 2026-08-09 status → discuss (app)
+- 2026-08-09 status → ready (shell build sequence root)
+- 2026-08-09 status → in-progress (agent)

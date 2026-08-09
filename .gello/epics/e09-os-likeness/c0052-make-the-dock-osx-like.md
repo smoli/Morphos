@@ -67,3 +67,4 @@ Open questions for planning:
 - 2026-08-09 status → discuss (app)
 - 2026-08-09 status → ready (app)
 - 2026-08-09 status → discuss (app)
+- 2026-08-09 depends [c0055, c0056] + status → backlog (shell build sequence)

@@ -1,9 +1,21 @@
 {
-  "status": "idle",
-  "ready": [],
+  "status": "running",
+  "ready": [
+    "c0056"
+  ],
   "waiting": [],
-  "runs": [],
-  "updated": "2026-08-09T07:57:04",
+  "runs": [
+    {
+      "cardId": "c0055",
+      "phase": "running",
+      "activity": {
+        "name": "Read",
+        "arg": "/Users/stephan/WebstormProjects/Morphos/src/components/AppIcon.spec.ts"
+      },
+      "model": "claude-opus-5"
+    }
+  ],
+  "updated": "2026-08-09T07:59:19",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -31,6 +43,7 @@
     "c0049",
     "c0050",
     "c0051",
-    "c0038"
+    "c0038",
+    "c0055"
   ]
 }

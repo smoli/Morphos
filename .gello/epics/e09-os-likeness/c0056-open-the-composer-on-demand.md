@@ -1,10 +1,10 @@
 ---
 id: c0056
 title: Open the composer on demand
-status: discuss
+status: ready
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T07:20:39
+status-changed: 2026-08-09T07:58:53
 epic: e09
 ---
 
@@ -74,3 +74,4 @@ Consequences / open questions:
 ## Log
 
 - 2026-08-09 status → discuss (app)
+- 2026-08-09 status → ready (shell build sequence root)
