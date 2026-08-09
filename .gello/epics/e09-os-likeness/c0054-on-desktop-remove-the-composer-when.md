@@ -8,7 +8,13 @@ status-changed: 2026-08-09T07:18:48
 epic: e09
 ---
 
-Composer only shows when new app icon is clicked
+## Superseded
+
+**Merged into [c0056](c0056-open-the-composer-on-demand.md)** (2026-08-09).
+
+"Composer shows when the New-App icon is clicked" is the new-app trigger of the
+general on-demand composer — it lives as an acceptance criterion in c0056. This
+card can be archived; kept for the id/history trail.
 
 ## Log
 

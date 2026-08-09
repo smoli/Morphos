@@ -2,21 +2,22 @@
   "status": "running",
   "ready": [
     "c0038",
-    "c0051"
+    "c0052",
+    "c0053"
   ],
   "waiting": [],
   "runs": [
     {
-      "cardId": "c0050",
+      "cardId": "c0051",
       "phase": "running",
       "activity": {
-        "name": "Bash",
-        "arg": "python3 - <<'EOF'\np='src/components/ExplorerPanel.spec.ts'\ns=open(p,encoding='utf8').read()\n\ns=s.replace(\"\"\"import type { FsEntry, FsRequest, MorphosHost } from '@/types';\"\"\",\n\"\"\"import type { FsEntry, FsRequest, MorphosHost, ShellFsRequest, ShellFsResponse, TrashEntry } from '@/types';\"\"\")\n\ns=s.replace(\"\"\"/** Die zuletzt angemeldete Rückmeldung des Ordner-Beobachters. */\"\"\",\n\"\"\"/** Der Papierkorb der Attrappe und die Antwort auf den nächsten Verwaltungsauftrag. */\nlet trash: TrashEntry[];\nlet shellAnswer: ShellFsResponse;\n\nconst shellFs = vi.fn(async (_root: string, req: ShellFsRequest): Promise<ShellFsResponse> => {\n  if (req.op === 'trashList') return { ok: true, result: trash };\n  return shellAnswer;\n});\n\n/** Die zuletzt angemeldete Rückmeldung des Ordner-Beobachters. */\"\"\")\n\ns=s.replace(\"\"\"  fs.mockClear();\n  watchFolder.mockClear();\"\"\",\n\"\"\"  trash = [];\n  shellAnswer = { ok: true };\n  fs.mockClear();\n  shellFs.mockClear();\n  watchFolder.mockClear();\"\"\")\n\ns=s.replace(\"\"\"  setHost({ fs, watchFolder } as unknown as MorphosHost);\"\"\",\n\"\"\"  setHost({ fs, shellFs, watchFolder } as unknown as MorphosHost);\n  vi.stubGlobal('confirm', vi.fn(() => true));\n  vi.stubGlobal('prompt', vi.fn(() => 'Neuer Name'));\"\"\")\nopen(p,'w',encoding='utf8').write(s)\nEOF\nsed -n 1,60p src/components/ExplorerPanel.spec.ts"
+        "name": "Edit",
+        "arg": "/Users/stephan/WebstormProjects/Morphos/README.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T07:37:53",
+  "updated": "2026-08-09T07:48:57",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -42,6 +43,7 @@
     "c0047",
     "c0048",
     "c0049",
-    "c0050"
+    "c0050",
+    "c0051"
   ]
 }
