@@ -46,7 +46,7 @@ geladen, nicht neu erzeugt; Apps im alten JSON-Historienformat werden beim erste
 - **Electron** — Desktop-Rahmen
 - **Vue 3** + **TypeScript** — Oberfläche (Composition API, `<script setup>`)
 - **Pinia** — Zustandsverwaltung
-- **Vue Router** — Navigation (Arbeitsansicht ⇄ Versionsübersicht)
+- **Vue Router** — Navigation (Start ⇄ Desktop)
 - **Vite** — Build (Renderer + Electron Haupt-/Preload-Prozess)
 - **Vitest** + **@vue/test-utils** — Tests (strikt nach TDD entwickelt)
 
@@ -84,6 +84,12 @@ geladen, nicht neu erzeugt; Apps im alten JSON-Historienformat werden beim erste
   freigegeben hat (Hostname oder https-URL-Präfix). Die **Shell** lädt die
   Bibliothek **einmalig**, cacht sie lokal und bettet sie beim Bündeln inline ein.
   Die laufende App bleibt vollständig offline.
+- **Preact eingebaut (optional):** Für zustandsreiche Apps steht **Preact + htm**
+  als eingebaute Bibliothek bereit — im Chat beim **Anlegen einer neuen App** per
+  Schalter wählbar (Vorgabe: an). Es kommt **CSP-sauber** ohne `eval` und ohne
+  Build-Schritt aus (htm ist ein Tagged-Template-Parser); die App nutzt dann die
+  Globalen `preact`, `preactHooks` und `html` (JSX-artige Templates). Ohne den
+  Schalter bleibt die App reines Vanilla-JS; die Wahl wird je App gemerkt.
 - **Dialog statt Einzeiler:** Der Chat gehört **einer App** und hängt an **ihrem
   Fenster**: 💬 in der Titelleiste bzw. Strg/⌘ + ⇧ + C klappt ihn unten auf,
   Escape schließt ihn; nach dem Senden bleibt er offen. Er trägt Verlauf,
@@ -116,7 +122,9 @@ geladen, nicht neu erzeugt; Apps im alten JSON-Historienformat werden beim erste
   lassen sie sich als **Nur-Lese-Ansicht** lesen (Markdown, escape-first).
 - **Name & Icon:** Das LLM setzt in `src/index.html` einen `<title>` (App-Name)
   und ein `<meta name="morphos:icon">` (Emoji); daraus entstehen Name und Icon
-  der Desktop-Kachel.
+  der Desktop-Kachel. Der Anwender kann das Icon jederzeit überschreiben (Emoji
+  **oder** ein eigenes Bild) — ein selbst gesetztes Icon bleibt bei
+  Folge-Generierungen erhalten.
 - **Versionen = Git-Historie:** Jede Generierung ist ein Commit (Botschaft =
   Wunsch). Über **⟲ Versionen** in der Fenster-Titelleiste lässt sich ein
   früherer Stand wiederherstellen — als **neuer Commit** mit dem alten Baum:
@@ -128,12 +136,55 @@ geladen, nicht neu erzeugt; Apps im alten JSON-Historienformat werden beim erste
   unsichtbare Schutzschicht über die iframes, damit sie die Maus nicht
   „schlucken“. Eine erneut geöffnete App holt ihr bestehendes Fenster nach vorn,
   statt es zu duplizieren.
+- **Agenten (parallel + Warteschlange):** Wie viele Wünsche gleichzeitig
+  bearbeitet werden dürfen, ist einstellbar (Vorgabe 2); alles darüber wartet in
+  der Reihenfolge des Eingangs — für eine App arbeitet ohnehin nie mehr als ein
+  Agent. Ein Lauf kann abgebrochen werden.
+
+## Der Desktop – wie ein Betriebssystem
+
+Der Desktop ist ein vollwertiger Fenstermanager im Renderer, kein bloßer
+Startbildschirm:
+
+- **Dock:** Am unteren Rand liegt ein Dock im macOS-Stil — links das feste
+  **＋ Neue App**, dann angeheftete **Favoriten** (bleiben, auch geschlossen),
+  dann die **laufenden** Apps (mit Laufanzeige). Ein Klick holt eine App nach
+  vorn bzw. stellt sie wieder her. Transparenz, Weichzeichnen und automatisches
+  Ausblenden sind einstellbar.
+- **Startmenü / Suche:** **Strg/⌘ + K** öffnet ein durchsuchbares Startmenü —
+  Tippen filtert die Apps, ↑/↓ und Enter öffnen (eine laufende kommt nach vorn),
+  samt „Neue App“.
+- **Hintergrund:** Pro Workspace ein **Hintergrundbild**, eine Farbe oder ein
+  Verlauf.
+- **Desktop-Icons:** Die App-Icons liegen **rahmenlos** auf der Fläche, lassen
+  sich **frei anordnen** (Position gemerkt) und per **Rechtsklick** verwalten
+  (öffnen, Icon ändern, ins Dock, löschen).
+- **Drei Darstellungen:** **Fenster** (frei, überlappend), **Einzeln** (eine App
+  im Vollbild) und **Kacheln** — eine lückenlos geteilte Fläche nach Hyprlands
+  „dwindle“: ein neues Fenster teilt die aktive Kachel (Richtung nach
+  Seitenverhältnis), an den **Fugen ziehen** ändert die Größe, das **Ziehen der
+  Titelleiste auf eine andere Kachel** tauscht die Plätze. Die Anordnung wird je
+  Workspace gemerkt.
+- **Sitzung:** Welche Fenster offen waren und wo, kommt beim nächsten Start
+  zurück (auch die Kachel-Anordnung).
+- **Tastenkürzel:** neue App, Schließen/Minimieren/Maximieren, Einstellungen,
+  Startmenü, Chat — plus **Strg/⌘ + Tab** als Fensterwechsler.
+- **Mitteilungen:** kurze Einblendungen (Agent fertig, Fehler …) über dem
+  Desktop.
+- **Datei-Explorer:** ein eigenes **Systemfenster „Dateien“** zeigt den
+  Datenordner (live aktualisiert, streng eingegrenzt) mit **Vorschau**
+  (Bild/Video/Ton/Markdown/JSON/Text; HTML und SVG in einer eigenen Sandbox) und
+  voller **Verwaltung** (anlegen, umbenennen, verschieben, kopieren) samt
+  **Papierkorb** — Gelöschtes bleibt im Datenordner und wiederherstellbar.
+- **Telemetrie:** in den Einstellungen zeigt Morphos die **Agenten-Auslastung**
+  und den **Platzbedarf** der Apps und des Datenordners.
 
 ## Architektur
 
 ```
 electron/
-  main.ts              Hauptprozess: Fenster, IPC, Claude CLI, Ordner-/App-Dateien
+  main.ts              Hauptprozess: Fenster, IPC, Claude CLI, App-Dateien,
+                       Datei-Explorer, Datenstrom (morphos-file://), Preact eingebaut
   preload.ts           Sichere Brücke (contextBridge) → window.morphos
   libcache.ts          Tier-1-Bibliotheken: einmalig laden (Whitelist), cachen
 src/
@@ -142,27 +193,37 @@ src/
     files.ts           Datei-Blockformat: serialisieren/parsen, Pfad-Validierung
     docs.ts            Die zwei Dokumente je App: Pfade, Abtrennen, Fortschreiben
     bundle.ts          Bündelt Quelldateien + Bibliotheken zu EINEM Dokument
-    libs.ts            morphos:lib-Extraktion + Whitelist-Abgleich
+    libs.ts · framework.ts   morphos:lib + Whitelist · Preact-Schalter je App
     gitstore.ts        Git je App: init, commit, log, Wiederherstellen (System-Git)
     appstore.ts        App-Ablage: Manifest, src/, Artefakt, Dokumente, Migration
-    html.ts            Extraktion von HTML-Dokument, Titel und Icon
+    agent.ts · queue.ts      Agentenlauf (Strom der CLI) + Warteschlange/Parallel-Deckel
+    html.ts · markdown.ts · icon.ts   HTML/Titel/Icon · Markdown (escape-first) · Icons
     app.ts             App-Identität: Slug/Id, Vorgaben für Name & Icon
-    appfs.ts           Bridge-SDK (window.morphosFS) + Injektion + Dispatch
-    fsaccess.ts        Dateisystem-Zugriff mit Pfad-Eingrenzung (nur Hauptprozess)
+    appfs.ts           Bridge-SDK (window.morphosFS) + CSP + Dispatch
+    fsaccess.ts        Dateizugriff, Pfad-Eingrenzung, Verwalten (runShellFs)
+    trash.ts · dialog.ts     Papierkorb-Regeln · scoped Dateidialoge
+    filelink.ts · preview.ts · watch.ts · diskusage.ts
+                       Datei-Explorer: Strom, Vorschau-Regeln, Ordner-Beobachtung, Platz
+    tiling.ts · tilelayout.ts   Kachel-Baum (dwindle) + Persistenz je Workspace
+    uimode.ts · arrange.ts · dock.ts · favorites.ts · wallpaper.ts · session.ts
+                       Darstellung · Icon-Raster · Dock · Favoriten · Hintergrund · Sitzung
+    launcher.ts · shortcuts.ts · switcher.ts · system.ts
+                       Startmenü · Tastenkürzel · Fensterwechsler · Systemfenster
     permissions.ts     Berechtigungslogik je Funktion (Vorgaben, Dialog-Auswertung)
   services/
     host.ts            Injizierbarer Zugriff auf die Host-Brücke (für Tests)
   stores/
-    workspace.ts       Pinia-Store: Verzeichnis, zuletzt genutzte Ordner, App-Liste
-    app.ts             Pinia-Store: EINE geöffnete App (Historie, generate/revert)
+    workspace.ts       Verzeichnis, zuletzt genutzte Ordner, App-Liste, Einstellungen
+    desktop.ts         Fenster-Registry (Geometrie/z/Fokus/Kacheln), Sitzung, Dock
+    app.ts             EIN App-Fenster (Fabrik je Instanz): generate/revert/Chat
+    agents.ts · notifications.ts   Warteschlange + laufende Agenten · Toast-Mitteilungen
   components/          Präsentations-Komponenten (Props rein, Events raus)
-    WindowFrame · ChatDock · WelcomeScreen · AppCanvas · HistoryList · DocsPanel
-    TopBar (Titelleiste) · SystemWindow (Dateien, Einstellungen) · PermissionDialog
+    WindowFrame · AppWindow · SystemWindow · ExplorerPanel · ChatDock · DocsPanel
+    AppCanvas · WelcomeScreen · HistoryList · TopBar · TileGaps · ContextMenu
+    LauncherOverlay · SwitcherOverlay · IconDialog · PermissionDialog · settings/*
   views/
     StartView.vue      Startbildschirm: Ordnerauswahl + zuletzt genutzte Ordner
-    DesktopView.vue    Desktop: Launcher, App-Fenster, Dock, Startmenü
-  stores/
-    desktop.ts         Fenster-Registry (Geometrie, z-Ordnung, Fokus, Maximieren)
+    DesktopView.vue    Desktop: Launcher, Fenster, Dock, Kacheln, Startmenü, Hintergrund
   router/index.ts      Routen: / · /desktop (Apps sind Fenster, keine Route)
   App.vue · main.ts    Wurzelkomponente & Einstiegspunkt des Renderers
 ```
@@ -256,6 +317,12 @@ wird. Vorab lässt sich alles unter **⚙ Einstellungen** je Funktion einstellen
   (`confineWithin`), **Symlinks** real aufgelöst und bei Ausbruch abgelehnt,
   und als Wurzel akzeptiert der Hauptprozess nur Ordner, die der Anwender
   zuvor per Dialog freigegeben hat (gespeicherte `accessRoots`).
+- Der **Datei-Explorer** verwaltet nur INNERHALB des Datenordners: Verschieben,
+  Kopieren, Umbenennen und Papierkorb (`runShellFs`) prüfen **Quelle und Ziel**
+  über dieselbe Eingrenzung; der Vorschau-Datenstrom (`morphos-file://`) reicht
+  nur eingegrenzte Pfade heraus und niemals aktive Inhalte. Diese Verwaltung ist
+  eine **Anweisung des Anwenders**, keine App-Anfrage — Apps erreichen sie nicht,
+  und der Papierkorb (`.trash`) ist für Apps unsichtbar.
 
 ## Lizenz
 
