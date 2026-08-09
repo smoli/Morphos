@@ -289,9 +289,15 @@ function stopInteraction(): void {
   border-radius: 12px;
   background: rgba(108, 140, 255, 0.16);
 }
-/* Vollflächig: maximiert oder Einzel-Modus. */
+/*
+ * Vollflächig: maximiert oder Einzel-Modus. „Voll“ heißt die Arbeitsfläche,
+ * nicht der ganze Bildschirm — ein festes Dock behält seinen Rand, und der
+ * Rahmen endet an ihm statt darunter zu verschwinden (i0006). Wie breit dieser
+ * Rand ist, schreibt die Bühne an (views/DesktopView → core/workarea); ohne sie
+ * (der Rahmen für sich allein) bleibt es bei null.
+ */
 .window-frame.full {
-  inset: 0;
+  inset: var(--work-top, 0px) var(--work-right, 0px) var(--work-bottom, 0px) var(--work-left, 0px);
   width: auto;
   height: auto;
   border: 0;

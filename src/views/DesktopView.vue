@@ -27,6 +27,7 @@ import { SETTINGS_ID, SYSTEM_WINDOWS } from '@/core/system';
 import { wallpaperCss } from '@/core/wallpaper';
 import { dockBackgroundCss, dockBlurCss } from '@/core/transparency';
 import { dockEntries, dockRevealed, type DockEntry } from '@/core/dock';
+import { dockInsets, insetVars, workArea } from '@/core/workarea';
 import type { MenuItem } from '@/core/menu';
 import type { DesktopWindow } from '@/stores/desktop';
 import {
@@ -96,15 +97,30 @@ const systemCount = SYSTEM_WINDOWS.length;
 const dockEdge = computed(() => workspace.dockEdge);
 
 /**
- * Die Kacheln fangen oben links an — eine Leiste links oder oben verdeckte
+ * Steht die Leiste fest im Bild? Nur dann gehört ihr ein Rand: Ausgeblendet
+ * (c0062) legt sie sich beim Herankommen über die Fenster, und im Einzel-Modus
+ * ist sie vor der Vollbild-App gar nicht da.
+ */
+const dockFixed = computed(() => dockVisible.value && !workspace.dockAutohide);
+
+/**
+ * Was die feste Leiste vom Bildschirm wegnimmt (i0006) — und was den Fenstern
+ * bleibt, die die Fläche füllen: die Kacheln (unten) und der vollflächige
+ * Rahmen, der die Ränder als angeschriebene Werte der Bühne liest
+ * (components/WindowFrame).
+ */
+const insets = computed(() => dockInsets(dockEdge.value, dockFixed.value));
+const work = computed<Rect>(() => workArea(stageSize.value, insets.value));
+const workVars = computed(() => insetVars(insets.value));
+
+/**
+ * Die Icon-Kacheln fangen oben links an — eine Leiste links oder oben verdeckte
  * darum sofort die ersten. Steht das Dock nicht unten (dort lag es seit c0052
- * schon immer über der Fläche) und legt es sich auch nicht aus dem Weg, rückt
- * die Fläche an diesem Rand um die Breite der Leiste ein.
+ * über den Icons und liegt es weiterhin) und legt es sich auch nicht aus dem
+ * Weg, rückt die Icon-Fläche an diesem Rand um die Breite der Leiste ein.
  */
 const deskReserve = computed(() =>
-  dockVisible.value && !workspace.dockAutohide && dockEdge.value !== 'bottom'
-    ? `reserve-${dockEdge.value}`
-    : null,
+  dockFixed.value && dockEdge.value !== 'bottom' ? `reserve-${dockEdge.value}` : null,
 );
 
 // Ausblenden (c0062): Sagen die Einstellungen es, liegt das Dock unter dem
@@ -165,41 +181,46 @@ function closeActiveComposer(): boolean {
 
 // ---- Anordnung der Kacheln (frei abgelegt, sonst Raster — siehe core/arrange) ----
 
+const stage = ref<HTMLElement | null>(null);
 const launcher = ref<HTMLElement | null>(null);
+/** Die Bühne — der ganze Bildschirm, aus dem die Arbeitsfläche geschnitten wird. */
+const stageSize = ref<Bounds>({ w: 0, h: 0 });
 /**
- * Die freie Fläche des Desktops in Koordinaten der Bühne: Ihre Größe begrenzt,
- * wohin eine Icon-Kachel darf; ihre Lage (das Dock, das an einem Rand Platz
- * wegnimmt) brauchen die Fenster-Kacheln, die daneben in derselben Bühne liegen.
+ * Die Icon-Fläche: Ihre Größe begrenzt, wohin eine Kachel gezogen werden darf.
+ * Sie ist bereits um ein Dock eingerückt, das links, rechts oder oben steht
+ * (`deskReserve`) — unten liegt die Leiste über ihr wie seit c0052.
  */
-const desk = ref<Rect>({ x: 0, y: 0, w: 0, h: 0 });
-const bounds = computed<Bounds>(() => ({ w: desk.value.w, h: desk.value.h }));
+const bounds = ref<Bounds>({ w: 0, h: 0 });
 
 /**
- * Die sichtbare Fläche messen — Lage wie Größe. Dazu, wo die Bühne im
- * Programmfenster liegt: Die Maus meldet ihre Punkte dort, der Kachel-Baum
- * rechnet aber in der Bühne (c0067 zieht an der Fuge und tauscht Kacheln).
+ * Die Flächen messen: die Bühne (daraus wird die Arbeitsfläche der Fenster) und
+ * die Icon-Fläche. Dazu, wo die Bühne im Programmfenster liegt: Die Maus meldet
+ * ihre Punkte dort, der Kachel-Baum rechnet aber in der Bühne (c0067 zieht an
+ * der Fuge und tauscht Kacheln).
  */
 function measure(): void {
   const el = launcher.value;
+  const stageEl = stage.value;
+  stageSize.value = stageEl ? { w: stageEl.clientWidth, h: stageEl.clientHeight } : { w: 0, h: 0 };
   if (!el) {
-    desk.value = { x: 0, y: 0, w: 0, h: 0 };
+    bounds.value = { w: 0, h: 0 };
     desktop.setStageOrigin({ x: 0, y: 0 });
     return;
   }
-  desk.value = { x: el.offsetLeft, y: el.offsetTop, w: el.clientWidth, h: el.clientHeight };
+  bounds.value = { w: el.clientWidth, h: el.clientHeight };
   const box = el.getBoundingClientRect();
   desktop.setStageOrigin({ x: box.left - el.offsetLeft, y: box.top - el.offsetTop });
 }
 
 /**
- * Worauf gekachelt wird: die freie Fläche, ringsum um eine Fuge eingerückt —
+ * Worauf gekachelt wird: die Arbeitsfläche, ringsum um eine Fuge eingerückt —
  * so steht zwischen zwei Kacheln genau so viel Luft wie zum Rand hin.
  */
 const tileArea = computed<Rect>(() => ({
-  x: desk.value.x + TILE_GAP,
-  y: desk.value.y + TILE_GAP,
-  w: Math.max(0, desk.value.w - 2 * TILE_GAP),
-  h: Math.max(0, desk.value.h - 2 * TILE_GAP),
+  x: work.value.x + TILE_GAP,
+  y: work.value.y + TILE_GAP,
+  w: Math.max(0, work.value.w - 2 * TILE_GAP),
+  h: Math.max(0, work.value.h - 2 * TILE_GAP),
 }));
 
 // Der Baum rechnet in dieser Fläche: Sie ändert sich mit dem Programmfenster
@@ -297,9 +318,12 @@ onMounted(async () => {
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
   window.addEventListener('blur', closeSwitcher);
-  if (typeof ResizeObserver === 'function' && launcher.value) {
+  if (typeof ResizeObserver === 'function') {
     observer = new ResizeObserver(measure);
-    observer.observe(launcher.value);
+    // Beide Flächen: Die Bühne wächst mit dem Programmfenster, die Icon-Fläche
+    // rückt zusätzlich ein, wenn das Dock den Rand wechselt.
+    if (stage.value) observer.observe(stage.value);
+    if (launcher.value) observer.observe(launcher.value);
   }
   await workspace.refresh();
   // Erst mit den gelesenen Apps lässt sich die Sitzung wiederherstellen: Nur
@@ -543,7 +567,9 @@ function onMenuPick(id: string): void {
 
 <template>
   <div class="desktop">
-    <div class="stage">
+    <!-- Die Bühne schreibt an, welche Ränder die feste Leiste für sich behält
+         (i0006) — daran hält sich, was die Fläche füllt. -->
+    <div ref="stage" class="stage" :style="workVars">
       <!-- Der Hintergrund: liegt unter allem und nimmt keine Klicks an. -->
       <div class="wallpaper" :style="{ background: wallpaperCss(workspace.wallpaper) }" aria-hidden="true"></div>
 
@@ -743,19 +769,19 @@ function onMenuPick(id: string): void {
 }
 /*
  * Platz für ein Dock, das nicht unten steht (c0063): Die Kacheln fangen oben
- * links an, eine Leiste links oder oben verdeckte darum sofort die ersten.
- * 76 px sind die Leiste (48 px Glyphe + Polster) und ihr Abstand vom Rand. Am
- * unteren Rand bleibt es beim Alten — dort lag das Dock seit c0052 über der
- * Fläche.
+ * links an, eine Leiste links oder oben verdeckte darum sofort die ersten. Wie
+ * viel Platz sie nimmt, steht an der Bühne (core/workarea) — dieselbe Zahl, an
+ * die sich auch die Fenster halten. Am unteren Rand bleibt es für die Icons beim
+ * Alten: Dort liegt das Dock seit c0052 über ihrer Fläche.
  */
 .launcher.reserve-left {
-  left: 76px;
+  left: var(--work-left);
 }
 .launcher.reserve-right {
-  right: 76px;
+  right: var(--work-right);
 }
 .launcher.reserve-top {
-  top: 76px;
+  top: var(--work-top);
 }
 /* Die Fläche, auf der die Kacheln liegen — jede an ihrer eigenen Stelle. */
 .icons {

@@ -27,6 +27,8 @@ import {
   dockBlurCss,
 } from '@/core/transparency';
 import { DEFAULT_DOCK_EDGE } from '@/core/dock';
+import { DOCK_RESERVE } from '@/core/workarea';
+import { TILE_GAP } from '@/stores/desktop';
 import type { AppData, AppSummary, MorphosHost } from '@/types';
 
 const apps: AppSummary[] = [
@@ -773,6 +775,128 @@ describe('DesktopView', () => {
         ws.setDockAutohide(true);
         await flushPromises();
         expect(wrapper.get('.launcher').classes()).not.toContain('reserve-left');
+      });
+    });
+
+    describe('Das feste Dock legt sich nicht über die Fenster (i0006)', () => {
+      /** Die angeschriebenen Ränder der Bühne — daran hängt die Arbeitsfläche. */
+      function workVars(wrapper: VueWrapper): Record<string, string> {
+        const style = (wrapper.get('.stage').element as HTMLElement).style;
+        return {
+          top: style.getPropertyValue('--work-top'),
+          right: style.getPropertyValue('--work-right'),
+          bottom: style.getPropertyValue('--work-bottom'),
+          left: style.getPropertyValue('--work-left'),
+        };
+      }
+
+      /**
+       * jsdom rechnet kein Layout aus — die Bühne bekommt ihre Größe von Hand,
+       * danach misst die Ansicht auf das Fenster-Ereignis hin nach.
+       */
+      async function measureStage(wrapper: VueWrapper, w = 1200, h = 800) {
+        const stage = wrapper.get('.stage').element as HTMLElement;
+        Object.defineProperty(stage, 'clientWidth', { value: w, configurable: true });
+        Object.defineProperty(stage, 'clientHeight', { value: h, configurable: true });
+        window.dispatchEvent(new Event('resize'));
+        await flushPromises();
+      }
+
+      it('schreibt an, welchen Rand die Leiste für sich behält', async () => {
+        const { wrapper } = await mountView();
+        const ws = useWorkspaceStore();
+        // Unten (die Vorgabe): Ein Fenster, das die Fläche füllt, endet über der
+        // Leiste statt unter ihr.
+        expect(workVars(wrapper)).toEqual({
+          top: '0px',
+          right: '0px',
+          bottom: `${DOCK_RESERVE}px`,
+          left: '0px',
+        });
+
+        ws.setDockEdge('right');
+        await flushPromises();
+        expect(workVars(wrapper).right).toBe(`${DOCK_RESERVE}px`);
+        expect(workVars(wrapper).bottom).toBe('0px');
+      });
+
+      it('gibt den Rand her, sobald die Leiste sich aus dem Weg legt', async () => {
+        const { wrapper } = await mountView();
+        useWorkspaceStore().setDockAutohide(true);
+        await flushPromises();
+
+        expect(workVars(wrapper).bottom).toBe('0px');
+      });
+
+      it('gibt im Einzel-Modus alles her — dort ist die Leiste ohnehin weg', async () => {
+        useWorkspaceStore().uiMode = 'single';
+        const { wrapper } = await mountView();
+        useDesktopStore().openSystem(EXPLORER_ID);
+        await flushPromises();
+
+        expect(wrapper.find('.dock').exists()).toBe(false);
+        expect(workVars(wrapper).bottom).toBe('0px');
+      });
+
+      it('lässt dem Kachel-Verbund nur den Platz über der Leiste', async () => {
+        const { wrapper } = await mountView();
+        const desktop = useDesktopStore();
+        await measureStage(wrapper);
+
+        // Die Fläche ist der Bildschirm ohne den Rand der Leiste, ringsum um
+        // eine Fuge eingerückt.
+        expect(desktop.tileArea).toEqual({
+          x: TILE_GAP,
+          y: TILE_GAP,
+          w: 1200 - 2 * TILE_GAP,
+          h: 800 - DOCK_RESERVE - 2 * TILE_GAP,
+        });
+
+        // Ausgeblendet gehört die ganze Fläche wieder den Kacheln.
+        useWorkspaceStore().setDockAutohide(true);
+        await flushPromises();
+        expect(desktop.tileArea.h).toBe(800 - 2 * TILE_GAP);
+
+        // An der Seite wird die Fläche schmaler statt niedriger.
+        useWorkspaceStore().setDockAutohide(false);
+        useWorkspaceStore().setDockEdge('left');
+        await flushPromises();
+        expect(desktop.tileArea).toEqual({
+          x: DOCK_RESERVE + TILE_GAP,
+          y: TILE_GAP,
+          w: 1200 - DOCK_RESERVE - 2 * TILE_GAP,
+          h: 800 - 2 * TILE_GAP,
+        });
+      });
+
+      it('kachelt die Fenster in diese Fläche — keines liegt unter der Leiste', async () => {
+        const { wrapper } = await mountView();
+        const desktop = useDesktopStore();
+        desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+        desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });
+        useWorkspaceStore().uiMode = 'tiles';
+        await measureStage(wrapper);
+
+        const frames = wrapper
+          .findAllComponents(WindowFrame)
+          .map((f) => (f.element as HTMLElement).style);
+        expect(frames).toHaveLength(2);
+        for (const s of frames) {
+          // Beide reichen von oben bis an die Fuge über der Leiste — und keiner
+          // darüber hinaus.
+          expect(parseFloat(s.height)).toBeGreaterThan(0);
+          expect(parseFloat(s.top) + parseFloat(s.height)).toBe(800 - DOCK_RESERVE - TILE_GAP);
+        }
+      });
+
+      it('rückt den vollflächigen Rahmen um dieselben Ränder ein', () => {
+        // Maximiert und im Einzel-Modus füllt der Rahmen die Fläche — die
+        // angeschriebenen Ränder sagen, wo sie aufhört.
+        const source = readFileSync('src/components/WindowFrame.vue', 'utf8');
+        const full = source.slice(source.indexOf('.window-frame.full'));
+        expect(full.slice(0, full.indexOf('}'))).toMatch(
+          /inset:\s*var\(--work-top[^)]*\)\s*var\(--work-right[^)]*\)\s*var\(--work-bottom[^)]*\)\s*var\(--work-left[^)]*\)/,
+        );
       });
     });
 
