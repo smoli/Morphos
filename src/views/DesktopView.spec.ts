@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia, type Pinia } from 'pinia';
@@ -129,6 +130,18 @@ describe('DesktopView', () => {
   /** Die festen Plätze der Schale im Dock (Dateien, Einstellungen). */
   function dockSystemNames(wrapper: VueWrapper): string[] {
     return wrapper.findAll('.dock-item.system').map((d) => d.attributes('title') ?? '');
+  }
+
+  /**
+   * Eine Regel aus dem <style>-Block dieser Ansicht. jsdom rechnet kein CSS
+   * einer SFC aus — für die paar Aussagen, die am Aussehen hängen (rollt das
+   * Dock?), wird die Regel darum im Quelltext nachgeschlagen.
+   */
+  function styleRule(selector: string): string {
+    const source = readFileSync('src/views/DesktopView.vue', 'utf8');
+    const rule = new RegExp(`^${selector.replace(/[.]/g, '\\$&')}\\s*\\{([^}]*)\\}`, 'm').exec(source);
+    if (!rule) throw new Error(`Keine CSS-Regel für ${selector} in DesktopView.vue`);
+    return rule[1];
   }
 
   /** Rechtsklick auf die Kachel einer App — ihr Kontextmenü klappt auf. */
@@ -559,6 +572,16 @@ describe('DesktopView', () => {
       const { wrapper } = await mountView();
       expect(wrapper.find('.dock-item.new').exists()).toBe(true);
       expect(dockNames(wrapper)).toEqual([]);
+    });
+
+    it('rollt nicht — auch leer trägt es keine Bildlaufleiste (i0004)', () => {
+      const rule = styleRule('.dock');
+      // Die Namensblasen hängen (unsichtbar) über den Icons und ragen aus der
+      // Leiste heraus. Darf sie rollen, zeigt sie deshalb dauerhaft einen
+      // Balken — selbst wenn nur das ＋ dasteht.
+      expect(rule).not.toMatch(/overflow[a-z-]*:\s*(auto|scroll)/);
+      // Passt nicht alles in eine Reihe, bricht das Dock um, statt zu rollen.
+      expect(rule).toMatch(/flex-wrap:\s*wrap/);
     });
 
     it('reiht auf: erst die Lieblinge, dann das Laufende', async () => {

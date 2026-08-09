@@ -751,6 +751,8 @@ function onMenuPick(id: string): void {
   transform: translateX(-50%);
   display: flex;
   align-items: flex-end;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 6px 8px;
   background: rgba(20, 22, 28, 0.72);
@@ -760,8 +762,13 @@ function onMenuPick(id: string): void {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   z-index: 10000;
   max-width: 92%;
-  overflow-x: auto;
-  overflow-y: visible;
+  /*
+   * Nicht rollen: Die Namensblasen liegen unsichtbar über den Icons und ragen
+   * aus der Leiste heraus — eine rollbare Leiste zeigte dafür dauerhaft einen
+   * Balken, selbst wenn nur das ＋ dasteht (i0004). Wird es eng, bricht das
+   * Dock stattdessen in eine zweite Reihe um.
+   */
+  overflow: visible;
 }
 /* Das feste ＋ steht vor den Apps, abgesetzt durch einen Strich. */
 .dock-sep {
