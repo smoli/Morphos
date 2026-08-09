@@ -10,16 +10,16 @@
   "waiting": [],
   "runs": [
     {
-      "cardId": "c0059",
+      "cardId": "c0066",
       "phase": "running",
       "activity": {
-        "name": "Bash",
-        "arg": "git add src electron .gello/epics/e10-framework-support/c0059-provide-react-preact-to-apps.md && git status --short"
+        "name": "ToolSearch",
+        "arg": "select:mcp__gello__set_status,mcp__gello__add_question"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T19:43:25",
+  "updated": "2026-08-09T19:44:04",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -59,6 +59,7 @@
     "c0062",
     "c0063",
     "c0065",
-    "c0059"
+    "c0059",
+    "c0066"
   ]
 }
