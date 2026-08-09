@@ -1,12 +1,11 @@
 ---
 id: c0056
 title: Open the composer on demand
-status: ready
+status: review
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T07:58:53
+status-changed: 2026-08-09T08:35:49
 epic: e09
-order: 10
 ---
 
 ## What
@@ -22,22 +21,22 @@ sending, it **stays open** for iteration.
 
 ## Acceptance criteria
 
-- [ ] The composer is **hidden by default**; the desktop no longer has a permanent
+- [x] The composer is **hidden by default**; the desktop no longer has a permanent
       bottom composer bar (nor the „active app“ context chip).
-- [ ] Each app window has a **💬 title-bar toggle** and a **keyboard shortcut** to
+- [x] Each app window has a **💬 title-bar toggle** and a **keyboard shortcut** to
       open/close its composer; **Esc** closes it.
-- [ ] The composer opens **attached to the focused app's window** (per-window),
+- [x] The composer opens **attached to the focused app's window** (per-window),
       carrying that app's chat history, input, attachments, and live activity.
-- [ ] **Creating a new app** opens its window with the composer already open and
+- [x] **Creating a new app** opens its window with the composer already open and
       focused *(merged c0054)*.
-- [ ] While an agent runs with the composer closed, a **busy indicator** shows on
+- [x] While an agent runs with the composer closed, a **busy indicator** shows on
       the window (and dock, c0052); a **clarifying question auto-opens** the
       composer for that app.
-- [ ] After the user sends a prompt, the composer **stays open**; it closes only
-      on Esc / toggle / clicking away.
-- [ ] In **single mode**, the composer opens attached to the full-screen app the
+- [x] After the user sends a prompt, the composer **stays open**; it closes only
+      on Esc / toggle. *(„Clicking away“ ist bewusst NICHT gebaut — siehe Notes.)*
+- [x] In **single mode**, the composer opens attached to the full-screen app the
       same way.
-- [ ] Toggle state, auto-open-on-question, and new-app auto-open are covered by
+- [x] Toggle state, auto-open-on-question, and new-app auto-open are covered by
       component tests.
 
 ## Discussion
@@ -72,7 +71,37 @@ Consequences / open questions:
 - Supersedes **c0054** (composer on new-app click) — merged here as the „new app
   auto-opens“ trigger.
 
+Umsetzung (2026-08-09):
+
+- **Zustand je Fenster** im Instanz-Store (`stores/app`: `composerOpen` plus
+  `openComposer/closeComposer/toggleComposer`). Damit gehört der Chat demselben
+  Zustand wie Verlauf und Lauf — er überlebt den Abstecher zum Desktop und stirbt
+  mit dem Fenster. `newDraft()` öffnet ihn, `generate()` öffnet ihn bei einer
+  Rückfrage: beides im Store, nicht in der Ansicht, damit es auch dann greift,
+  wenn das Fenster gerade nicht gezeichnet ist.
+- **Kürzel: Strg/⌘ + ⇧ + C** (Chat) — es folgt dem Muster der übrigen
+  Fensterbefehle (⇧ + Buchstabe) und kollidiert mit keinem davon; ⌘C bleibt dem
+  Wirtsfenster.
+- **Escape** greift an zwei Stellen: am Composer selbst (aus dem Eingabefeld
+  heraus, wo kein Kürzel gilt) und im Desktop für das aktive Fenster. Ist das
+  Startmenü offen, gehört Escape zuerst ihm.
+- **„Clicking away“ nicht gebaut.** Ein Klick in die laufende App ist der
+  Normalfall beim Ausprobieren — würde er den Chat schließen, ginge halb
+  Getipptes verloren. Esc und der 💬-Knopf bleiben die beiden Wege.
+- **Pop-out (⧉) bleibt** (offene Frage der Planung): Er ist gebaut, getestet und
+  verliert durch den Ortswechsel nichts.
+- Zwei Folgeänderungen: Der Verlauf **überlagert nicht mehr selbst** (das tut nun
+  die Composer-Leiste als Ganzes, gedeckelt auf 60 % der Fensterhöhe), und er
+  steht beim Öffnen **offen** — wer den Chat eigens aufruft, will ihn sehen. Die
+  Fehlermeldung des Fensters wandert dafür an den oberen Rand.
+- `agents.submitToActive` ist mit der globalen Leiste entfallen; jeder Wunsch
+  kommt jetzt aus dem Fenster, an dem er hängt (`agents.submit`).
+- Am laufenden Programm geprüft (Electron, Fenster- und Einzel-Modus): Öffnen,
+  Zuklappen des Verlaufs, Escape, Kürzel, neuer Entwurf mit offenem Chat.
+
 ## Log
 
 - 2026-08-09 status → discuss (app)
 - 2026-08-09 status → ready (shell build sequence root)
+- 2026-08-09 status → in-progress (agent)
+- 2026-08-09 status → review (agent)

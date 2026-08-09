@@ -36,8 +36,8 @@ function mountDock(props: Partial<InstanceType<typeof ChatDock>['$props']> = {})
   });
 }
 
-/** Wie mountDock, aber mit aufgeklapptem Verlauf (der Anwender hat geklickt). */
-async function mountOpenDock(props: Partial<InstanceType<typeof ChatDock>['$props']> = {}) {
+/** Wie mountDock, aber mit zugeklapptem Verlauf (der Anwender hat geklickt). */
+async function mountClosedDock(props: Partial<InstanceType<typeof ChatDock>['$props']> = {}) {
   const wrapper = mountDock(props);
   await wrapper.get('.toggle').trigger('click');
   return wrapper;
@@ -83,15 +83,12 @@ describe('ChatDock', () => {
   });
 
   it('führt wartende Wünsche im Fortschritt mit auf', async () => {
-    const wrapper = await mountOpenDock({ busy: true, queued: 2 });
+    const wrapper = mountDock({ busy: true, queued: 2 });
     expect(wrapper.get('.activity').text()).toContain('2 weitere Wünsche warten.');
   });
 
-  it('klappt den Chatverlauf über den Umschalter auf', async () => {
+  it('zeigt den Verlauf, sobald er da ist — er wird ja eigens geöffnet', () => {
     const wrapper = mountDock({ messages });
-    expect(wrapper.find('.chat-panel').exists()).toBe(false);
-
-    await wrapper.get('.toggle').trigger('click');
 
     expect(wrapper.find('.chat-panel').exists()).toBe(true);
     expect(wrapper.text()).toContain('Ein Spiel');
@@ -100,8 +97,20 @@ describe('ChatDock', () => {
     expect(wrapper.findAll('.msg.assistant')).toHaveLength(1);
   });
 
+  it('klappt den Verlauf über den Umschalter zu und wieder auf', async () => {
+    const wrapper = mountDock({ messages });
+
+    await wrapper.get('.toggle').trigger('click');
+    expect(wrapper.find('.chat-panel').exists()).toBe(false);
+    // Die Eingabe bleibt — nur der Verlauf ist fort.
+    expect(wrapper.find('textarea').exists()).toBe(true);
+
+    await wrapper.get('.toggle').trigger('click');
+    expect(wrapper.find('.chat-panel').exists()).toBe(true);
+  });
+
   it('klappt automatisch auf, wenn das LLM eine Rückfrage stellt', async () => {
-    const wrapper = mountDock({ messages: [] });
+    const wrapper = await mountClosedDock();
     expect(wrapper.find('.chat-panel').exists()).toBe(false);
 
     await wrapper.setProps({ messages, pendingQuestion: 'Welche Art von Spiel?' });
@@ -111,8 +120,7 @@ describe('ChatDock', () => {
   });
 
   it('klappt beim Absenden NICHT von selbst auf — die Warteanzeige führt den Lauf vor', async () => {
-    const wrapper = mountDock();
-    expect(wrapper.find('.chat-panel').exists()).toBe(false);
+    const wrapper = await mountClosedDock();
 
     await wrapper.setProps({ busy: true, activity: [{ kind: 'think' }] });
     await flushPromises();
@@ -122,7 +130,6 @@ describe('ChatDock', () => {
 
   it('lässt einen aufgeklappten Verlauf während des Laufs aufgeklappt', async () => {
     const wrapper = mountDock();
-    await wrapper.get('.toggle').trigger('click');
     expect(wrapper.find('.chat-panel').exists()).toBe(true);
 
     await wrapper.setProps({ busy: true });
@@ -132,7 +139,7 @@ describe('ChatDock', () => {
   });
 
   it('zeigt im aufgeklappten Verlauf, was der Agent gerade tut', async () => {
-    const wrapper = await mountOpenDock({
+    const wrapper = mountDock({
       busy: true,
       activity: [
         { kind: 'start' },
@@ -150,7 +157,7 @@ describe('ChatDock', () => {
   });
 
   it('zeigt in der laufenden Zeile die Laufzeit mit', async () => {
-    const wrapper = await mountOpenDock({
+    const wrapper = mountDock({
       busy: true,
       startedAt: Date.now() - 65_000,
       activity: [{ kind: 'think' }],
@@ -163,14 +170,14 @@ describe('ChatDock', () => {
   });
 
   it('kommt ohne Startzeitpunkt aus (dann eben ohne Laufzeit)', async () => {
-    const wrapper = await mountOpenDock({ busy: true, activity: [{ kind: 'think' }] });
+    const wrapper = mountDock({ busy: true, activity: [{ kind: 'think' }] });
     await flushPromises();
 
     expect(wrapper.get('.step.running').text()).toContain('Der Agent arbeitet');
   });
 
   it('blendet den Fortschritt aus, sobald der Lauf vorbei ist', async () => {
-    const wrapper = await mountOpenDock({ busy: true, activity: [{ kind: 'write', path: 'src/index.html' }] });
+    const wrapper = mountDock({ busy: true, activity: [{ kind: 'write', path: 'src/index.html' }] });
     await flushPromises();
     expect(wrapper.find('.activity').exists()).toBe(true);
 
@@ -226,15 +233,12 @@ describe('ChatDock', () => {
       { role: 'user', text: 'Nutze die Vorlage', attachments: ['vorlage.png'], time: 1 },
     ];
     const wrapper = mountDock({ messages: withAtts });
-    await wrapper.get('.toggle').trigger('click');
     expect(wrapper.text()).toContain('vorlage.png');
   });
 
-  it('zeigt das aktive Ziel (Kontext-Label) an, wenn gesetzt', () => {
-    const wrapper = mountDock({ contextLabel: '🧮 Rechner' });
-    expect(wrapper.get('.chat-context').text()).toContain('Rechner');
-    const none = mountDock({ contextLabel: null });
-    expect(none.find('.chat-context').exists()).toBe(false);
+  it('zeigt kein Kontext-Kärtchen mehr — der Chat gehört sichtbar zu seinem Fenster', () => {
+    const wrapper = mountDock({ messages });
+    expect(wrapper.find('.chat-context').exists()).toBe(false);
   });
 
   it('rendert Antworten des LLM als Markdown-HTML ohne Sprechblase', async () => {
@@ -243,7 +247,6 @@ describe('ChatDock', () => {
       { role: 'assistant', text: 'Eine **wichtige** Frage:\n- Option A\n- Option B', time: 2 },
     ];
     const wrapper = mountDock({ messages: md });
-    await wrapper.get('.toggle').trigger('click');
 
     const assistant = wrapper.get('.msg.assistant');
     expect(assistant.classes()).toContain('md');
@@ -258,14 +261,28 @@ describe('ChatDock', () => {
   it('escapt HTML in LLM-Antworten (kein Markup aus dem Modell)', async () => {
     const evil: ChatMessage[] = [{ role: 'assistant', text: '<img src=x onerror=alert(1)>', time: 1 }];
     const wrapper = mountDock({ messages: evil });
-    await wrapper.get('.toggle').trigger('click');
     expect(wrapper.get('.msg.assistant').html()).not.toContain('<img');
   });
 
-  it('öffnet den aufgeklappten Verlauf als Overlay (verkleinert die App nicht)', async () => {
+  /*
+   * Der Verlauf legt sich nicht mehr selbst über etwas: Der Chat sitzt jetzt in
+   * seinem Fenster (WindowFrame) und dessen Composer-Leiste liegt als Ganzes
+   * über der App. Ein zweites Overlay hier würde nur aus dem Rahmen ragen.
+   */
+  it('zeigt den Verlauf im Fluss — das Überlagern übernimmt der Fensterrahmen', () => {
     const wrapper = mountDock({ messages });
-    await wrapper.get('.toggle').trigger('click');
-    expect(wrapper.get('.chat-panel').classes()).toContain('overlay');
+    expect(wrapper.get('.chat-panel').classes()).not.toContain('overlay');
+  });
+
+  it('nimmt beim Öffnen sofort Eingaben an (der Fokus liegt im Feld)', async () => {
+    const wrapper = mount(ChatDock, {
+      props: { busy: false, messages: [], pendingQuestion: null },
+      attachTo: document.body,
+    });
+    await flushPromises();
+
+    expect(document.activeElement).toBe(wrapper.get('textarea').element);
+    wrapper.unmount();
   });
 
   describe('Einfügen aus der Zwischenablage (Cmd/Ctrl+V)', () => {

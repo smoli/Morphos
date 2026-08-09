@@ -10,9 +10,10 @@
  *   und ⌘/Strg + M gehören dem Wirtsfenster von Electron — sie schlössen bzw.
  *   minimierten Morphos selbst. Die Fensterbefehle des Desktops tragen darum
  *   zusätzlich die Umschalttaste.
- * - Wo getippt wird, gilt kein Kürzel (siehe `isTypingTarget`): Weder die
- *   Promptleiste noch ein Eingabefeld noch eine laufende App im iframe soll
- *   Tastendrücke an die Schale verlieren.
+ * - Wo getippt wird, gilt kein Kürzel (siehe `isTypingTarget`): Weder der Chat
+ *   einer App noch ein Eingabefeld noch eine laufende App im iframe soll
+ *   Tastendrücke an die Schale verlieren. Escape ist die Ausnahme — es schließt
+ *   den Chat auch aus seinem Eingabefeld heraus (siehe views/DesktopView).
  */
 
 /** Was ein Kürzel auslöst. */
@@ -22,7 +23,8 @@ export type ShortcutId =
   | 'settings'
   | 'close-window'
   | 'minimize-window'
-  | 'maximize-window';
+  | 'maximize-window'
+  | 'composer';
 
 export interface Shortcut {
   id: ShortcutId;
@@ -43,6 +45,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { id: 'close-window', label: 'Fenster schließen', key: 'w', shift: true, keys: 'Strg/⌘ + ⇧ + W' },
   { id: 'minimize-window', label: 'Fenster minimieren', key: 'm', shift: true, keys: 'Strg/⌘ + ⇧ + M' },
   { id: 'maximize-window', label: 'Fenster maximieren / wiederherstellen', key: 'f', shift: true, keys: 'Strg/⌘ + ⇧ + F' },
+  { id: 'composer', label: 'Chat der App öffnen / schließen', key: 'c', shift: true, keys: 'Strg/⌘ + ⇧ + C' },
 ];
 
 /** Wie der Umschalter aufgerufen wird — fürs Anzeigen. */

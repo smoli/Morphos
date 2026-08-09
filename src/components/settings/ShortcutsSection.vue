@@ -10,8 +10,8 @@ import { SHORTCUTS, SWITCHER_KEYS } from '@/core/shortcuts';
   <section class="block">
     <h3>Tastenkürzel</h3>
     <p class="hint">
-      Die Kürzel gelten auf dem Desktop, solange nicht gerade in ein Feld getippt wird — weder die
-      Promptleiste noch eine laufende App verliert ihre Tastendrücke an die Schale.
+      Die Kürzel gelten auf dem Desktop, solange nicht gerade in ein Feld getippt wird — weder der
+      Chat einer App noch eine laufende App verliert ihre Tastendrücke an die Schale.
     </p>
     <ul class="keys">
       <li v-for="s in SHORTCUTS" :key="s.id">

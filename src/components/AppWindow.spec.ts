@@ -5,7 +5,9 @@ import AppWindow from './AppWindow.vue';
 import WelcomeScreen from './WelcomeScreen.vue';
 import IconDialog from './IconDialog.vue';
 import DocsPanel from './DocsPanel.vue';
+import ChatDock from './ChatDock.vue';
 import { useAppWindow } from '@/stores/app';
+import { useAgentsStore } from '@/stores/agents';
 import { useDesktopStore } from '@/stores/desktop';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { setHost } from '@/services/host';
@@ -337,6 +339,131 @@ describe('AppWindow', () => {
 
       expect(wrapper.find('.w-icon-btn').exists()).toBe(false);
       expect(wrapper.get('.w-icon').text()).toBe('🧩');
+    });
+  });
+
+  describe('Chat auf Zuruf (Composer)', () => {
+    /** Ein Entwurfsfenster — sein Chat steht von Anfang an offen. */
+    async function mountDraft(over: Partial<MorphosHost> = {}) {
+      setActivePinia(createPinia());
+      setHost(makeHost(over));
+      useWorkspaceStore().folder = '/apps';
+      const desktop = useDesktopStore();
+      const id = desktop.openDraft();
+      const win = desktop.windows.find((w) => w.instanceId === id)!;
+      const wrapper = mount(AppWindow, { props: { win } });
+      await flushPromises();
+      return { wrapper, desktop, win, store: useAppWindow(id) };
+    }
+
+    it('zeigt bei einer geöffneten App zunächst keinen Chat, nur den Knopf dafür', async () => {
+      const { wrapper } = await mountFrameForApp();
+      expect(wrapper.find('.w-composer').exists()).toBe(false);
+      expect(wrapper.find('.w-chat').exists()).toBe(true);
+    });
+
+    it('öffnet und schließt ihn über den 💬-Knopf der Titelleiste', async () => {
+      const { wrapper, win } = await mountFrameForApp();
+
+      await wrapper.get('.w-chat').trigger('click');
+      expect(wrapper.findComponent(ChatDock).exists()).toBe(true);
+      expect(useAppWindow(win.instanceId).composerOpen).toBe(true);
+
+      await wrapper.get('.w-chat').trigger('click');
+      expect(wrapper.findComponent(ChatDock).exists()).toBe(false);
+    });
+
+    it('trägt den Verlauf, die Anhänge und den Fortschritt DIESER App', async () => {
+      const { wrapper, win } = await mountFrameForApp({
+        loadApp: vi.fn(async () => appData({ chat: [{ role: 'user', text: 'Tasten blau', time: 1 }] })),
+      });
+      const store = useAppWindow(win.instanceId);
+      store.busy = true;
+      store.activity = [{ kind: 'tool', name: 'Read', detail: 'src/index.html' }];
+
+      await wrapper.get('.w-chat').trigger('click');
+
+      const dock = wrapper.getComponent(ChatDock);
+      expect(dock.props('messages')).toEqual(store.chat);
+      expect(dock.props('busy')).toBe(true);
+      expect(dock.text()).toContain('Tasten blau');
+      expect(dock.text()).toContain('Read: src/index.html');
+    });
+
+    it('schickt den Wunsch als Auftrag für dieses Fenster ab', async () => {
+      const { wrapper, win } = await mountFrameForApp();
+      const agents = useAgentsStore();
+      const spy = vi.spyOn(agents, 'submit').mockReturnValue('job-1');
+
+      await wrapper.get('.w-chat').trigger('click');
+      await wrapper.get('textarea').setValue('Mach die Tasten blau');
+      await wrapper.get('textarea').trigger('keydown', { key: 'Enter' });
+
+      expect(spy).toHaveBeenCalledWith(win.instanceId, 'Mach die Tasten blau', []);
+    });
+
+    it('bleibt nach dem Absenden offen (der Dialog geht weiter)', async () => {
+      const { wrapper, win } = await mountFrameForApp();
+      vi.spyOn(useAgentsStore(), 'submit').mockReturnValue('job-1');
+
+      await wrapper.get('.w-chat').trigger('click');
+      await wrapper.get('textarea').setValue('Mach die Tasten blau');
+      await wrapper.get('textarea').trigger('keydown', { key: 'Enter' });
+      await flushPromises();
+
+      expect(useAppWindow(win.instanceId).composerOpen).toBe(true);
+      expect(wrapper.findComponent(ChatDock).exists()).toBe(true);
+    });
+
+    it('schließt ihn mit Escape — auch aus dem Eingabefeld heraus', async () => {
+      const { wrapper, win } = await mountFrameForApp();
+      await wrapper.get('.w-chat').trigger('click');
+
+      await wrapper.get('textarea').trigger('keydown', { key: 'Escape' });
+
+      expect(useAppWindow(win.instanceId).composerOpen).toBe(false);
+      expect(wrapper.findComponent(ChatDock).exists()).toBe(false);
+    });
+
+    it('steht bei einer neuen App von Anfang an offen', async () => {
+      const { wrapper } = await mountDraft();
+      expect(wrapper.findComponent(ChatDock).exists()).toBe(true);
+    });
+
+    it('geht bei einer Rückfrage des LLM von selbst auf', async () => {
+      const { wrapper, win } = await mountFrameForApp();
+      expect(wrapper.findComponent(ChatDock).exists()).toBe(false);
+
+      const store = useAppWindow(win.instanceId);
+      store.pendingQuestion = 'Welche Farbe?';
+      store.openComposer();
+      await flushPromises();
+
+      expect(wrapper.findComponent(ChatDock).exists()).toBe(true);
+      expect(wrapper.getComponent(ChatDock).props('pendingQuestion')).toBe('Welche Farbe?');
+    });
+
+    it('zeigt bei geschlossenem Chat weiter an, dass ein Agent arbeitet', async () => {
+      const { wrapper, win } = await mountFrameForApp();
+      expect(wrapper.find('.w-busy').exists()).toBe(false);
+
+      useAgentsStore().jobs = [{
+        jobId: 'job-1', appKey: 'rechner-1', state: 'running', instanceId: win.instanceId,
+        appId: 'rechner-1', label: 'Rechner', prompt: 'Mach was', attachments: [], cancelled: false,
+      }];
+      await flushPromises();
+
+      expect(wrapper.find('.w-composer').exists()).toBe(false);
+      expect(wrapper.find('.w-busy').exists()).toBe(true);
+    });
+
+    it('hängt ihn im Einzel-Modus genauso an das Vollbild-Fenster', async () => {
+      const { wrapper } = await mountSingleFrame();
+
+      await wrapper.get('.w-chat').trigger('click');
+
+      expect(wrapper.get('.window-frame').classes()).toContain('full');
+      expect(wrapper.get('.w-composer').findComponent(ChatDock).exists()).toBe(true);
     });
   });
 

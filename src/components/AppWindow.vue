@@ -9,17 +9,20 @@ import { useElapsed } from '@/composables/useElapsed';
 import { useSetAppIcon } from '@/composables/useSetAppIcon';
 import WindowFrame from './WindowFrame.vue';
 import AppCanvas from './AppCanvas.vue';
+import ChatDock from './ChatDock.vue';
 import WelcomeScreen from './WelcomeScreen.vue';
 import HistoryList from './HistoryList.vue';
 import DocsPanel from './DocsPanel.vue';
 import AppIcon from './AppIcon.vue';
 import IconDialog from './IconDialog.vue';
+import { shortcutKeys } from '@/core/shortcuts';
 import type { DesktopWindow } from '@/stores/desktop';
 import type { Attachment } from '@/types';
 
 /**
  * Ein Fenster, das eine erzeugte App zeigt: der Instanz-Store, die App im
- * Canvas, Versionen, Dokumente und das Icon. Den Rahmen — Geometrie, Ziehen,
+ * Canvas, Versionen, Dokumente, das Icon — und der Chat zu dieser App, der auf
+ * Zuruf unten am Fenster erscheint. Den Rahmen — Geometrie, Ziehen,
  * Fensterknöpfe — stellt WindowFrame; hier liegt nur, was die App angeht.
  */
 const props = defineProps<{ win: DesktopWindow; single?: boolean }>();
@@ -78,11 +81,15 @@ function syncMeta(): void {
   if (store.id) desktop.setAppMeta(props.win.instanceId, store.id, store.name, store.icon);
 }
 
-// Der WelcomeScreen eines leeren Entwurfsfensters reicht seinen Wunsch in die
-// zentrale Warteschlange (wie die globale Promptleiste).
-function onWelcomePick(text: string, attachments: Attachment[] = []): void {
+// Jeder Wunsch dieses Fensters — aus dem Chat oder vom WelcomeScreen eines
+// leeren Entwurfs — geht in die zentrale Warteschlange (siehe stores/agents).
+function onPrompt(text: string, attachments: Attachment[] = []): void {
   agents.submit(props.win.instanceId, text, attachments);
 }
+
+const chatTitle = computed(
+  () => `${store.composerOpen ? 'Chat schließen' : 'Chat öffnen'} (${shortcutKeys('composer')})`,
+);
 
 // Versionen und Dokumente legen sich beide über die App — es liegt also stets
 // höchstens eine der beiden Ansichten oben.
@@ -128,6 +135,16 @@ async function onIcon(icon: string | null): Promise<void> {
 
     <template #actions>
       <button
+        type="button"
+        class="w-chat"
+        :class="{ on: store.composerOpen }"
+        :title="chatTitle"
+        @mousedown.stop
+        @click="store.toggleComposer()"
+      >
+        💬
+      </button>
+      <button
         v-if="!store.isDraft"
         type="button"
         class="w-docs"
@@ -149,13 +166,28 @@ async function onIcon(icon: string | null): Promise<void> {
       </button>
     </template>
 
+    <!-- Der Chat dieser App — nur, wenn er gerade offen steht. Escape schließt
+         ihn auch aus dem Eingabefeld heraus (dort gilt kein Tastenkürzel). -->
+    <template v-if="store.composerOpen" #composer>
+      <ChatDock
+        :busy="store.busy"
+        :messages="store.chat"
+        :pending-question="store.pendingQuestion"
+        :activity="store.activity"
+        :started-at="store.runStartedAt"
+        :queued="queuedHere"
+        @submit="onPrompt"
+        @keydown.esc.stop="store.closeComposer()"
+      />
+    </template>
+
     <AppCanvas
       v-if="store.hasApp"
       :html="store.currentHtml"
       :access-root="workspace.accessRoot"
       :authorize="workspace.authorizeFs"
     />
-    <WelcomeScreen v-else @pick="onWelcomePick" />
+    <WelcomeScreen v-else @pick="onPrompt" />
 
     <div v-if="store.busy || runningElsewhere" class="w-loading">
       <div class="spinner"></div>
@@ -291,11 +323,20 @@ async function onIcon(icon: string | null): Promise<void> {
   font-size: 12px;
   cursor: pointer;
 }
+/* Der 💬-Knopf zeigt, ob der Chat offen steht. */
+.w-chat.on {
+  border-color: var(--accent) !important;
+  color: var(--text) !important;
+}
+/*
+ * Die Meldung sitzt oben: Unten liegt der Chat, und gerade dann, wenn ein Lauf
+ * schiefgeht, will man beides gleichzeitig sehen.
+ */
 .w-error {
   position: absolute;
   left: 10px;
   right: 10px;
-  bottom: 10px;
+  top: 10px;
   background: rgba(40, 12, 12, 0.95);
   border: 1px solid var(--danger);
   color: #ffb3b3;

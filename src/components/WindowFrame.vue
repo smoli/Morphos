@@ -137,6 +137,12 @@ function stopInteraction(): void {
       <slot />
     </div>
 
+    <!-- Der Chat der App, wenn sie ihn gerade zeigt: eine Leiste am unteren
+         Rand DIESES Fensters, über der App statt neben ihr. -->
+    <footer v-if="$slots.composer" class="w-composer">
+      <slot name="composer" />
+    </footer>
+
     <div v-if="!full" class="resize-handle" title="Größe ändern" @mousedown.stop="startResize"></div>
   </section>
 </template>
@@ -245,10 +251,33 @@ function stopInteraction(): void {
 .w-busy {
   margin-right: 2px;
 }
+/*
+ * Die Composer-Leiste liegt ÜBER dem unteren Teil der App, statt sie zu
+ * verkleinern: Ein Fenster, das sich beim Aufklappen des Chats umbaut, wäre
+ * unruhig — und der Verlauf darin bekommt so eine Grenze, an der er rollt,
+ * statt aus dem Rahmen zu wachsen.
+ */
+.w-composer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  max-height: 60%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.45);
+}
+/* Der Griff bleibt greifbar, auch wenn die Composer-Leiste darunter liegt. */
 .resize-handle {
   position: absolute;
   right: 0;
   bottom: 0;
+  z-index: 7;
   width: 16px;
   height: 16px;
   cursor: nwse-resize;

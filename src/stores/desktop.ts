@@ -76,7 +76,7 @@ export const useDesktopStore = defineStore('desktop', {
     },
     /**
      * Das Fenster, das den Anwender gerade bedient — also `focusedId`, außer im
-     * Einzel-Modus, solange der Desktop davor liegt. Ziel der Promptleiste.
+     * Einzel-Modus, solange der Desktop davor liegt. Ziel der Fenster-Kürzel.
      */
     activeId(): string | null {
       if (this.showingDesktop && useWorkspaceStore().uiMode === 'single') return null;
@@ -84,8 +84,8 @@ export const useDesktopStore = defineStore('desktop', {
     },
     /**
      * Das aktive Fenster, sofern es eine App zeigt. Ein System-Fenster (der
-     * Explorer) nimmt keine Wünsche entgegen — die Promptleiste legt dann eine
-     * neue App an, statt an der Schale herumzuentwickeln.
+     * Explorer) nimmt keine Wünsche entgegen — es trägt gar keinen Chat, an der
+     * Schale wird nicht herumentwickelt.
      */
     activeAppId(): string | null {
       const id = this.activeId;

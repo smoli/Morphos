@@ -716,4 +716,65 @@ describe('useAppStore', () => {
     store.clearError();
     expect(store.error).toBeNull();
   });
+
+  describe('Chat auf Zuruf (Composer)', () => {
+    it('bleibt bei einer geöffneten App zunächst zu', async () => {
+      setHost(makeHost({
+        loadApp: vi.fn(async (): Promise<AppData> => ({
+          id: 'rechner-1', name: 'Rechner', icon: '🧮', createdAt: 1, updatedAt: 2,
+          files: FILES(DOC('calc')), html: DOC('calc'), chat: [],
+        })),
+      }));
+      const store = useAppStore();
+      expect(store.composerOpen).toBe(false);
+
+      await store.open('/apps', 'rechner-1');
+      expect(store.composerOpen).toBe(false);
+    });
+
+    it('öffnet und schließt ihn auf Zuruf', () => {
+      const store = useAppStore();
+      store.toggleComposer();
+      expect(store.composerOpen).toBe(true);
+      store.toggleComposer();
+      expect(store.composerOpen).toBe(false);
+
+      store.openComposer();
+      store.openComposer();
+      expect(store.composerOpen).toBe(true);
+      store.closeComposer();
+      expect(store.composerOpen).toBe(false);
+    });
+
+    it('steht bei einem neuen Entwurf von Anfang an offen (er hat noch nichts zu zeigen)', () => {
+      const store = useAppStore();
+      store.newDraft('/apps');
+      expect(store.composerOpen).toBe(true);
+    });
+
+    it('geht bei einer Rückfrage des LLM von selbst auf', async () => {
+      setHost(makeHost({
+        generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, say: 'Welche Art von Spiel?' })),
+      }));
+      const store = useAppStore();
+      store.newDraft('/apps');
+      store.closeComposer();
+
+      await store.generate('Ein Spiel');
+
+      expect(store.pendingQuestion).toBe('Welche Art von Spiel?');
+      expect(store.composerOpen).toBe(true);
+    });
+
+    it('geht ohne Rückfrage nicht von selbst auf (das führt die Warteanzeige vor)', async () => {
+      setHost(makeHost());
+      const store = useAppStore();
+      store.newDraft('/apps');
+      store.closeComposer();
+
+      await store.generate('Ein Rechner');
+
+      expect(store.composerOpen).toBe(false);
+    });
+  });
 });

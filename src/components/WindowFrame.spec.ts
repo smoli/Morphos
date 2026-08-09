@@ -101,6 +101,30 @@ describe('WindowFrame', () => {
     window.dispatchEvent(new MouseEvent('mouseup'));
   });
 
+  describe('Composer-Leiste am unteren Rand', () => {
+    it('hält den Rahmen frei, solange kein Aufsatz einen Chat mitbringt', () => {
+      const { wrapper } = mountFrame();
+      expect(wrapper.find('.w-composer').exists()).toBe(false);
+    });
+
+    it('hängt den Chat des Aufsatzes unten an das Fenster', () => {
+      const desktop = useDesktopStore();
+      const win = desktop.find(desktop.openSystem(EXPLORER_ID)!)!;
+      const wrapper = mount(WindowFrame, {
+        props: { win },
+        slots: {
+          default: '<div class="mein-inhalt">Inhalt</div>',
+          composer: '<div class="mein-chat">Chat</div>',
+        },
+      });
+
+      const bar = wrapper.get('.w-composer');
+      expect(bar.get('.mein-chat').text()).toBe('Chat');
+      // Er liegt im Rahmen, hinter dem Fensterkörper — nicht daneben.
+      expect(wrapper.get('.w-body').element.nextElementSibling).toBe(bar.element);
+    });
+  });
+
   it('zeigt im Einzel-Modus keine Fensterknöpfe und keinen Ziehgriff', () => {
     const { wrapper } = mountFrame({ single: true });
     expect(wrapper.find('.w-max').exists()).toBe(false);

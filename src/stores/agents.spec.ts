@@ -6,7 +6,6 @@ import { useWorkspaceStore } from './workspace';
 import { useAppWindow } from './app';
 import { useNotificationsStore } from './notifications';
 import { MAX_RECENT_RUNS } from '@/core/queue';
-import { EXPLORER_ID } from '@/core/system';
 import { setHost } from '@/services/host';
 import type { AppData, GenerateResult, MorphosHost, SourceFile } from '@/types';
 
@@ -411,66 +410,34 @@ describe('useAgentsStore', () => {
     });
   });
 
-  describe('Eingabe der globalen Promptleiste', () => {
-    it('legt ohne offenes Fenster einen Entwurf an und richtet den Titel ein', async () => {
+  describe('Eingabe aus dem Chat eines Fensters', () => {
+    it('führt den Wunsch dem Fenster zu, aus dem er kommt', async () => {
+      const slow = makeSlowHost();
+      setHost(slow.host);
+      const agents = useAgentsStore();
+      const desktop = useDesktopStore();
+      const a = openWindow('a-1', 'A');
+      openWindow('b-2', 'B'); // b liegt vorn — der Wunsch kommt trotzdem aus a
+
+      agents.submit(a, 'mach was');
+      await flush();
+
+      expect(desktop.windows).toHaveLength(2);
+      expect(agents.jobs[0].instanceId).toBe(a);
+    });
+
+    it('macht aus dem Entwurfsfenster eine benannte App', async () => {
       setHost(makeHost());
       const agents = useAgentsStore();
       const desktop = useDesktopStore();
+      const draft = openWindow(null);
 
-      agents.submitToActive('Ein Rechner');
+      agents.submit(draft, 'Ein Rechner');
       await flush();
 
       expect(desktop.windows).toHaveLength(1);
       expect(desktop.windows[0].appId).not.toBeNull();
       expect(desktop.windows[0].title).toBe('Rechner');
-    });
-
-    it('richtet die Eingabe an das aktive (fokussierte) Fenster', async () => {
-      const slow = makeSlowHost();
-      setHost(slow.host);
-      const agents = useAgentsStore();
-      const desktop = useDesktopStore();
-      openWindow('a-1', 'A');
-      const b = openWindow('b-2', 'B'); // b ist jetzt aktiv
-
-      agents.submitToActive('mach was');
-      await flush();
-
-      expect(desktop.windows).toHaveLength(2);
-      expect(agents.jobs[0].instanceId).toBe(b);
-    });
-
-    it('legt auf dem Desktop (Einzel-Modus) einen neuen Entwurf an', async () => {
-      setHost(makeHost());
-      const ws = useWorkspaceStore();
-      ws.uiMode = 'single';
-      const agents = useAgentsStore();
-      const desktop = useDesktopStore();
-      const a = openWindow('a-1', 'A');
-      desktop.showDesktop();
-
-      agents.submitToActive('Ein Rechner');
-      await flush();
-
-      expect(desktop.windows).toHaveLength(2);
-      expect(desktop.showingDesktop).toBe(false);
-      expect(desktop.activeId).not.toBe(a);
-    });
-
-    it('legt vor einem System-Fenster (Explorer) einen neuen Entwurf an', async () => {
-      setHost(makeHost());
-      const agents = useAgentsStore();
-      const desktop = useDesktopStore();
-      const explorer = desktop.openSystem(EXPLORER_ID)!;
-
-      agents.submitToActive('Ein Rechner');
-      await flush();
-
-      // Der Explorer bleibt, was er ist — der Wunsch wird eine eigene App.
-      expect(desktop.find(explorer)!.kind).toBe('system');
-      expect(desktop.windows).toHaveLength(2);
-      expect(agents.jobs[0]?.instanceId ?? desktop.activeId).not.toBe(explorer);
-      expect(desktop.windows.filter((w) => w.appId !== null)).toHaveLength(1);
     });
 
     it('nimmt keinen leeren Wunsch an', async () => {
@@ -487,10 +454,11 @@ describe('useAgentsStore', () => {
 
     it('braucht ein Arbeitsverzeichnis', async () => {
       setHost(makeHost());
-      useWorkspaceStore().folder = null;
       const agents = useAgentsStore();
+      const a = openWindow('a-1', 'A');
+      useWorkspaceStore().folder = null;
 
-      agents.submitToActive('Ein Rechner');
+      agents.submit(a, 'Ein Rechner');
       await flush();
 
       expect(agents.count).toBe(0);

@@ -46,6 +46,9 @@ describe('core/shortcuts', () => {
       expect(matchShortcut(press('w', { metaKey: true, shiftKey: true }))).toBe('close-window');
       expect(matchShortcut(press('m', { metaKey: true, shiftKey: true }))).toBe('minimize-window');
       expect(matchShortcut(press('f', { metaKey: true, shiftKey: true }))).toBe('maximize-window');
+      expect(matchShortcut(press('c', { metaKey: true, shiftKey: true }))).toBe('composer');
+      // ⌘C bleibt das Kopieren des Wirtsfensters.
+      expect(matchShortcut(press('c', { metaKey: true }))).toBeNull();
       // Ohne Umschalttaste gehören ⌘W/⌘M dem Wirtsfenster — wir fassen sie nicht an.
       expect(matchShortcut(press('w', { metaKey: true }))).toBeNull();
       expect(matchShortcut(press('m', { metaKey: true }))).toBeNull();
@@ -62,6 +65,7 @@ describe('core/shortcuts', () => {
     it('nennt zu jedem Kürzel seine Schreibweise', () => {
       expect(shortcutKeys('launcher')).toBe('Strg/⌘ + K');
       expect(shortcutKeys('close-window')).toBe('Strg/⌘ + ⇧ + W');
+      expect(shortcutKeys('composer')).toBe('Strg/⌘ + ⇧ + C');
     });
   });
 

@@ -34,6 +34,12 @@ interface AppState {
   chat: ChatMessage[];
   /** Offene Rückfrage des LLM — die Oberfläche klappt dann den Chat auf. */
   pendingQuestion: string | null;
+  /**
+   * Steht der Chat dieses Fensters offen? Er ist zunächst zu und geht auf
+   * Zuruf auf (💬 in der Titelleiste, Tastenkürzel) — sowie von selbst bei
+   * einem neuen Entwurf und bei einer Rückfrage des LLM.
+   */
+  composerOpen: boolean;
   /** Was der Agent im laufenden (bzw. zuletzt gelaufenen) Lauf getan hat. */
   activity: AgentEvent[];
   /** Beginn des laufenden Laufs (ms) — Grundlage der angezeigten Laufzeit; sonst null. */
@@ -70,6 +76,7 @@ export function useAppWindow(instanceId: string) {
     versions: [],
     chat: [],
     pendingQuestion: null,
+    composerOpen: false,
     activity: [],
     runStartedAt: null,
     runId: null,
@@ -93,10 +100,26 @@ export function useAppWindow(instanceId: string) {
       this.error = null;
     },
 
-    /** Beginnt eine neue, noch nicht gespeicherte App im gewählten Verzeichnis. */
+    /** Der Chat dieses Fensters — auf, zu, oder das eine wie das andere. */
+    openComposer(): void {
+      this.composerOpen = true;
+    },
+    closeComposer(): void {
+      this.composerOpen = false;
+    },
+    toggleComposer(): void {
+      this.composerOpen = !this.composerOpen;
+    },
+
+    /**
+     * Beginnt eine neue, noch nicht gespeicherte App im gewählten Verzeichnis.
+     * Ihr Chat steht dabei sofort offen: Ein Entwurf hat noch nichts zu zeigen —
+     * das Einzige, was hier zu tun ist, ist zu beschreiben, was er werden soll.
+     */
     newDraft(folder: string): void {
       this.$reset();
       this.folder = folder;
+      this.composerOpen = true;
     },
 
     /**
@@ -241,8 +264,11 @@ export function useAppWindow(instanceId: string) {
           await this.loadVersions();
         } else if (res.say) {
           // Reine Rückfrage: kein neuer Stand, der Chat wartet auf die Antwort.
+          // Er geht dafür von selbst auf — eine übersehene Frage bliebe sonst
+          // unbeantwortet stehen, und der Lauf käme nie zum Ende.
           this.chat.push({ role: 'assistant', text: res.say, time: Date.now() });
           this.pendingQuestion = res.say;
+          this.composerOpen = true;
         }
 
         await this.persistChat();

@@ -1,21 +1,22 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { getHost } from '@/services/host';
 import { agentEventIcon, agentEventLabel } from '@/core/agent';
 import { useElapsed } from '@/composables/useElapsed';
 import { renderMarkdown } from '@/core/markdown';
-import AppIcon from './AppIcon.vue';
 import type { AgentEvent, Attachment, ChatMessage } from '@/types';
 
+/**
+ * Der Chat einer App: Verlauf, Eingabe, Anhänge und der Fortschritt des
+ * laufenden Laufs. Er wird eigens geöffnet (siehe components/AppWindow) und
+ * gehört sichtbar zum Fenster seiner App — ein Kontext-Kärtchen, das das Ziel
+ * benennt, braucht es darum nicht mehr.
+ */
 const props = defineProps<{
   busy: boolean;
   messages: ChatMessage[];
   /** Offene Rückfrage des LLM — klappt den Verlauf automatisch auf. */
   pendingQuestion: string | null;
-  /** Name der App, an die die Eingabe geht (zeigt dem Anwender das Ziel an). */
-  contextLabel?: string | null;
-  /** Ihr Icon — als eigener Wert, denn ein Bild-Icon passt in keinen Text. */
-  contextIcon?: string | null;
   /** Live-Fortschritt des laufenden Laufs (was der Agent gerade tut). */
   activity?: AgentEvent[];
   /** Beginn des laufenden Laufs (ms) — daraus wächst die angezeigte Laufzeit. */
@@ -27,10 +28,13 @@ const props = defineProps<{
 const emit = defineEmits<{ submit: [text: string, attachments: Attachment[]] }>();
 
 const text = ref('');
-const open = ref(false);
+// Wer den Chat öffnet, will ihn sehen: Der Verlauf steht von Anfang an offen
+// und lässt sich auf die reine Eingabezeile zuklappen.
+const open = ref(true);
 const attachments = ref<Attachment[]>([]);
 const attachError = ref<string | null>(null);
 const panel = ref<HTMLElement | null>(null);
+const input = ref<HTMLTextAreaElement | null>(null);
 
 // ---- Eigenes Chat-Fenster (Portal): dasselbe Vue-Kontextfenster rendert per
 // Teleport in ein about:blank-Kindfenster. Es gibt KEINEN zweiten Renderer
@@ -69,6 +73,12 @@ function scrollDown(): void {
     if (panel.value) panel.value.scrollTop = panel.value.scrollHeight;
   });
 }
+
+// Der Chat erscheint auf Zuruf — dann soll auch gleich getippt werden können.
+onMounted(() => {
+  void nextTick(() => input.value?.focus());
+  scrollDown();
+});
 
 // Rückfrage des LLM → Verlauf zeigen: gedockt aufklappen, im Fenster fokussieren.
 watch(() => props.pendingQuestion, (q) => {
@@ -211,7 +221,7 @@ function fmt(ts: number): string {
 
     <Teleport :key="placeKey" :to="teleportTarget" :disabled="!popped">
       <div class="chat-ui" :class="popped ? 'windowed' : 'docked'">
-        <div v-if="popped || open" ref="panel" class="chat-panel" :class="{ overlay: !popped }">
+        <div v-if="popped || open" ref="panel" class="chat-panel">
           <p v-if="messages.length === 0" class="empty">Noch kein Dialog — beschreibe unten, was die App können soll.</p>
           <template v-for="(msg, i) in messages" :key="i">
             <!-- eslint-disable-next-line vue/no-v-html — renderMarkdown escapt sämtliches HTML zuerst -->
@@ -246,12 +256,6 @@ function fmt(ts: number): string {
           </div>
         </div>
 
-            <div v-if="contextLabel" class="chat-context" :title="`Deine Eingabe geht an: ${contextLabel}`">
-          <span class="ctx-dot"></span>
-          <AppIcon v-if="contextIcon" class="ctx-icon" :icon="contextIcon" :size="14" />
-          <span class="ctx-name">{{ contextLabel }}</span>
-        </div>
-
         <div v-if="attachments.length" class="chips">
           <span v-for="a in attachments" :key="a.path" class="chip" :title="a.path">
             {{ a.kind === 'image' ? '🖼' : '📄' }} {{ a.name }}
@@ -283,11 +287,13 @@ function fmt(ts: number): string {
             📎
           </button>
           <textarea
+            ref="input"
             v-model="text"
             :rows="rows"
             :placeholder="busy
-              ? 'Der Agent arbeitet — dein nächster Wunsch reiht sich ein.'
-              : 'Was soll die App sein oder können? (Enter sendet, Shift+Enter neue Zeile, Bild einfügen mit Cmd/Ctrl+V)'"
+              ? 'Der Agent arbeitet — dein Wunsch reiht sich ein.'
+              : 'Was soll die App können? (Enter sendet)'"
+            title="Enter sendet, Shift+Enter macht eine neue Zeile, Cmd/Ctrl+V fügt ein Bild als Referenz an."
             @keydown="onKeydown"
             @paste="onPaste"
           ></textarea>
@@ -301,14 +307,25 @@ function fmt(ts: number): string {
 </template>
 
 <style scoped>
+/*
+ * Gedockt füllt der Chat die Composer-Leiste seines Fensters: Der Verlauf nimmt
+ * sich, was übrig bleibt, und rollt in sich — der Rahmen begrenzt die Höhe
+ * (siehe components/WindowFrame, .w-composer).
+ */
 .chatdock {
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 .chat-ui.docked {
-  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
+}
+.chat-ui.docked .chat-panel {
+  flex: 1;
+  min-height: 0;
 }
 /* Im eigenen Fenster füllt der Chat die ganze Fläche. */
 .chat-ui.windowed {
@@ -333,16 +350,6 @@ function fmt(ts: number): string {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-/* Gedockt liegt der Verlauf ÜBER der App (Overlay) statt sie zu verkleinern. */
-.chat-panel.overlay {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(100% + 10px);
-  max-height: 48vh;
-  z-index: 30;
-  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.45);
 }
 .windowed-hint {
   display: flex;
@@ -477,32 +484,6 @@ function fmt(ts: number): string {
   font-size: 10px;
   opacity: 0.7;
   margin-top: 4px;
-}
-.chat-context {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  align-self: flex-start;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 3px 12px 3px 10px;
-  font-size: 12px;
-  color: var(--muted);
-  max-width: 100%;
-}
-.ctx-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex-shrink: 0;
-}
-.ctx-name {
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .chips {
   display: flex;

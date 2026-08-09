@@ -7,7 +7,6 @@ import { useAppWindow } from '@/stores/app';
 import { useSetAppIcon } from '@/composables/useSetAppIcon';
 import AppWindow from '@/components/AppWindow.vue';
 import SystemWindow from '@/components/SystemWindow.vue';
-import ChatDock from '@/components/ChatDock.vue';
 import BusyDot from '@/components/BusyDot.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import IconDialog from '@/components/IconDialog.vue';
@@ -41,7 +40,7 @@ import {
   TILE_W,
   type Bounds,
 } from '@/core/arrange';
-import type { AppSummary, Attachment, IconPos } from '@/types';
+import type { AppSummary, IconPos } from '@/types';
 
 const workspace = useWorkspaceStore();
 const desktop = useDesktopStore();
@@ -57,12 +56,6 @@ const activeWindow = computed(() =>
   desktop.windows.find((w) => w.instanceId === desktop.activeId) ?? null,
 );
 
-// Das aktive Fenster, sofern es eine App zeigt: Ziel der globalen Promptleiste.
-// Vor einem System-Fenster (Explorer) entsteht ein Wunsch als neue App.
-const activeAppWindow = computed(() =>
-  desktop.windows.find((w) => w.instanceId === desktop.activeAppId) ?? null,
-);
-
 /** Womit ein Fenster gezeichnet wird — eine erzeugte App oder eine Ansicht der Schale. */
 function surfaceFor(w: DesktopWindow) {
   return w.kind === 'system' ? SystemWindow : AppWindow;
@@ -76,39 +69,25 @@ const dockWindows = computed(() => {
   return activeWindow.value ? [] : desktop.windows;
 });
 
-// Die globale Promptleiste ist an das aktive App-Fenster gebunden.
-const activeStore = computed(() => (desktop.activeAppId ? useAppWindow(desktop.activeAppId) : null));
-const chatMessages = computed(() => activeStore.value?.chat ?? []);
-const chatBusy = computed(() => activeStore.value?.busy ?? false);
-const chatPending = computed(() => activeStore.value?.pendingQuestion ?? null);
-const chatActivity = computed(() => activeStore.value?.activity ?? []);
-const chatStartedAt = computed(() => activeStore.value?.runStartedAt ?? null);
-// Wie viele Wünsche für das aktive Fenster noch anstehen (sie laufen nacheinander).
-const chatQueued = computed(() =>
-  desktop.activeAppId
-    ? agents.queuedJobs.filter((j) => j.instanceId === desktop.activeAppId).length
-    : 0,
-);
-
 /** Arbeitet ein Agent für dieses Fenster (bzw. für die App, die es zeigt)? */
 function windowBusy(instanceId: string, appId: string | null): boolean {
   return agents.isWindowBusy(instanceId, appId);
 }
 
-// Anzeigen, an welche App die Eingabe geht (Gewissheit für den Anwender). Ohne
-// aktives Fenster entsteht eine neue App. Im Einzel-Modus zeigt die laufende
-// App ihren Namen bereits in der Kopfzeile — dort genügt der Hinweis auf dem
-// Desktop.
-const chatContext = computed<string | null>(() => {
-  const w = activeAppWindow.value;
-  if (singleMode.value) return w ? null : 'Neue App';
-  return w ? w.title : 'Neue App';
-});
-// Das Icon separat: Es kann ein Bild sein und lässt sich dann nicht in den Text setzen.
-const chatContextIcon = computed<string | null>(() => {
-  if (singleMode.value) return null;
-  return activeAppWindow.value?.icon ?? null;
-});
+/**
+ * Der Chat gehört dem Fenster, nicht dem Desktop (siehe components/AppWindow) —
+ * hier gibt es nur die beiden Wege, die von außen kommen: das Tastenkürzel des
+ * aktiven Fensters und Escape.
+ */
+const activeStore = computed(() => (desktop.activeAppId ? useAppWindow(desktop.activeAppId) : null));
+
+/** Escape schließt den offenen Chat des aktiven Fensters. Meldet, ob es einen gab. */
+function closeActiveComposer(): boolean {
+  const store = activeStore.value;
+  if (!store?.composerOpen) return false;
+  store.closeComposer();
+  return true;
+}
 
 // ---- Anordnung der Kacheln (frei abgelegt, sonst Raster — siehe core/arrange) ----
 
@@ -198,8 +177,8 @@ function tidy(): void {
   workspace.resetIconPositions();
 }
 
-// Die Fläche ändert sich nicht nur mit dem Fenster (auch die Promptleiste
-// wächst), darum beobachten wir sie, wo der Browser es anbietet.
+// Die Fläche ändert sich nicht nur mit dem Programmfenster, darum beobachten
+// wir sie, wo der Browser es anbietet.
 let observer: ResizeObserver | null = null;
 
 onMounted(async () => {
@@ -265,7 +244,13 @@ function onKeyDown(e: KeyboardEvent): void {
     closeSwitcher();
     return;
   }
-  // Wo getippt wird (Promptleiste, Suchfeld, laufende App), gilt kein Kürzel.
+  // Escape schließt den Chat des aktiven Fensters — auch aus seinem Eingabefeld
+  // heraus. Ist das Startmenü offen, gehört Escape zuerst ihm.
+  if (e.key === 'Escape' && !searchOpen.value && closeActiveComposer()) {
+    e.preventDefault();
+    return;
+  }
+  // Wo getippt wird (Chat, Suchfeld, laufende App), gilt kein Kürzel.
   if (isTypingTarget(e.target) || isTypingTarget(document.activeElement)) return;
 
   if (isSwitcherChord(e)) {
@@ -304,6 +289,10 @@ function runShortcut(id: ShortcutId): void {
       break;
     case 'maximize-window':
       if (active) desktop.toggleMaximize(active);
+      break;
+    case 'composer':
+      // Ohne App im Vordergrund gibt es nichts zu bereden — dafür gibt es „Neue App“.
+      activeStore.value?.toggleComposer();
       break;
   }
 }
@@ -358,10 +347,6 @@ function systemFromSearch(systemId: string): void {
 function newFromSearch(): void {
   searchOpen.value = false;
   newApp();
-}
-
-function onPrompt(text: string, attachments: Attachment[] = []): void {
-  agents.submitToActive(text, attachments);
 }
 
 // ---- Icon einer App ändern (Dialog von der Kachel aus) ----
@@ -507,8 +492,8 @@ function onMenuPick(id: string): void {
             <BusyDot v-if="agents.isBusy(app.id)" class="tile-busy" />
           </div>
           <p v-if="!workspace.loading && workspace.apps.length === 0" class="hint" :style="{ top: hintTop }">
-            Noch keine Apps in diesem Verzeichnis. Beschreibe unten, was deine erste App sein soll —
-            oder öffne „Neue App“.
+            Noch keine Apps in diesem Verzeichnis. Öffne „Neue App“ — im Chat des neuen Fensters
+            beschreibst du dann, was deine erste App sein soll.
           </p>
         </div>
       </div>
@@ -572,22 +557,6 @@ function onMenuPick(id: string): void {
       </div>
     </div>
 
-    <!-- Globale Promptleiste — immer für das aktive Fenster. -->
-    <footer class="prompt-wrap">
-      <div v-if="activeStore?.error" class="error">{{ activeStore.error }}</div>
-      <ChatDock
-        :busy="chatBusy"
-        :messages="chatMessages"
-        :pending-question="chatPending"
-        :context-label="chatContext"
-        :context-icon="chatContextIcon"
-        :activity="chatActivity"
-        :started-at="chatStartedAt"
-        :queued="chatQueued"
-        @submit="onPrompt"
-      />
-    </footer>
-
     <IconDialog
       v-if="iconApp"
       :name="iconApp.name"
@@ -610,13 +579,16 @@ function onMenuPick(id: string): void {
 </template>
 
 <style scoped>
+/* Die Fläche gehört ganz dem Desktop — der Chat sitzt in seinem Fenster. */
 .desktop {
-  display: grid;
-  grid-template-rows: 1fr auto;
+  display: flex;
+  flex-direction: column;
   height: 100%;
 }
 .stage {
   position: relative;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 /* Der gewählte Hintergrund — hinter Kacheln und Fenstern, ohne sie zu stören. */
@@ -788,20 +760,5 @@ function onMenuPick(id: string): void {
   max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.prompt-wrap {
-  border-top: 1px solid var(--border);
-  background: var(--panel);
-  padding: 12px 16px;
-}
-.error {
-  background: rgba(255, 108, 108, 0.12);
-  border: 1px solid var(--danger);
-  color: #ffb3b3;
-  padding: 10px 14px;
-  border-radius: 10px;
-  margin-bottom: 10px;
-  font-size: 13px;
-  white-space: pre-wrap;
 }
 </style>

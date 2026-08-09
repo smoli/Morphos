@@ -95,8 +95,9 @@ export const useAgentsStore = defineStore('agents', {
 
   actions: {
     /**
-     * Nimmt einen Wunsch für ein Fenster entgegen. Er startet sofort, wenn ein
-     * Platz frei ist und für die App gerade kein Agent arbeitet — sonst wartet er.
+     * Nimmt einen Wunsch für ein Fenster entgegen — er kommt aus dem Chat dieses
+     * Fensters (siehe components/AppWindow). Er startet sofort, wenn ein Platz
+     * frei ist und für die App gerade kein Agent arbeitet — sonst wartet er.
      * Liefert die Auftrags-Id (oder null, wenn nichts anzunehmen war).
      */
     submit(instanceId: string, prompt: string, attachments: Attachment[] = []): string | null {
@@ -122,23 +123,6 @@ export const useAgentsStore = defineStore('agents', {
       this.jobs.push(job);
       this.pump();
       return job.jobId;
-    },
-
-    /**
-     * Nimmt eine Eingabe der globalen Promptleiste entgegen und richtet sie an
-     * das aktive App-Fenster. Ist keines offen — oder liegt eine Ansicht der
-     * Schale vorn, die keine Wünsche entgegennimmt —, entsteht ein neuer Entwurf.
-     */
-    submitToActive(text: string, attachments: Attachment[] = []): string | null {
-      const ws = useWorkspaceStore();
-      if (!ws.folder) return null;
-      const desktop = useDesktopStore();
-      let id = desktop.activeAppId;
-      if (!id) {
-        id = desktop.openDraft();
-        useAppWindow(id).newDraft(ws.folder);
-      }
-      return this.submit(id, text, attachments);
     },
 
     /**

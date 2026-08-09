@@ -201,7 +201,7 @@ describe('useDesktopStore', () => {
       expect(d.windows.map((w) => w.instanceId)).toEqual([app]);
     });
 
-    it('nimmt keine Wünsche entgegen — die Promptleiste zielt auf App-Fenster', () => {
+    it('nimmt keine Wünsche entgegen — nur ein App-Fenster ist aktiv im Sinne des Chats', () => {
       const d = useDesktopStore();
       const app = d.openApp('a', { title: 'A', icon: '🅰' });
       expect(d.activeAppId).toBe(app);

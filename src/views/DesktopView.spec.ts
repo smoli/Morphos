@@ -234,24 +234,78 @@ describe('DesktopView', () => {
     });
   });
 
-  it('richtet die globale Promptleiste an das aktive Fenster (Entwurf, wenn keins offen)', async () => {
-    const { wrapper } = await mountView();
-    const spy = vi.spyOn(useAgentsStore(), 'submitToActive').mockReturnValue('job-1');
+  describe('Chat auf Zuruf statt Promptleiste', () => {
+    it('hat keine feste Promptleiste mehr — der Desktop trägt keine Eingabe', async () => {
+      const { wrapper } = await mountView();
+      expect(wrapper.find('.prompt-wrap').exists()).toBe(false);
+      expect(wrapper.find('textarea').exists()).toBe(false);
+      expect(wrapper.find('.chat-context').exists()).toBe(false);
+    });
 
-    // ChatDock unten absenden.
-    await wrapper.get('textarea').setValue('Ein Spiel');
-    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' });
+    it('öffnet den Chat des aktiven Fensters per Tastenkürzel und schließt ihn wieder', async () => {
+      setHost(makeHost({ loadApp: vi.fn(async () => rechnerData) }));
+      const { wrapper } = await mountView();
+      const instanceId = useDesktopStore().openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await flushPromises();
+      expect(wrapper.find('.w-composer').exists()).toBe(false);
 
-    expect(spy).toHaveBeenCalledWith('Ein Spiel', []);
-  });
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'C', metaKey: true, shiftKey: true }));
+      await flushPromises();
 
-  it('zeigt im Fenster-Modus den Namen der aktiven App an der Promptleiste', async () => {
-    const { wrapper } = await mountView();
-    const desktop = useDesktopStore();
-    desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
-    await flushPromises();
-    expect(wrapper.get('.chat-context').text()).toContain('Rechner');
-    expect(wrapper.get('.chat-context').text()).toContain('🧮');
+      expect(useAppWindow(instanceId).composerOpen).toBe(true);
+      expect(wrapper.get('.w-composer').find('textarea').exists()).toBe(true);
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'C', metaKey: true, shiftKey: true }));
+      await flushPromises();
+      expect(wrapper.find('.w-composer').exists()).toBe(false);
+    });
+
+    it('schließt ihn mit Escape', async () => {
+      setHost(makeHost({ loadApp: vi.fn(async () => rechnerData) }));
+      const { wrapper } = await mountView();
+      const instanceId = useDesktopStore().openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await flushPromises();
+      useAppWindow(instanceId).openComposer();
+      await flushPromises();
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      await flushPromises();
+
+      expect(useAppWindow(instanceId).composerOpen).toBe(false);
+      expect(wrapper.find('.w-composer').exists()).toBe(false);
+    });
+
+    it('greift ohne App im Vordergrund ins Leere (statt irgendwo aufzugehen)', async () => {
+      const { wrapper } = await mountView();
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'C', metaKey: true, shiftKey: true }));
+      await flushPromises();
+      expect(wrapper.find('.w-composer').exists()).toBe(false);
+    });
+
+    it('öffnet eine neue App mit offenem Chat', async () => {
+      const { wrapper } = await mountView();
+
+      await wrapper.get('.tile.new').trigger('click');
+      await flushPromises();
+
+      const instanceId = useDesktopStore().windows[0].instanceId;
+      expect(useAppWindow(instanceId).composerOpen).toBe(true);
+      expect(wrapper.get('.w-composer').find('textarea').exists()).toBe(true);
+    });
+
+    it('schickt den Wunsch aus dem Chat an das Fenster, an dem er hängt', async () => {
+      const { wrapper } = await mountView();
+      const spy = vi.spyOn(useAgentsStore(), 'submit').mockReturnValue('job-1');
+
+      await wrapper.get('.tile.new').trigger('click');
+      await flushPromises();
+      const instanceId = useDesktopStore().windows[0].instanceId;
+
+      await wrapper.get('.w-composer textarea').setValue('Ein Spiel');
+      await wrapper.get('.w-composer textarea').trigger('keydown', { key: 'Enter' });
+
+      expect(spy).toHaveBeenCalledWith(instanceId, 'Ein Spiel', []);
+    });
   });
 
   describe('Icon einer App', () => {
@@ -270,9 +324,10 @@ describe('DesktopView', () => {
       expect(entry.text()).not.toContain('🎨');
     });
 
-    it('zeigt ein Bild-Icon als Bild — auf der Kachel und an der Promptleiste', async () => {
+    it('zeigt ein Bild-Icon als Bild — auf der Kachel und in der Titelleiste', async () => {
       setHost(makeHost({
         listApps: vi.fn(async () => [{ ...apps[0], icon: IMAGE_ICON, iconCustom: true }, apps[1]]),
+        loadApp: vi.fn(async () => ({ ...rechnerData, icon: IMAGE_ICON, iconCustom: true })),
       }));
       const { wrapper } = await mountView();
       useDesktopStore().openApp('rechner-1', { title: 'Rechner', icon: IMAGE_ICON });
@@ -280,7 +335,7 @@ describe('DesktopView', () => {
 
       const tile = wrapper.findAll('.tile-wrap').find((t) => t.text().includes('Rechner'))!;
       expect(tile.get('.tile img').attributes('src')).toBe(IMAGE_ICON);
-      expect(wrapper.get('.chat-context img').attributes('src')).toBe(IMAGE_ICON);
+      expect(wrapper.get('.w-icon img').attributes('src')).toBe(IMAGE_ICON);
     });
 
     it('setzt das Icon einer geschlossenen App und zieht die Kachel nach', async () => {
@@ -850,11 +905,17 @@ describe('DesktopView', () => {
       wrapper.unmount();
     });
 
-    it('rührt sich nicht, während in der Promptleiste getippt wird', async () => {
+    it('rührt sich nicht, während im Chat eines Fensters getippt wird', async () => {
       const { wrapper } = await mountView({ attach: true });
-      await pressOn(wrapper.get('textarea').element, 'n', { ctrlKey: true });
-      await pressOn(wrapper.get('textarea').element, 'k', { ctrlKey: true });
-      expect(useDesktopStore().windows).toHaveLength(0);
+      // Ein Entwurfsfenster bringt seinen Chat offen mit.
+      await wrapper.get('.tile.new').trigger('click');
+      await flushPromises();
+      const input = wrapper.get('.w-composer textarea').element;
+
+      await pressOn(input, 'n', { ctrlKey: true });
+      await pressOn(input, 'k', { ctrlKey: true });
+
+      expect(useDesktopStore().windows).toHaveLength(1); // nur der Entwurf von eben
       expect(wrapper.findComponent(LauncherOverlay).exists()).toBe(false);
       wrapper.unmount();
     });
@@ -988,12 +1049,14 @@ describe('DesktopView', () => {
       expect(desktop.focusedId).toBe(ids[0]);
     });
 
-    it('bleibt still, während in der Promptleiste getippt wird', async () => {
+    it('bleibt still, während im Chat eines Fensters getippt wird', async () => {
       const { wrapper } = await mountView({ attach: true });
-      await withWindows(2);
+      const { ids } = await withWindows(2);
+      useAppWindow(ids[1]).openComposer();
+      await flushPromises();
 
       wrapper
-        .get('textarea')
+        .get('.w-composer textarea')
         .element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true, bubbles: true }));
       await flushPromises();
 
@@ -1118,17 +1181,17 @@ describe('DesktopView', () => {
       expect(wrapper.get('.dock').text()).toContain('Dateien');
     });
 
-    it('nimmt keine Wünsche entgegen — die Promptleiste legt eine neue App an', async () => {
+    it('nimmt keine Wünsche entgegen — er trägt keinen Chat', async () => {
       const { wrapper } = await mountView();
       await openExplorer(wrapper);
-      const spy = vi.spyOn(useAgentsStore(), 'submitToActive').mockReturnValue('job-1');
 
       expect(useDesktopStore().activeAppId).toBeNull();
-      expect(wrapper.get('.chat-context').text()).toContain('Neue App');
+      expect(wrapper.find('.w-chat').exists()).toBe(false);
 
-      await wrapper.get('textarea').setValue('Ein Spiel');
-      await wrapper.get('textarea').trigger('keydown', { key: 'Enter' });
-      expect(spy).toHaveBeenCalledWith('Ein Spiel', []);
+      // Auch das Tastenkürzel öffnet vor dem Explorer keinen Chat.
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'C', metaKey: true, shiftKey: true }));
+      await flushPromises();
+      expect(wrapper.find('.w-composer').exists()).toBe(false);
     });
 
     it('wird nicht in der Sitzung gemerkt (nur Apps kommen zurück)', async () => {
@@ -1138,16 +1201,23 @@ describe('DesktopView', () => {
     });
   });
 
-  it('meldet an der Promptleiste, dass auf dem Desktop eine neue App entsteht', async () => {
+  it('hängt den Chat im Einzel-Modus an die Vollbild-App', async () => {
     useWorkspaceStore().uiMode = 'single';
+    setHost(makeHost({ loadApp: vi.fn(async () => rechnerData) }));
     const { wrapper } = await mountView();
     const desktop = useDesktopStore();
-    desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+    const instanceId = desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
     await flushPromises();
-    expect(wrapper.find('.chat-context').exists()).toBe(false);
 
+    await wrapper.get('.w-chat').trigger('click');
+
+    expect(useAppWindow(instanceId).composerOpen).toBe(true);
+    expect(wrapper.get('.window-frame').classes()).toContain('full');
+    expect(wrapper.get('.w-composer').find('textarea').exists()).toBe(true);
+
+    // Auf dem Desktop selbst gibt es keine Eingabe mehr.
     await wrapper.get('.w-desktop').trigger('click');
     await flushPromises();
-    expect(wrapper.get('.chat-context').text()).toContain('Neue App');
+    expect(wrapper.find('textarea').exists()).toBe(false);
   });
 });
