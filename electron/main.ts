@@ -86,6 +86,44 @@ function libCacheDir(): string {
   return path.join(app.getPath('userData'), 'lib-cache');
 }
 
+// TRYOUT (e10, Preact-Variante): eingebaute UI-Bibliothek Preact + htm. CSP-sauber
+// — htm ist ein Tagged-Template-PARSER (kein eval) und braucht keinen Bündel-
+// Schritt, die strikte CSP bleibt also unangetastet. Eine App fordert sie über
+// <meta name="morphos:lib" content="preact"> an; eingebettet werden die vendored
+// UMD-Builds aus node_modules plus etwas Kleber (window.html = htm.bind(preact.h)).
+// Globale danach: preact, preactHooks, html.
+const BUILTIN_LIB_FILES: Record<string, string[]> = {
+  preact: [
+    'preact/dist/preact.umd.js',
+    'preact/hooks/dist/hooks.umd.js',
+    'htm/dist/htm.umd.js',
+  ],
+};
+const BUILTIN_LIB_GLUE: Record<string, string> = {
+  preact: '\n;window.html = htm.bind(preact.h);\n',
+};
+
+function readBuiltinLib(name: string): string | null {
+  const files = BUILTIN_LIB_FILES[name];
+  if (!files) return null;
+  const parts: string[] = [];
+  for (const rel of files) {
+    let src: string | null = null;
+    for (const base of [process.cwd(), path.join(__dirname, '..'), path.join(__dirname, '../..')]) {
+      try {
+        src = fs.readFileSync(path.join(base, 'node_modules', rel), 'utf8');
+        break;
+      } catch {
+        /* nächster Ort */
+      }
+    }
+    if (src === null) return null;
+    parts.push(src);
+  }
+  parts.push(BUILTIN_LIB_GLUE[name] ?? '');
+  return parts.join('\n');
+}
+
 /** Liest die gespeicherten Einstellungen; bei Fehlern die leere Vorgabe. */
 function readSettings(): Settings {
   try {
@@ -357,10 +395,24 @@ async function generate(
     return { ok: false, error: 'Die App hat kein gültiges src/index.html. Bitte den Wunsch anders formulieren.' };
   }
 
-  const libRes = await resolveLibs(extractLibs(entry.content), whitelist, libCacheDir());
-  if (!libRes.ok) return libRes;
+  // Eingebaute Bibliotheken (Preact) vor der Whitelist abfangen und aus
+  // node_modules einbetten; der Rest läuft über die freigegebenen Quellen.
+  const requested = extractLibs(entry.content);
+  const builtinNames = requested.filter((n) => n in BUILTIN_LIB_FILES);
+  const externalUrls = requested.filter((n) => !(n in BUILTIN_LIB_FILES));
 
-  const html = bundle(files, libRes.libs);
+  const libs: Record<string, string> = {};
+  for (const name of builtinNames) {
+    const src = readBuiltinLib(name);
+    if (!src) return { ok: false, error: `Eingebaute Bibliothek nicht verfügbar: ${name}` };
+    libs[name] = src;
+  }
+
+  const libRes = await resolveLibs(externalUrls, whitelist, libCacheDir());
+  if (!libRes.ok) return libRes;
+  Object.assign(libs, libRes.libs);
+
+  const html = bundle(files, libs);
   if (!html) return { ok: false, error: 'Das Bündeln der App ist fehlgeschlagen.' };
   return {
     ok: true,
