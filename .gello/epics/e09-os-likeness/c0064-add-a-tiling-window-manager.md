@@ -33,24 +33,24 @@ layout is **remembered per workspace**.
 
 ## Acceptance criteria
 
-- [ ] A third mode **„Kacheln“** joins the Fenster/Einzeln switch; switching to it
+- [x] A third mode **„Kacheln“** joins the Fenster/Einzeln switch; switching to it
       tiles the open windows with **no overlap**, filling the desktop area (minus
       gaps); it is **persisted** like `uiMode`.
-- [ ] Windows are arranged by a **binary split tree (dwindle)**: opening an app
+- [x] Windows are arranged by a **binary split tree (dwindle)**: opening an app
       **splits the focused tile**; split orientation follows the tile's aspect
       ratio (wider → left/right, taller → top/bottom).
-- [ ] **Dragging the gap** between two tiles adjusts that split's ratio; all
+- [x] **Dragging the gap** between two tiles adjusts that split's ratio; all
       descendant tiles reflow; a **minimum tile size** is enforced.
-- [ ] **Closing** a tile collapses its node (the sibling takes the parent's space)
+- [x] **Closing** a tile collapses its node (the sibling takes the parent's space)
       and reflows; **minimizing** removes it from the layout (to the dock) and
       reflows; restoring re-inserts it.
-- [ ] **Dragging a window's title bar onto another tile swaps** their positions in
+- [x] **Dragging a window's title bar onto another tile swaps** their positions in
       the tree.
-- [ ] The tiling **tree + split ratios** are **persisted per workspace** and
+- [x] The tiling **tree + split ratios** are **persisted per workspace** and
       restored next session (alongside which apps are open).
-- [ ] In tiling mode, geometry is **derived from the tree** — no free move/resize,
+- [x] In tiling mode, geometry is **derived from the tree** — no free move/resize,
       no overlap; **maximize** fullscreens a tile temporarily.
-- [ ] The **split-tree engine** (split/insert, remove/collapse, resize ratio,
+- [x] The **split-tree engine** (split/insert, remove/collapse, resize ratio,
       swap, compute geometry) is **pure** and covered by unit tests, independent of
       the DOM.
 
