@@ -9,13 +9,13 @@
       "cardId": "c0070",
       "phase": "running",
       "activity": {
-        "name": "Read",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/src/views/DesktopView.spec.ts"
+        "name": "Bash",
+        "arg": "git add -A src .gello/epics/e09-os-likeness/c0070-make-strg-f-shortcut-top-open-app-search.md && git status --short && git commit -q -m \"$(cat <<'EOF'\nc0070: Strg/⌘ + Leertaste öffnet die App-Suche\n\nWie die Suche eines Betriebssystems führt die Leertaste ins Startmenü.\nEin Kürzel darf dafür eine Zweittaste tragen (`also`) — unter macOS\ngehört ⌘ + Leertaste Spotlight, dort bleibt Strg/⌘ + K der Weg hinein.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nEOF\n)\" && git log --oneline -1"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T21:33:44",
+  "updated": "2026-08-09T21:34:25",
   "pickupDelay": 10,
   "owned": [
     "c0029",
