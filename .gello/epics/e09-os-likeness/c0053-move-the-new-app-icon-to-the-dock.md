@@ -1,12 +1,11 @@
 ---
 id: c0053
 title: move the new App Icon to the dock
-status: ready
+status: discuss
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T07:48:47
+status-changed: 2026-08-09T07:49:20
 epic: e09
-order: 170
 ---
 
 ## What
@@ -34,3 +33,4 @@ grid→dock move; consider merging into c0052 at planning time.
 
 - 2026-08-09 status → discuss (app)
 - 2026-08-09 status → ready (app)
+- 2026-08-09 status → discuss (app)

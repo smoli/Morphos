@@ -1,9 +1,7 @@
 {
   "status": "running",
   "ready": [
-    "c0038",
-    "c0052",
-    "c0053"
+    "c0038"
   ],
   "waiting": [],
   "runs": [
@@ -12,12 +10,12 @@
       "phase": "running",
       "activity": {
         "name": "Edit",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/README.md"
+        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e09-os-likeness/c0051-show-file-size-and-creation-change-date.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T07:48:57",
+  "updated": "2026-08-09T07:49:20",
   "pickupDelay": 10,
   "owned": [
     "c0029",

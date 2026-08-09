@@ -1,12 +1,11 @@
 ---
 id: c0052
 title: Make the dock OSX like
-status: ready
+status: discuss
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T07:48:43
+status-changed: 2026-08-09T07:49:18
 epic: e09
-order: 160
 ---
 
 ## What
@@ -62,3 +61,4 @@ Open questions for planning:
 
 - 2026-08-09 status → discuss (app)
 - 2026-08-09 status → ready (app)
+- 2026-08-09 status → discuss (app)
