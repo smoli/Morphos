@@ -8,6 +8,15 @@ status-changed: 2026-08-09T09:38:42
 epic: e10
 ---
 
+## Not adopted (2026-08-09)
+
+Closed in favour of **[c0059](c0059-provide-react-preact-to-apps.md) — Preact +
+htm**, which keeps the strict CSP (no `'unsafe-eval'`) **and** needs no bundler
+compiler, and is verified working. Vue's full templates would have required either
+relaxing the CSP or building a bundle-time compiler — more risk/effort for no
+advantage over Preact here. Kept for the id/history trail; the prototype write-up
+below is left as-is.
+
 ## What
 
 **Prototype** giving generated apps **Vue** (components with `<template>`) and
@@ -80,3 +89,4 @@ Open questions:
 
 - 2026-08-09 status → discuss (app)
 - 2026-08-09 moved e0002 → e10 (framework-support epic)
+- 2026-08-09 not adopted (Preact/c0059 chosen); archived
