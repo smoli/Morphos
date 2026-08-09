@@ -7,13 +7,13 @@
       "cardId": "c0038",
       "phase": "running",
       "activity": {
-        "name": "Read",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e09-os-likeness/c0038-file-explorer.md"
+        "name": "Bash",
+        "arg": "git status --short; echo \"=== companion diff:\"; git diff --stat .gello/.companion/"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T07:52:37",
+  "updated": "2026-08-09T07:53:02",
   "pickupDelay": 10,
   "owned": [
     "c0029",

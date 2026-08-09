@@ -1,10 +1,10 @@
 ---
 id: c0038
 title: File-Explorer
-status: in-progress
+status: review
 created: 2026-08-08
 updated: 2026-08-09
-status-changed: 2026-08-09T07:50:57
+status-changed: 2026-08-09T07:52:56
 epic: e09
 depends: [c0047, c0048, c0049, c0050]
 ---
@@ -126,8 +126,38 @@ Open questions for planning:
   `core/fsaccess` and the `morphos:fs` IPC, all guarded by `confineWithin` on
   every path.
 
+### Verification of the umbrella criteria (2026-08-09)
+
+All four sub-cards are `done`; this card was closed by checking the overall
+criteria against what they built, not by writing new code:
+
+- **Window & modes** — `WindowKind = 'app' | 'system'` in `stores/desktop.ts`,
+  `openSystem()` reuses an existing window with the same `systemId` (single
+  instance). `SystemWindow.vue` renders inside the shared `WindowFrame`, so
+  focus, z-order, minimize/maximize and the single-mode „← Desktop“ button are
+  the same code as for app windows. Entry points: desktop button and launcher
+  (`DesktopView.vue`, fed from `SYSTEM_WINDOWS`).
+- **Browsing** — `ExplorerPanel.vue` lists `workspace.accessRoot` with
+  breadcrumbs, prompts for a data folder when none is set; every path goes
+  through `confineWithin`. Live refresh via `morphos:watch` →
+  `FolderWatchers` (150 ms debounce, `stopAll(owner)` on window close).
+- **Preview** — `core/preview.ts` (type detection, `TEXT_LIMIT` 512 KiB cap,
+  pretty/highlighted JSON) plus `FilePreview.vue`: HTML/SVG in a blob iframe
+  with `allow-scripts` and no `allow-same-origin`, media via the privileged
+  `morphos-file://` scheme with range requests, unknown types fall back to
+  file info.
+- **Management** — `runShellFs` covers `newFolder`, `rename`, `move`, `copy`,
+  `trash`, `trashList`, `restore`, `emptyTrash`; the trash is `.trash/files`
+  + `.trash/meta` inside the data folder and is hidden from the listing by
+  `isHiddenName`. Shell ops use the separate `morphos:shellFs` channel, so
+  they never raise the app permission dialog.
+- **Tests** — 64 files / 941 tests pass, `vue-tsc --noEmit` clean.
+
 ## Log
 
 - 2026-08-08 status → discuss (app)
 - 2026-08-08 status → ready (app)
 - 2026-08-09 status → in-progress (agent)
+- 2026-08-09 c0047–c0050 all done; umbrella criteria verified against the code,
+  full test suite (941) and typecheck green (agent)
+- 2026-08-09 status → review (agent)
