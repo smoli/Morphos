@@ -321,6 +321,47 @@ function contains(rect: Rect, point: Point): boolean {
 }
 
 /**
+ * Alle Fugen des Baums — je Teilung eine, von außen nach innen. `hitGap` sucht
+ * die eine unter dem Zeiger; hier kommen sie alle, damit die Oberfläche für
+ * jede einen Griff hinlegen kann (c0067).
+ */
+export function gapBands(tree: TileTree | null, area: Rect, gap: number): GapHit[] {
+  const bands: GapHit[] = [];
+  collectGaps(tree, area, gap, [], bands);
+  return bands;
+}
+
+function collectGaps(
+  tree: TileTree | null,
+  area: Rect,
+  gap: number,
+  path: Side[],
+  out: GapHit[],
+): void {
+  if (!tree || tree.kind !== 'split') return;
+  const [a, b] = childAreas(tree, area, gap);
+  out.push({ path, orientation: tree.orientation, band: gapBand(tree.orientation, a, b, area) });
+  collectGaps(tree.a, a, gap, [...path, 'a'], out);
+  collectGaps(tree.b, b, gap, [...path, 'b'], out);
+}
+
+/**
+ * Welches Fenster liegt unter diesem Punkt? Für das Tauschen zweier Kacheln
+ * (c0067): Auf der Fuge und außerhalb der Fläche liegt keines.
+ */
+export function hitLeaf(
+  tree: TileTree | null,
+  point: Point,
+  area: Rect,
+  gap: number,
+): string | null {
+  if (!tree) return null;
+  if (tree.kind === 'leaf') return contains(area, point) ? tree.id : null;
+  const [a, b] = childAreas(tree, area, gap);
+  return hitLeaf(tree.a, point, a, gap) ?? hitLeaf(tree.b, point, b, gap);
+}
+
+/**
  * Das Verhältnis, das eine an die Fuge gezogene Zeigerposition meint — die
  * Fuge sitzt mittig unter dem Zeiger. Bereits begrenzt wie `setRatio`.
  */

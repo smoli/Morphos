@@ -209,6 +209,88 @@ describe('WindowFrame', () => {
       expect(wrapper.attributes('style')).toContain(`left: ${before.x}px`);
     });
 
+    /** Zwei gekachelte Rahmen nebeneinander — jeder mit seinem eigenen Fenster. */
+    function mountTiles() {
+      useWorkspaceStore().uiMode = 'tiles';
+      const desktop = useDesktopStore();
+      desktop.setTileArea({ x: 0, y: 0, w: 1000, h: 600 });
+      const ids = [
+        desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' }),
+        desktop.openApp('editor-2', { title: 'Editor', icon: '📝' }),
+      ];
+      const frames = ids.map((id) =>
+        mount(WindowFrame, { props: { win: desktop.find(id)!, tiled: true } }),
+      );
+      return { desktop, ids, frames };
+    }
+
+    /** Die Mitte einer Kachel — dorthin zeigt die Maus beim Tauschen. */
+    function mitte(desktop: ReturnType<typeof useDesktopStore>, id: string) {
+      const r = desktop.tileRects[id];
+      return { clientX: r.x + r.w / 2, clientY: r.y + r.h / 2 };
+    }
+
+    it('trägt das Fenster an der Titelleiste auf eine andere Kachel und tauscht dort', async () => {
+      const { desktop, ids, frames } = mountTiles();
+      const [a, b] = ids;
+      const vorher = { ...desktop.tileRects };
+
+      await frames[0].get('.titlebar').trigger('mousedown', mitte(desktop, a));
+      // Auf der eigenen Kachel gibt es noch nichts zu tauschen.
+      expect(desktop.tileSwap).toEqual({ id: a, targetId: null });
+      expect(frames[0].get('.window-frame').classes()).toContain('swapping');
+
+      window.dispatchEvent(new MouseEvent('mousemove', mitte(desktop, b)));
+      await frames[1].vm.$nextTick();
+      // Die Zielkachel zeigt, wo das Fenster landet.
+      expect(desktop.tileSwap).toEqual({ id: a, targetId: b });
+      expect(frames[1].find('.drop-target').exists()).toBe(true);
+      expect(frames[0].find('.drop-target').exists()).toBe(false);
+
+      window.dispatchEvent(new MouseEvent('mouseup'));
+      await frames[0].vm.$nextTick();
+
+      expect(desktop.tileSwap).toBeNull();
+      expect(desktop.tileRects[a]).toEqual(vorher[b]);
+      expect(desktop.tileRects[b]).toEqual(vorher[a]);
+      expect(frames[0].get('.window-frame').classes()).not.toContain('swapping');
+      expect(frames[1].find('.drop-target').exists()).toBe(false);
+    });
+
+    it('deckt die Kacheln beim Tragen mit der Schutzschicht ab', async () => {
+      const { desktop, ids, frames } = mountTiles();
+      expect(frames[0].find('.drag-shield').exists()).toBe(false);
+
+      await frames[0].get('.titlebar').trigger('mousedown', mitte(desktop, ids[0]));
+      expect(frames[0].find('.drag-shield').exists()).toBe(true);
+
+      window.dispatchEvent(new MouseEvent('mouseup'));
+      await frames[0].vm.$nextTick();
+      expect(frames[0].find('.drag-shield').exists()).toBe(false);
+    });
+
+    it('lässt über der eigenen Kachel alles, wie es war', async () => {
+      const { desktop, ids, frames } = mountTiles();
+      const vorher = { ...desktop.tileRects };
+
+      await frames[0].get('.titlebar').trigger('mousedown', mitte(desktop, ids[1]));
+      window.dispatchEvent(new MouseEvent('mousemove', mitte(desktop, ids[0])));
+      window.dispatchEvent(new MouseEvent('mouseup'));
+      await frames[0].vm.$nextTick();
+
+      expect(desktop.tileRects).toEqual(vorher);
+    });
+
+    it('bricht das Tragen ab, wenn das Fenster mitten im Zug fortgeht', async () => {
+      const { desktop, ids, frames } = mountTiles();
+
+      await frames[0].get('.titlebar').trigger('mousedown', mitte(desktop, ids[0]));
+      expect(desktop.tileSwap).not.toBeNull();
+
+      frames[0].unmount();
+      expect(desktop.tileSwap).toBeNull();
+    });
+
     it('füllt maximiert die ganze Fläche und kehrt danach in die Kachel zurück', async () => {
       const { wrapper, desktop, win } = mountTile();
       desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });

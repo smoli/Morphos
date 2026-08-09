@@ -3,7 +3,9 @@ import {
   DEFAULT_GAP,
   MIN_TILE,
   computeRects,
+  gapBands,
   hitGap,
+  hitLeaf,
   insertLeaf,
   leaf,
   leafIds,
@@ -285,6 +287,49 @@ describe('hitGap', () => {
   it('greift mit einer Toleranz auch neben der Fuge', () => {
     expect(hitGap(tree, { x: 490, y: 300 }, area, GAP)).toBeNull();
     expect(hitGap(tree, { x: 490, y: 300 }, area, GAP, 6)?.path).toEqual([]);
+  });
+});
+
+describe('gapBands', () => {
+  const tree = split('row', leaf('a'), split('column', leaf('b'), leaf('c')));
+
+  it('nennt jede Teilung mit ihrem Streifen — genau die, die hitGap findet', () => {
+    const bands = gapBands(tree, area, GAP);
+    expect(bands.map((b) => b.path)).toEqual([[], ['b']]);
+    for (const band of bands) {
+      const mitte = {
+        x: band.band.x + band.band.w / 2,
+        y: band.band.y + band.band.h / 2,
+      };
+      expect(hitGap(tree, mitte, area, GAP)).toEqual(band);
+    }
+  });
+
+  it('hat ohne Teilung nichts anzubieten', () => {
+    expect(gapBands(leaf('a'), area, GAP)).toEqual([]);
+    expect(gapBands(null, area, GAP)).toEqual([]);
+  });
+});
+
+describe('hitLeaf', () => {
+  const tree = split('row', leaf('a'), split('column', leaf('b'), leaf('c')));
+
+  it('nennt das Fenster unter dem Punkt', () => {
+    const rects = computeRects(tree, area, GAP);
+    for (const [id, r] of Object.entries(rects)) {
+      expect(hitLeaf(tree, { x: r.x + r.w / 2, y: r.y + r.h / 2 }, area, GAP)).toBe(id);
+    }
+  });
+
+  it('findet auf der Fuge und außerhalb der Fläche keines', () => {
+    // Mitten in der senkrechten Fuge der äußeren Teilung.
+    expect(hitLeaf(tree, { x: 500, y: 300 }, area, GAP)).toBeNull();
+    expect(hitLeaf(tree, { x: -20, y: 300 }, area, GAP)).toBeNull();
+    expect(hitLeaf(null, { x: 100, y: 100 }, area, GAP)).toBeNull();
+  });
+
+  it('trifft auch das einzige Fenster eines ungeteilten Baums', () => {
+    expect(hitLeaf(leaf('a'), { x: 100, y: 100 }, area, GAP)).toBe('a');
   });
 });
 

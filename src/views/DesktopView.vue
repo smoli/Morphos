@@ -12,6 +12,7 @@ import AppIcon from '@/components/AppIcon.vue';
 import IconDialog from '@/components/IconDialog.vue';
 import ContextMenu from '@/components/ContextMenu.vue';
 import LauncherOverlay from '@/components/LauncherOverlay.vue';
+import TileGaps from '@/components/TileGaps.vue';
 import SwitcherOverlay from '@/components/SwitcherOverlay.vue';
 import {
   isSwitcherChord,
@@ -173,12 +174,21 @@ const launcher = ref<HTMLElement | null>(null);
 const desk = ref<Rect>({ x: 0, y: 0, w: 0, h: 0 });
 const bounds = computed<Bounds>(() => ({ w: desk.value.w, h: desk.value.h }));
 
-/** Die sichtbare Fläche messen — Lage wie Größe. */
+/**
+ * Die sichtbare Fläche messen — Lage wie Größe. Dazu, wo die Bühne im
+ * Programmfenster liegt: Die Maus meldet ihre Punkte dort, der Kachel-Baum
+ * rechnet aber in der Bühne (c0067 zieht an der Fuge und tauscht Kacheln).
+ */
 function measure(): void {
   const el = launcher.value;
-  desk.value = el
-    ? { x: el.offsetLeft, y: el.offsetTop, w: el.clientWidth, h: el.clientHeight }
-    : { x: 0, y: 0, w: 0, h: 0 };
+  if (!el) {
+    desk.value = { x: 0, y: 0, w: 0, h: 0 };
+    desktop.setStageOrigin({ x: 0, y: 0 });
+    return;
+  }
+  desk.value = { x: el.offsetLeft, y: el.offsetTop, w: el.clientWidth, h: el.clientHeight };
+  const box = el.getBoundingClientRect();
+  desktop.setStageOrigin({ x: box.left - el.offsetLeft, y: box.top - el.offsetTop });
 }
 
 /**
@@ -607,6 +617,10 @@ function onMenuPick(id: string): void {
           :tiled="tilesMode"
         />
       </div>
+
+      <!-- Die Griffe an den Fugen zwischen den Kacheln (c0067) — sie liegen
+           über den Fenstern, nehmen aber nur an den Fugen selbst Klicks an. -->
+      <TileGaps v-if="tilesMode" />
 
       <!-- Startmenü: liegt über allem auf der Bühne, auch über den Fenstern. -->
       <LauncherOverlay

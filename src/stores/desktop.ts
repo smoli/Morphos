@@ -6,9 +6,15 @@ import {
   computeRects,
   DEFAULT_GAP,
   hasLeaf,
+  hitLeaf,
   insertLeaf,
   leafIds,
+  ratioAtPoint,
   removeLeaf,
+  setRatio,
+  swapLeaves,
+  type NodePath,
+  type Point,
   type Rect,
   type TileTree,
 } from '@/core/tiling';
@@ -51,6 +57,16 @@ interface DesktopState {
   tiles: Record<string, TileTree | null>;
   /** Die Fläche, auf der gekachelt wird — vom Desktop gemessen (Bühnen-Koordinaten). */
   tileArea: Rect;
+  /** Wo die Bühne im Programmfenster liegt — damit werden Mauspunkte umgerechnet. */
+  stageOrigin: Point;
+  /** Das Fenster, das gerade an der Titelleiste auf eine andere Kachel getragen wird. */
+  tileSwap: TileSwap | null;
+}
+
+/** Ein laufendes Tauschen: Wer getragen wird, und auf welcher Kachel er gerade schwebt. */
+export interface TileSwap {
+  id: string;
+  targetId: string | null;
 }
 
 const MIN_W = 240;
@@ -92,6 +108,8 @@ export const useDesktopStore = defineStore('desktop', {
     restoredFolder: null,
     tiles: {},
     tileArea: { ...NO_AREA },
+    stageOrigin: { x: 0, y: 0 },
+    tileSwap: null,
   }),
 
   getters: {
@@ -292,6 +310,69 @@ export const useDesktopStore = defineStore('desktop', {
       const a = this.tileArea;
       if (a.x === next.x && a.y === next.y && a.w === next.w && a.h === next.h) return;
       this.tileArea = next;
+    },
+
+    /**
+     * Wo die Bühne im Programmfenster liegt. Die Maus meldet ihre Punkte im
+     * Programmfenster, der Kachel-Baum rechnet in der Bühne — gemessen wird das
+     * an einer Stelle (views/DesktopView), umgerechnet mit `stagePoint`.
+     */
+    setStageOrigin(origin: Point): void {
+      const next = { x: Math.round(origin.x), y: Math.round(origin.y) };
+      if (this.stageOrigin.x === next.x && this.stageOrigin.y === next.y) return;
+      this.stageOrigin = next;
+    },
+
+    /** Ein Mauspunkt in Bühnen-Koordinaten — so, wie der Baum ihn versteht. */
+    stagePoint(e: { clientX: number; clientY: number }): Point {
+      return { x: e.clientX - this.stageOrigin.x, y: e.clientY - this.stageOrigin.y };
+    },
+
+    /**
+     * An einer Fuge ziehen (c0067): Die Teilung am Pfad bekommt das Verhältnis,
+     * das der Zeiger meint — begrenzt auf die Mindestgröße einer Kachel. Alle
+     * Nachkommen rücken von selbst nach, denn ihre Rechtecke fallen aus dem Baum.
+     */
+    dragGap(path: NodePath, point: Point): void {
+      const tree = this.tileTree;
+      if (!tree) return;
+      const ratio = ratioAtPoint(tree, path, point, this.tileArea, TILE_GAP);
+      const next = setRatio(tree, path, ratio, this.tileArea, TILE_GAP);
+      if (next !== tree) this.tiles[tileKey()] = next;
+    },
+
+    /**
+     * Ein Fenster an der Titelleiste aufnehmen, um es auf eine andere Kachel zu
+     * tragen. Meldet, ob daraus etwas werden kann — außerhalb des Kachel-Modus
+     * und ohne Platz im Baum gibt es nichts zu tauschen.
+     */
+    startTileSwap(id: string): boolean {
+      if (!hasLeaf(this.tileTree, id)) return false;
+      this.tileSwap = { id, targetId: null };
+      return true;
+    },
+
+    /** Zielen: die Kachel unter dem Zeiger — die eigene zählt nicht als Ziel. */
+    aimTileSwap(point: Point): void {
+      const swap = this.tileSwap;
+      if (!swap) return;
+      const hit = hitLeaf(this.tileTree, point, this.tileArea, TILE_GAP);
+      swap.targetId = hit && hit !== swap.id ? hit : null;
+    },
+
+    /** Loslassen: über einer fremden Kachel tauschen die beiden die Plätze. */
+    dropTileSwap(): void {
+      const swap = this.tileSwap;
+      this.tileSwap = null;
+      if (!swap?.targetId) return;
+      const tree = this.tileTree;
+      const next = swapLeaves(tree, swap.id, swap.targetId);
+      if (next !== tree) this.tiles[tileKey()] = next;
+    },
+
+    /** Abbrechen, ohne zu tauschen (das Fenster geht mitten im Zug fort). */
+    cancelTileSwap(): void {
+      this.tileSwap = null;
     },
 
     /**

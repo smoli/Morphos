@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
-import { useDesktopStore } from './desktop';
+import { TILE_GAP, useDesktopStore } from './desktop';
 import { useWorkspaceStore } from './workspace';
 import { EXPLORER_ID, systemWindow } from '@/core/system';
-import { leafIds, type Rect } from '@/core/tiling';
+import { leafIds, MIN_TILE, type Rect } from '@/core/tiling';
 import type { AppSummary, SessionWindow } from '@/types';
 
 describe('useDesktopStore', () => {
@@ -657,6 +657,138 @@ describe('useDesktopStore', () => {
 
       ws.folder = '/eins';
       expect(leafIds(d.tileTree)).toEqual([a]);
+    });
+
+    describe('an der Fuge ziehen (c0067)', () => {
+      it('verschiebt die Teilung dorthin, wo der Zeiger sie hinzieht', () => {
+        const d = tiled();
+        const a = d.openApp('a', { title: 'A', icon: '🅰' });
+        const b = d.openApp('b', { title: 'B', icon: '🅱' });
+        const vorher = d.tileRects[a].w;
+
+        d.dragGap([], { x: 300, y: 400 });
+
+        // Die Fuge sitzt mittig unter dem Zeiger, links bleibt weniger übrig.
+        expect(d.tileRects[a].w).toBeLessThan(vorher);
+        expect(d.tileRects[a].w).toBeCloseTo(300 - TILE_GAP / 2, 0);
+        // Und rechts kommt genau so viel dazu — überschneidungsfrei.
+        expectDisjointWithin(Object.values(d.tileRects), AREA);
+        expect(d.tileRects[a].w + d.tileRects[b].w).toBe(AREA.w - TILE_GAP);
+      });
+
+      it('lässt keine Kachel unter die Mindestgröße rutschen', () => {
+        const d = tiled();
+        const a = d.openApp('a', { title: 'A', icon: '🅰' });
+        d.openApp('b', { title: 'B', icon: '🅱' });
+
+        d.dragGap([], { x: -400, y: 400 });
+        expect(d.tileRects[a].w).toBeGreaterThanOrEqual(MIN_TILE);
+      });
+
+      it('zieht auch an einer inneren Fuge, ohne die äußere zu stören', () => {
+        const d = tiled();
+        const a = d.openApp('a', { title: 'A', icon: '🅰' });
+        const b = d.openApp('b', { title: 'B', icon: '🅱' });
+        const c = d.openApp('c', { title: 'C', icon: '🇨' });
+        const außen = d.tileRects[a];
+
+        d.dragGap(['b'], { x: 900, y: 200 });
+
+        expect(d.tileRects[a]).toEqual(außen);
+        expect(d.tileRects[b].h).toBeCloseTo(200 - AREA.y - TILE_GAP / 2, 0);
+        expectDisjointWithin(Object.values(d.tileRects), AREA);
+        expect(leafIds(d.tileTree)).toEqual([a, b, c]);
+      });
+
+      it('rührt außerhalb des Kachel-Modus nichts an', () => {
+        const d = useDesktopStore();
+        d.setTileArea(AREA);
+        d.openApp('a', { title: 'A', icon: '🅰' });
+        d.dragGap([], { x: 300, y: 400 });
+        expect(d.tileTree).toBeNull();
+      });
+    });
+
+    describe('Kacheln tauschen (c0067)', () => {
+      /** Zwei Kachel-Fenster nebeneinander. */
+      function zwei() {
+        const d = tiled();
+        const a = d.openApp('a', { title: 'A', icon: '🅰' });
+        const b = d.openApp('b', { title: 'B', icon: '🅱' });
+        return { d, a, b };
+      }
+
+      /** Die Mitte einer Kachel — dort zielt die Maus hin. */
+      function mitte(r: Rect) {
+        return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+      }
+
+      it('tauscht die Plätze zweier Fenster', () => {
+        const { d, a, b } = zwei();
+        const vorher = { ...d.tileRects };
+
+        expect(d.startTileSwap(a)).toBe(true);
+        d.aimTileSwap(mitte(vorher[b]));
+        expect(d.tileSwap).toEqual({ id: a, targetId: b });
+        d.dropTileSwap();
+
+        expect(d.tileSwap).toBeNull();
+        expect(d.tileRects[a]).toEqual(vorher[b]);
+        expect(d.tileRects[b]).toEqual(vorher[a]);
+      });
+
+      it('nimmt die eigene Kachel nicht als Ziel', () => {
+        const { d, a } = zwei();
+        const vorher = { ...d.tileRects };
+
+        d.startTileSwap(a);
+        d.aimTileSwap(mitte(vorher[a]));
+        expect(d.tileSwap?.targetId).toBeNull();
+        d.dropTileSwap();
+
+        expect(d.tileRects).toEqual(vorher);
+      });
+
+      it('lässt über der Fuge und daneben alles, wie es war', () => {
+        const { d, a, b } = zwei();
+        const vorher = { ...d.tileRects };
+
+        d.startTileSwap(a);
+        d.aimTileSwap(mitte(vorher[b]));
+        // Zurück auf die Fuge zwischen beiden — dort liegt keine Kachel.
+        d.aimTileSwap({ x: vorher[a].w + TILE_GAP / 2, y: 400 });
+        expect(d.tileSwap?.targetId).toBeNull();
+        d.dropTileSwap();
+
+        expect(d.tileRects).toEqual(vorher);
+      });
+
+      it('hebt außerhalb des Kachel-Modus gar nichts erst auf', () => {
+        const d = useDesktopStore();
+        const a = d.openApp('a', { title: 'A', icon: '🅰' });
+        expect(d.startTileSwap(a)).toBe(false);
+        expect(d.tileSwap).toBeNull();
+      });
+
+      it('bricht ab, ohne zu tauschen', () => {
+        const { d, a, b } = zwei();
+        const vorher = { ...d.tileRects };
+
+        d.startTileSwap(a);
+        d.aimTileSwap(mitte(vorher[b]));
+        d.cancelTileSwap();
+
+        expect(d.tileSwap).toBeNull();
+        expect(d.tileRects).toEqual(vorher);
+      });
+    });
+
+    it('rechnet Mauspunkte in die Bühne um', () => {
+      const d = useDesktopStore();
+      expect(d.stagePoint({ clientX: 120, clientY: 90 })).toEqual({ x: 120, y: 90 });
+
+      d.setStageOrigin({ x: 20, y: 48 });
+      expect(d.stagePoint({ clientX: 120, clientY: 90 })).toEqual({ x: 100, y: 42 });
     });
   });
 });

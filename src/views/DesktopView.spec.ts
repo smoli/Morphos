@@ -1893,6 +1893,61 @@ describe('DesktopView', () => {
       expect(wrapper.find('.resize-handle').exists()).toBe(false);
     });
 
+    it('zieht an der Fuge zwischen zwei Kacheln und verschiebt die Teilung', async () => {
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });
+      await tileOn();
+      const vorher = frameRects(wrapper);
+
+      // Genau eine Fuge — und sie liegt zwischen den beiden Kacheln.
+      const griff = wrapper.findAll('.gap-handle');
+      expect(griff).toHaveLength(1);
+      await griff[0].trigger('mousedown', { button: 0 });
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX: 400, clientY: 400 }));
+      window.dispatchEvent(new MouseEvent('mouseup'));
+      await flushPromises();
+
+      const rects = frameRects(wrapper);
+      expect(rects[0].w).toBeLessThan(vorher[0].w);
+      expect(rects[0].w).toBeCloseTo(400 - 6, 0);
+      expectDisjoint(rects);
+      expect(rects[0].w + rects[1].w).toBe(AREA.w - 12);
+    });
+
+    it('tauscht zwei Kacheln, wenn eine auf die andere getragen wird', async () => {
+      const { wrapper } = await mountView();
+      const desktop = useDesktopStore();
+      desktop.openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });
+      await tileOn();
+      const [links, rechts] = frameRects(wrapper);
+
+      const frames = visibleFrames(wrapper);
+      await frames[0].get('.titlebar').trigger('mousedown', {
+        clientX: links.x + links.w / 2,
+        clientY: links.y + links.h / 2,
+      });
+      window.dispatchEvent(
+        new MouseEvent('mousemove', {
+          clientX: rechts.x + rechts.w / 2,
+          clientY: rechts.y + rechts.h / 2,
+        }),
+      );
+      await flushPromises();
+      // Solange getragen wird, ist keine Fuge zu fassen.
+      expect(wrapper.findAll('.gap-handle')).toHaveLength(0);
+      expect(frames[1].find('.drop-target').exists()).toBe(true);
+
+      window.dispatchEvent(new MouseEvent('mouseup'));
+      await flushPromises();
+
+      expect(frameRects(wrapper)).toEqual([rechts, links]);
+      expect(wrapper.find('.drop-target').exists()).toBe(false);
+      expect(wrapper.findAll('.gap-handle')).toHaveLength(1);
+    });
+
     it('rechnet die Kacheln auf eine geänderte Fläche um', async () => {
       const { wrapper } = await mountView();
       const desktop = useDesktopStore();

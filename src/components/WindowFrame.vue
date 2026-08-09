@@ -17,8 +17,10 @@ import type { DesktopWindow } from '@/stores/desktop';
  *
  * Im Kachel-Modus (`tiled`, c0066) kommt die Geometrie NICHT von hier: Der
  * Rahmen liest sein Rechteck aus dem Kachel-Baum (stores/desktop → core/tiling)
- * und rückt nach, sobald der sich ändert. Ziehen und Größenändern gibt es dann
- * nicht — nur Maximieren, das die Kachel vorübergehend über alles legt.
+ * und rückt nach, sobald der sich ändert. Frei verschieben und am Griff größer
+ * machen gibt es dann nicht: Die Titelleiste trägt das Fenster stattdessen auf
+ * eine andere Kachel, wo die beiden die Plätze tauschen (c0067) — und die Größe
+ * ändert man an der Fuge (components/TileGaps).
  */
 const props = defineProps<{ win: DesktopWindow; single?: boolean; tiled?: boolean }>();
 
@@ -38,6 +40,13 @@ const tile = computed(() =>
 );
 // Frei beweglich ist ein Fenster nur im Fenster-Modus.
 const movable = computed(() => !full.value && !props.tiled);
+// Gekachelt trägt die Titelleiste das Fenster auf eine andere Kachel (c0067).
+const swappable = computed(() => !full.value && !!props.tiled);
+
+// Dieses Fenster hängt gerade am Zeiger …
+const swapping = computed(() => desktop.tileSwap?.id === props.win.instanceId);
+// … bzw. auf dieser Kachel würde es landen (der Hinweis liegt über ihr).
+const dropTarget = computed(() => desktop.tileSwap?.targetId === props.win.instanceId);
 
 const frameStyle = computed(() => {
   if (full.value) return { zIndex: props.win.z };
@@ -76,6 +85,13 @@ function backToDesktop(): void {
 }
 
 // ---- Ziehen (Titelleiste) ----
+
+/** Was die Titelleiste tut: im Fenster-Modus verschieben, gekachelt tauschen. */
+function startTitleDrag(e: MouseEvent): void {
+  if (movable.value) startDrag(e);
+  else if (swappable.value) startSwap(e);
+}
+
 let dragDX = 0;
 let dragDY = 0;
 function startDrag(e: MouseEvent): void {
@@ -109,35 +125,60 @@ function onResize(e: MouseEvent): void {
   desktop.resizeWindow(props.win.instanceId, resW + (e.clientX - resX), resH + (e.clientY - resY));
 }
 
+// ---- Kacheln tauschen (Titelleiste im Kachel-Modus, c0067) ----
+function startSwap(e: MouseEvent): void {
+  if (e.button !== 0 || !desktop.startTileSwap(props.win.instanceId)) return;
+  interacting.value = true;
+  onSwap(e);
+  window.addEventListener('mousemove', onSwap);
+  window.addEventListener('mouseup', endSwap);
+}
+function onSwap(e: MouseEvent): void {
+  desktop.aimTileSwap(desktop.stagePoint(e));
+}
+function endSwap(): void {
+  // Loslassen tauscht — über einer fremden Kachel; sonst bleibt alles liegen.
+  desktop.dropTileSwap();
+  stopInteraction();
+}
+
 function stopInteraction(): void {
   interacting.value = false;
   window.removeEventListener('mousemove', onDrag);
   window.removeEventListener('mousemove', onResize);
+  window.removeEventListener('mousemove', onSwap);
   window.removeEventListener('mouseup', stopInteraction);
+  window.removeEventListener('mouseup', endSwap);
+  // Ein Zug, der nicht beim Loslassen endet (das Fenster geht fort), lässt den
+  // Baum sonst mit einem Zeiger auf ein Fenster zurück, das es nicht mehr gibt.
+  if (swapping.value) desktop.cancelTileSwap();
 }
 </script>
 
 <template>
   <section
     class="window-frame"
-    :class="{ full, tiled: !!tile }"
+    :class="{ full, tiled: !!tile, swapping }"
     :style="frameStyle"
     @mousedown="focus"
   >
     <!-- Vollflächige Schutzschicht: verhindert, dass die iframes beim Ziehen/
-         Größenändern die Maus schlucken. -->
+         Größenändern (und beim Tauschen) die Maus schlucken. -->
     <div v-if="interacting" class="drag-shield"></div>
+
+    <!-- Hier landet die getragene Kachel, wenn jetzt losgelassen wird. -->
+    <div v-if="dropTarget" class="drop-target" aria-hidden="true"></div>
 
     <!-- Im Einzel-Modus trägt die Kopfzeile KEINE Fensterknöpfe (es gibt dort
          keinen Fenstermanager), sondern nur den Weg zurück zum Desktop. -->
-    <header class="titlebar" @mousedown.self="movable && startDrag($event)" @dblclick="!single && toggleMaximize()">
+    <header class="titlebar" @mousedown.self="startTitleDrag" @dblclick="!single && toggleMaximize()">
       <button v-if="single" type="button" class="w-desktop" title="Zurück zum Desktop" @mousedown.stop @click="backToDesktop">
         ← Desktop
       </button>
       <slot name="icon">
         <AppIcon class="w-icon" :icon="win.icon" :size="16" @mousedown.stop />
       </slot>
-      <span class="w-title" @mousedown.self="movable && startDrag($event)">
+      <span class="w-title" @mousedown.self="startTitleDrag">
         <slot name="title">{{ win.title }}</slot>
       </span>
       <BusyDot v-if="agentBusy" class="w-busy" @mousedown.stop />
@@ -197,9 +238,22 @@ function stopInteraction(): void {
   min-width: 0;
   min-height: 0;
 }
-.window-frame.tiled .titlebar,
-.window-frame.tiled .w-title {
-  cursor: default;
+/* Getragen: Das Fenster bleibt an seinem Platz, hebt sich aber ab — es hängt
+   am Zeiger und wartet auf die Kachel, mit der es tauscht (c0067). */
+.window-frame.swapping {
+  opacity: 0.7;
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+/* Der Hinweis auf der Zielkachel — nur zu sehen, nicht anzufassen. */
+.drop-target {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  background: rgba(108, 140, 255, 0.16);
 }
 /* Vollflächig: maximiert oder Einzel-Modus. */
 .window-frame.full {
