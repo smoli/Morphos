@@ -8,6 +8,8 @@ created: 2026-08-09
 updated: 2026-08-09
 status-changed: 2026-08-09T21:37:34
 commit: 2cd8727
+usage-tokens: 11663
+usage-cost: 1.880453
 ---
 
 Seems, active window has some significance for how the tiling behaves. So we should visually mark the active window.
