@@ -16,16 +16,32 @@ Kopfleiste — er gehört zu den Einstellungen. Er zieht in den Bereich
 
 ## Acceptance criteria
 
-- [ ] Die Kopfleiste zeigt **keinen** Darstellungs-Umschalter mehr.
-- [ ] Im Einstellungsfenster, Bereich **„Darstellung“**, steht ein Block
+- [x] Die Kopfleiste zeigt **keinen** Darstellungs-Umschalter mehr.
+- [x] Im Einstellungsfenster, Bereich **„Darstellung“**, steht ein Block
       **„Der Desktop“** mit den drei Darstellungen (Name, Symbol, kurze
       Erklärung); die gewählte ist hervorgehoben.
-- [ ] Ein Klick schaltet **sofort** um und wird wie bisher gemerkt
+- [x] Ein Klick schaltet **sofort** um und wird wie bisher gemerkt
       (`uiMode`, siehe c0066).
-- [ ] Die drei Darstellungen stehen mit Name/Symbol/Erklärung an **einer**
+- [x] Die drei Darstellungen stehen mit Name/Symbol/Erklärung an **einer**
       Stelle (`core/uimode`) — die Einstellungen bauen den Umschalter daraus.
-- [ ] Tests: TopBar hat keinen Umschalter mehr; der Einstellungs-Bereich listet
+- [x] Tests: TopBar hat keinen Umschalter mehr; der Einstellungs-Bereich listet
       alle drei, hebt die aktive hervor und schaltet den Workspace um.
+
+## Notes
+
+- `core/uimode` trägt jetzt neben den Werten auch die **Worte**:
+  `UI_MODE_OPTIONS` (Id, Name, Zeichen, ein erklärender Satz), `UI_MODES` fällt
+  daraus ab. Die drei Namen standen vorher wörtlich in der Kopfleiste — es gab
+  keinen Ort, an dem eine Darstellung sich selbst erklärt.
+- `AppearanceSection` bekommt den Block **„Der Desktop“** *über* dem Dock: drei
+  Karten statt eines Segment-Umschalters, weil jede jetzt einen Satz mitträgt
+  (im schmalen Einstellungsfenster brechen sie um).
+- `TopBar` verliert den Umschalter samt seiner Formatierung und dem
+  `setMode`-Handler; `workspace.setUiMode` ruft nur noch der Einstellungs-
+  Bereich. Rechts in der Kopfleiste bleiben Agenten-Anzeige, ⚙ und
+  „Ordner wechseln“.
+- README: Der Absatz über die Modi zeigt nicht mehr auf die Kopfleiste und nennt
+  „Kacheln“ mit (das fehlte seit c0066).
 
 ## Log
 

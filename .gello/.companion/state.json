@@ -12,12 +12,12 @@
       "phase": "running",
       "activity": {
         "name": "Edit",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/src/core/uimode.spec.ts"
+        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e09-os-likeness/c0069-move-the-windowing-options-to-the-settig.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T19:57:32",
+  "updated": "2026-08-09T20:00:24",
   "pickupDelay": 10,
   "owned": [
     "c0029",
