@@ -1,12 +1,14 @@
 ---
 id: c0049
 title: "File-Explorer: content previews"
-status: review
+status: done
 epic: e09
 depends: [c0048]
 created: 2026-08-08
 updated: 2026-08-09
-status-changed: 2026-08-09T07:26:35
+status-changed: 2026-08-09T07:37:53
+usage-tokens: 66843
+usage-cost: 6.807762
 ---
 
 ## What
@@ -74,3 +76,4 @@ the trusted renderer.
   `FilePreview.vue` und die Vorschau-Spalte im Explorer — 881 Tests grün
   (54 neu), Typecheck und Build sauber
 - 2026-08-09 status → review (agent)
+- 2026-08-09 status → done (app)

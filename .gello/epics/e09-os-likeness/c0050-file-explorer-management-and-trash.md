@@ -1,13 +1,12 @@
 ---
 id: c0050
 title: "File-Explorer: file management + waste bin"
-status: ready
+status: in-progress
 epic: e09
 depends: [c0048]
 created: 2026-08-08
-updated: 2026-08-08
-status-changed: 2026-08-08T23:18:22
-order: 140
+updated: 2026-08-09
+status-changed: 2026-08-09T07:27:26
 ---
 
 ## What
@@ -43,3 +42,4 @@ data root; operations are user actions in the trusted shell, not app fs requests
 
 - 2026-08-08 created from the c0038 File-Explorer breakdown
 - 2026-08-08 status → ready (app)
+- 2026-08-09 status → in-progress (agent)
