@@ -1,13 +1,12 @@
 ---
 id: c0066
 title: "Tiling: Kacheln mode + tree-derived rendering"
-status: ready
+status: in-progress
 epic: e09
 depends: [c0065]
 created: 2026-08-09
 updated: 2026-08-09
-status-changed: 2026-08-09T19:13:15
-order: 30
+status-changed: 2026-08-09T19:44:06
 ---
 
 ## What
@@ -43,3 +42,4 @@ through the engine.
 
 - 2026-08-09 created from the c0064 tiling-window-manager breakdown
 - 2026-08-09 status → ready (app)
+- 2026-08-09 status → in-progress (agent)
