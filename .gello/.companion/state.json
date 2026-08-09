@@ -9,13 +9,13 @@
       "cardId": "c0052",
       "phase": "running",
       "activity": {
-        "name": "Bash",
-        "arg": "grep -n \"isBusy\\|isWindowBusy\" -A 12 src/stores/agents.ts | sed -n 1,40p"
+        "name": "Edit",
+        "arg": "/Users/stephan/WebstormProjects/Morphos/src/views/DesktopView.vue"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-09T09:38:40",
+  "updated": "2026-08-09T09:38:58",
   "pickupDelay": 10,
   "owned": [
     "c0029",
