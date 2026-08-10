@@ -1,13 +1,15 @@
 ---
 id: i0006
 title: Fixed dock overlaps windows
-status: review
+status: done
 type: issue
 created: 2026-08-09
-updated: 2026-08-09
-status-changed: 2026-08-09T23:05:03
+updated: 2026-08-10
+status-changed: 2026-08-10T06:49:11
 epic: e09
 commit: b07e88d
+usage-tokens: 31281
+usage-cost: 4.12042
 ---
 
 If the dock is fixed it should not overlap windows that are fullscreen, or when in tiling mode
@@ -50,3 +52,4 @@ If the dock is fixed it should not overlap windows that are fullscreen, or when 
 - 2026-08-09 `core/workarea` angelegt (rot → grün), Bühne schreibt `--work-…`
   an, vollflächiger Rahmen und Kachel-Fläche halten sich an die Arbeitsfläche
 - 2026-08-09 status → review (agent)
+- 2026-08-10 status → done (app)
