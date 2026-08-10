@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
-import { TILE_GAP, useDesktopStore } from './desktop';
+import { useDesktopStore } from './desktop';
 import { useWorkspaceStore } from './workspace';
+import { DEFAULT_TILE_GAP as TILE_GAP } from '@/core/tilesettings';
 import { EXPLORER_ID, systemWindow } from '@/core/system';
 import { leaf, leafIds, MIN_TILE, split, type Rect, type TileTree } from '@/core/tiling';
 import type { AppSummary, SessionWindow } from '@/types';
@@ -657,6 +658,57 @@ describe('useDesktopStore', () => {
 
       ws.folder = '/eins';
       expect(leafIds(d.tileTree)).toEqual([a]);
+    });
+
+    describe('Fuge nach Einstellung (c0072)', () => {
+      /** Ein gekacheltes Verzeichnis mit gewählter Fuge. */
+      function mitFuge(gap: number): ReturnType<typeof useDesktopStore> {
+        const ws = useWorkspaceStore();
+        ws.uiMode = 'tiles';
+        ws.folder = '/apps';
+        ws.tileGaps = { '/apps': gap };
+        const d = useDesktopStore();
+        d.setTileArea(AREA);
+        return d;
+      }
+
+      it('nimmt ohne eigene Wahl die Vorgabe', () => {
+        const d = tiled();
+        expect(d.tileGap).toBe(TILE_GAP);
+      });
+
+      it('rechnet mit der gewählten Fuge statt mit der Vorgabe', () => {
+        const d = mitFuge(30);
+        const a = d.openApp('a', { title: 'A', icon: '🅰' });
+        const b = d.openApp('b', { title: 'B', icon: '🅱' });
+
+        expect(d.tileGap).toBe(30);
+        expect(d.tileRects[b].x - (d.tileRects[a].x + d.tileRects[a].w)).toBe(30);
+        expect(d.tileRects[a].w + d.tileRects[b].w).toBe(AREA.w - 30);
+        expectDisjointWithin(Object.values(d.tileRects), AREA);
+      });
+
+      it('legt die Kacheln bei Fuge null lückenlos aneinander', () => {
+        const d = mitFuge(0);
+        const a = d.openApp('a', { title: 'A', icon: '🅰' });
+        const b = d.openApp('b', { title: 'B', icon: '🅱' });
+
+        expect(d.tileRects[b].x).toBe(d.tileRects[a].x + d.tileRects[a].w);
+        expect(d.tileRects[a].w + d.tileRects[b].w).toBe(AREA.w);
+        expectDisjointWithin(Object.values(d.tileRects), AREA);
+      });
+
+      it('rückt die Kacheln nach, sobald die Fuge sich ändert', () => {
+        const ws = useWorkspaceStore();
+        const d = mitFuge(0);
+        const a = d.openApp('a', { title: 'A', icon: '🅰' });
+        d.openApp('b', { title: 'B', icon: '🅱' });
+        const vorher = d.tileRects[a].w;
+
+        ws.tileGaps = { '/apps': 40 };
+
+        expect(d.tileRects[a].w).toBe(vorher - 20);
+      });
     });
 
     describe('an der Fuge ziehen (c0067)', () => {

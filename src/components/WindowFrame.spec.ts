@@ -344,6 +344,66 @@ describe('WindowFrame', () => {
       expect(desktop.tileSwap).toBeNull();
     });
 
+    describe('Titelleiste weglegen (c0072)', () => {
+      /** Eine Kachel in einem Verzeichnis, das seine Leisten weglegt. */
+      function mountOhneLeiste({ tiled = true } = {}) {
+        const ws = useWorkspaceStore();
+        ws.uiMode = 'tiles';
+        ws.folder = '/apps';
+        ws.tileChromeHides = { '/apps': true };
+        const desktop = useDesktopStore();
+        desktop.setTileArea({ x: 0, y: 0, w: 1000, h: 600 });
+        const id = desktop.openSystem(EXPLORER_ID)!;
+        const wrapper = mount(WindowFrame, { props: { win: desktop.find(id)!, tiled } });
+        return { wrapper, desktop };
+      }
+
+      it('trägt seine Leiste, solange die Einstellung sie nicht weglegt', () => {
+        const { wrapper } = mountTile();
+        expect(wrapper.get('.window-frame').classes()).not.toContain('chrome-hidden');
+        expect(wrapper.find('.chrome-sensor').exists()).toBe(false);
+      });
+
+      it('legt die Leiste weg und holt sie am oberen Rand wieder hervor', async () => {
+        const { wrapper } = mountOhneLeiste();
+        const frame = () => wrapper.get('.window-frame').classes();
+
+        expect(frame()).toContain('chrome-hidden');
+        expect(frame()).toContain('chrome-away');
+        // Sie ist nur weggelegt, nicht abgebaut — die Fensterknöpfe bleiben.
+        expect(wrapper.find('.w-close').exists()).toBe(true);
+
+        await wrapper.get('.chrome-sensor').trigger('mouseenter');
+        expect(frame()).toContain('chrome-hidden');
+        expect(frame()).not.toContain('chrome-away');
+
+        await wrapper.get('.titlebar').trigger('mouseleave');
+        expect(frame()).toContain('chrome-away');
+      });
+
+      it('behält die Leiste, solange das Fenster getragen wird', async () => {
+        const { wrapper, desktop } = mountOhneLeiste();
+        desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });
+        await wrapper.vm.$nextTick();
+
+        await wrapper.get('.chrome-sensor').trigger('mouseenter');
+        await wrapper.get('.titlebar').trigger('mousedown', { clientX: 100, clientY: 4 });
+        // Der Zeiger verlässt die Leiste beim Tragen — sie bleibt trotzdem da.
+        await wrapper.get('.titlebar').trigger('mouseleave');
+        expect(wrapper.get('.window-frame').classes()).not.toContain('chrome-away');
+
+        window.dispatchEvent(new MouseEvent('mouseup'));
+        await wrapper.vm.$nextTick();
+        expect(wrapper.get('.window-frame').classes()).toContain('chrome-away');
+      });
+
+      it('rührt die Leiste außerhalb des Kachel-Modus nicht an', () => {
+        const { wrapper } = mountOhneLeiste({ tiled: false });
+        expect(wrapper.get('.window-frame').classes()).not.toContain('chrome-hidden');
+        expect(wrapper.find('.chrome-sensor').exists()).toBe(false);
+      });
+    });
+
     it('füllt maximiert die ganze Fläche und kehrt danach in die Kachel zurück', async () => {
       const { wrapper, desktop, win } = mountTile();
       desktop.openApp('editor-2', { title: 'Editor', icon: '📝' });

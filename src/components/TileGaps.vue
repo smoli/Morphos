@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue';
-import { TILE_GAP, useDesktopStore } from '@/stores/desktop';
+import { useDesktopStore } from '@/stores/desktop';
 import { gapBands, type GapHit } from '@/core/tiling';
 
 /**
@@ -14,8 +14,8 @@ import { gapBands, type GapHit } from '@/core/tiling';
  * maximiert die Fläche füllt, gibt es keine Fuge zu fassen.
  */
 
-/** Ein paar Bildpunkte Zugabe auf jeder Seite: Die 12 px breite Fuge wird so
- *  zu einem Griff, den man nicht erst suchen muss. */
+/** Ein paar Bildpunkte Zugabe auf jeder Seite: Die Fuge wird so zu einem Griff,
+ *  den man nicht erst suchen muss — auch eine sehr schmale (c0072). */
 const GRAB = 4;
 
 const desktop = useDesktopStore();
@@ -29,7 +29,7 @@ const blocked = computed(
 );
 
 const bands = computed<GapHit[]>(() =>
-  blocked.value ? [] : gapBands(desktop.tileTree, desktop.tileArea, TILE_GAP),
+  blocked.value ? [] : gapBands(desktop.tileTree, desktop.tileArea, desktop.tileGap),
 );
 
 /** Ein Pfad als Schlüssel — die Wurzel hat den leeren. */

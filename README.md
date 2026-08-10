@@ -164,7 +164,9 @@ Startbildschirm:
   „dwindle“: ein neues Fenster teilt die aktive Kachel (Richtung nach
   Seitenverhältnis), an den **Fugen ziehen** ändert die Größe, das **Ziehen der
   Titelleiste auf eine andere Kachel** tauscht die Plätze. Die Anordnung wird je
-  Workspace gemerkt.
+  Workspace gemerkt. Wie **weit die Fuge** ist und ob eine Kachel ihre
+  **Titelleiste weglegt** (sie kommt hervor, sobald der Zeiger den oberen Rand
+  erreicht), steht in den Einstellungen unter „Darstellung“.
 - **Sitzung:** Welche Fenster offen waren und wo, kommt beim nächsten Start
   zurück (auch die Kachel-Anordnung).
 - **Tastenkürzel:** neue App, Schließen/Minimieren/Maximieren, Einstellungen,
@@ -204,7 +206,8 @@ src/
     trash.ts · dialog.ts     Papierkorb-Regeln · scoped Dateidialoge
     filelink.ts · preview.ts · watch.ts · diskusage.ts
                        Datei-Explorer: Strom, Vorschau-Regeln, Ordner-Beobachtung, Platz
-    tiling.ts · tilelayout.ts   Kachel-Baum (dwindle) + Persistenz je Workspace
+    tiling.ts · tilelayout.ts · tilesettings.ts
+                       Kachel-Baum (dwindle) · Persistenz je Workspace · Fuge/Titelleiste
     uimode.ts · arrange.ts · dock.ts · favorites.ts · wallpaper.ts · session.ts
                        Darstellung · Icon-Raster · Dock · Favoriten · Hintergrund · Sitzung
     launcher.ts · shortcuts.ts · switcher.ts · system.ts

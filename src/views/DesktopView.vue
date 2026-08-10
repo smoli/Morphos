@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useWorkspaceStore } from '@/stores/workspace';
-import { TILE_GAP, useDesktopStore } from '@/stores/desktop';
+import { useDesktopStore } from '@/stores/desktop';
 import { useAgentsStore } from '@/stores/agents';
 import { useAppWindow } from '@/stores/app';
 import { useSetAppIcon } from '@/composables/useSetAppIcon';
@@ -214,13 +214,15 @@ function measure(): void {
 
 /**
  * Worauf gekachelt wird: die Arbeitsfläche, ringsum um eine Fuge eingerückt —
- * so steht zwischen zwei Kacheln genau so viel Luft wie zum Rand hin.
+ * so steht zwischen zwei Kacheln genau so viel Luft wie zum Rand hin. Wie weit
+ * die Fuge ist, sagen die Einstellungen (c0072); wird sie geschoben, rückt
+ * darum auch der Rand mit.
  */
 const tileArea = computed<Rect>(() => ({
-  x: work.value.x + TILE_GAP,
-  y: work.value.y + TILE_GAP,
-  w: Math.max(0, work.value.w - 2 * TILE_GAP),
-  h: Math.max(0, work.value.h - 2 * TILE_GAP),
+  x: work.value.x + desktop.tileGap,
+  y: work.value.y + desktop.tileGap,
+  w: Math.max(0, work.value.w - 2 * desktop.tileGap),
+  h: Math.max(0, work.value.h - 2 * desktop.tileGap),
 }));
 
 // Der Baum rechnet in dieser Fläche: Sie ändert sich mit dem Programmfenster

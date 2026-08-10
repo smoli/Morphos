@@ -15,6 +15,11 @@ import { DOCK_EDGES } from '@/core/dock';
 import { UI_MODE_OPTIONS } from '@/core/uimode';
 import type { DockEdge, UiMode } from '@/types';
 import {
+  DEFAULT_TILE_GAP,
+  MAX_TILE_GAP,
+  TILE_GAP_STEP,
+} from '@/core/tilesettings';
+import {
   BLUR_STEP,
   DEFAULT_DOCK_BLUR,
   DEFAULT_DOCK_TRANSPARENCY,
@@ -58,6 +63,19 @@ const uiMode = computed(() => workspace.uiMode);
 function onUiMode(id: UiMode): void {
   workspace.setUiMode(id);
 }
+
+// ---- Die Kacheln (c0072) ----
+
+const tileGap = computed(() => workspace.tileGap);
+const chromeHidden = computed(() => workspace.tileChromeHidden);
+
+function onTileGap(event: Event): void {
+  workspace.setTileGap(Number((event.target as HTMLInputElement).value));
+}
+
+function onChromeHidden(event: Event): void {
+  workspace.setTileChromeHidden((event.target as HTMLInputElement).checked);
+}
 </script>
 
 <template>
@@ -84,6 +102,55 @@ function onUiMode(id: UiMode): void {
         <small class="mode-hint">{{ m.hint }}</small>
       </button>
     </div>
+  </section>
+
+  <section class="block tiles">
+    <h3>Die Kacheln</h3>
+    <p class="hint">
+      Was den Kachel-Modus ausmacht: wie viel Luft zwischen zwei Kacheln steht — und ob eine
+      Kachel ihre Titelleiste trägt oder sie weglegt, bis der Zeiger an ihren oberen Rand kommt.
+      Beides gilt für dieses Arbeitsverzeichnis und wird sofort wirksam.
+    </p>
+
+    <div class="tiles-preview" :class="{ 'no-chrome': chromeHidden }" :style="{ gap: `${tileGap}px`, padding: `${tileGap}px` }">
+      <div v-for="n in 2" :key="n" class="tile-preview">
+        <span class="tile-bar" aria-hidden="true"></span>
+      </div>
+    </div>
+
+    <div class="row">
+      <span class="end">lückenlos</span>
+      <input
+        class="gap-level"
+        type="range"
+        min="0"
+        :max="MAX_TILE_GAP"
+        :step="TILE_GAP_STEP"
+        :value="tileGap"
+        aria-label="Fuge zwischen zwei Kacheln"
+        @input="onTileGap"
+      />
+      <span class="end">weit</span>
+      <code class="gap-value">{{ tileGap }} px</code>
+      <button
+        type="button"
+        class="btn gap-reset"
+        :disabled="!workspace.hasTileGap"
+        @click="workspace.resetTileGap()"
+      >
+        Auf Vorgabe zurücksetzen ({{ DEFAULT_TILE_GAP }} px)
+      </button>
+    </div>
+
+    <label class="row switch">
+      <input class="chrome-hide" type="checkbox" :checked="chromeHidden" @change="onChromeHidden" />
+      <span>
+        Titelleiste ausblenden
+        <small class="muted">
+          — sie kommt hervor, sobald der Zeiger den oberen Rand der Kachel erreicht.
+        </small>
+      </span>
+    </label>
   </section>
 
   <section class="block dock">
@@ -185,9 +252,40 @@ function onUiMode(id: UiMode): void {
 
 <style scoped src="./settings.css"></style>
 <style scoped>
-/* Der Dock-Block steht unter dem Desktop-Block — mit Luft dazwischen. */
+/* Kachel- und Dock-Block stehen unter dem Desktop-Block — mit Luft dazwischen. */
+.tiles,
 .dock {
   margin-top: 26px;
+}
+/*
+ * Die Vorschau der Kacheln: zwei Kacheln in einer Fläche, mit genau der Fuge
+ * dazwischen (und ringsum), die der Regler meint — so wie der Desktop sie stellt
+ * (views/DesktopView rückt die Kachelfläche um eine Fuge ein).
+ */
+.tiles-preview {
+  display: flex;
+  height: 96px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+.tile-preview {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  overflow: hidden;
+}
+/* Die angedeutete Titelleiste — weggelegt ist sie schlicht nicht da. */
+.tile-bar {
+  height: 8px;
+  background: var(--border);
+}
+.tiles-preview.no-chrome .tile-bar {
+  display: none;
 }
 /*
  * Die drei Darstellungen als Karten nebeneinander: Zeichen, Name, ein Satz.

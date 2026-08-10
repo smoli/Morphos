@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import TileGaps from './TileGaps.vue';
-import { TILE_GAP, useDesktopStore } from '@/stores/desktop';
+import { useDesktopStore } from '@/stores/desktop';
+import { DEFAULT_TILE_GAP as TILE_GAP } from '@/core/tilesettings';
 import { useWorkspaceStore } from '@/stores/workspace';
 
 const AREA = { x: 0, y: 0, w: 1200, h: 800 };

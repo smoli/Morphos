@@ -25,6 +25,14 @@ import {
 } from '@/core/dock';
 import { cleanSessions, sameSession } from '@/core/session';
 import { cleanTileTrees, sameTree, type SavedTileTree } from '@/core/tilelayout';
+import {
+  cleanChromeHide,
+  cleanChromeHides,
+  cleanTileGap,
+  cleanTileGaps,
+  DEFAULT_TILE_CHROME_HIDE,
+  DEFAULT_TILE_GAP,
+} from '@/core/tilesettings';
 import { cleanUiMode, DEFAULT_UI_MODE } from '@/core/uimode';
 import { cleanWallpaper, cleanWallpapers, DEFAULT_WALLPAPER } from '@/core/wallpaper';
 import {
@@ -62,6 +70,10 @@ interface WorkspaceState {
   sessions: Record<string, SessionWindow[]>;
   /** Die zuletzt gekachelte Anordnung, je Workspace-Pfad (siehe core/tilelayout). */
   tileLayouts: Record<string, SavedTileTree>;
+  /** Die Fuge zwischen zwei Kacheln, je Workspace-Pfad (siehe core/tilesettings). */
+  tileGaps: Record<string, number>;
+  /** Legt eine Kachel ihre Titelleiste weg? Je Workspace-Pfad (siehe core/tilesettings). */
+  tileChromeHides: Record<string, boolean>;
   /** Der Hintergrund der Desktop-Fläche, je Workspace-Pfad (siehe core/wallpaper). */
   wallpapers: Record<string, Wallpaper>;
   /** Die Durchsichtigkeit des Docks, je Workspace-Pfad (siehe core/transparency). */
@@ -101,6 +113,8 @@ export const useWorkspaceStore = defineStore('workspace', {
     favorites: {},
     sessions: {},
     tileLayouts: {},
+    tileGaps: {},
+    tileChromeHides: {},
     wallpapers: {},
     dockTransparencies: {},
     dockBlurs: {},
@@ -136,6 +150,13 @@ export const useWorkspaceStore = defineStore('workspace', {
     session: (s): SessionWindow[] => (s.folder ? s.sessions[s.folder] ?? [] : []),
     /** Die gemerkte Kachel-Anordnung des aktuellen Verzeichnisses (oder keine). */
     tileLayout: (s): SavedTileTree | null => (s.folder ? s.tileLayouts[s.folder] ?? null : null),
+    /** Wie weit die Fuge zwischen zwei Kacheln hier ist — ohne eigene die Vorgabe. */
+    tileGap: (s): number => (s.folder ? s.tileGaps[s.folder] ?? DEFAULT_TILE_GAP : DEFAULT_TILE_GAP),
+    /** Hat der Anwender hier eine eigene Fuge gewählt? */
+    hasTileGap: (s): boolean => (s.folder ? s.tileGaps[s.folder] !== undefined : false),
+    /** Legt eine Kachel hier ihre Titelleiste weg — ohne eigene Entscheidung die Vorgabe? */
+    tileChromeHidden: (s): boolean =>
+      (s.folder ? s.tileChromeHides[s.folder] ?? DEFAULT_TILE_CHROME_HIDE : DEFAULT_TILE_CHROME_HIDE),
     /** Der Hintergrund des aktuellen Verzeichnisses — ohne eigenen die Vorgabe. */
     wallpaper: (s): Wallpaper => (s.folder ? s.wallpapers[s.folder] ?? DEFAULT_WALLPAPER : DEFAULT_WALLPAPER),
     /** Hat der Anwender hier einen eigenen Hintergrund gewählt? */
@@ -173,6 +194,8 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.favorites = cleanFavorites(settings?.favorites);
         this.sessions = cleanSessions(settings?.sessions);
         this.tileLayouts = cleanTileTrees(settings?.tileLayouts);
+        this.tileGaps = cleanTileGaps(settings?.tileGaps);
+        this.tileChromeHides = cleanChromeHides(settings?.tileChromeHides);
         this.wallpapers = cleanWallpapers(settings?.wallpapers);
         this.dockTransparencies = cleanTransparencies(settings?.dockTransparencies);
         this.dockBlurs = cleanBlurs(settings?.dockBlurs);
@@ -189,6 +212,8 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.favorites = {};
         this.sessions = {};
         this.tileLayouts = {};
+        this.tileGaps = {};
+        this.tileChromeHides = {};
         this.wallpapers = {};
         this.dockTransparencies = {};
         this.dockBlurs = {};
@@ -309,6 +334,47 @@ export const useWorkspaceStore = defineStore('workspace', {
         this.favorites = { ...this.favorites, [this.folder]: ids };
       }
       void this.persistSettings();
+    },
+
+    /**
+     * Legt fest, wie weit die Fuge zwischen zwei Kacheln in diesem Verzeichnis
+     * ist. Geprüft wird hier, nicht erst beim Rechnen: Was `cleanTileGap` nicht
+     * annimmt, wird nicht gemerkt (liefert false).
+     */
+    setTileGap(gap: number): boolean {
+      if (!this.folder) return false;
+      const clean = cleanTileGap(gap);
+      if (clean === null) return false;
+      this.tileGaps = { ...this.tileGaps, [this.folder]: clean };
+      void this.persistSettings();
+      return true;
+    },
+
+    /** Zurück zur Vorgabe: Dieses Verzeichnis hat dann keine eigene Fuge mehr. */
+    resetTileGap(): void {
+      if (!this.folder || this.tileGaps[this.folder] === undefined) return;
+      const { [this.folder]: _weg, ...rest } = this.tileGaps;
+      this.tileGaps = rest;
+      void this.persistSettings();
+    },
+
+    /**
+     * Legt fest, ob eine Kachel in diesem Verzeichnis ihre Titelleiste weglegt.
+     * Wie beim Dock ist der Schalter selbst der Weg zurück — die Vorgabe wird
+     * darum nicht gemerkt, ihr Eintrag fällt weg.
+     */
+    setTileChromeHidden(on: boolean): boolean {
+      if (!this.folder) return false;
+      const clean = cleanChromeHide(on);
+      if (clean === null) return false;
+      if (clean === DEFAULT_TILE_CHROME_HIDE) {
+        const { [this.folder]: _weg, ...rest } = this.tileChromeHides;
+        this.tileChromeHides = rest;
+      } else {
+        this.tileChromeHides = { ...this.tileChromeHides, [this.folder]: clean };
+      }
+      void this.persistSettings();
+      return true;
     },
 
     /**
@@ -576,6 +642,8 @@ export const useWorkspaceStore = defineStore('workspace', {
       const favorites = JSON.parse(JSON.stringify(this.favorites)) as Record<string, string[]>;
       const sessions = JSON.parse(JSON.stringify(this.sessions)) as Record<string, SessionWindow[]>;
       const tileLayouts = JSON.parse(JSON.stringify(this.tileLayouts)) as Record<string, SavedTileTree>;
+      const tileGaps = { ...this.tileGaps };
+      const tileChromeHides = { ...this.tileChromeHides };
       const wallpapers = JSON.parse(JSON.stringify(this.wallpapers)) as Record<string, Wallpaper>;
       const dockTransparencies = { ...this.dockTransparencies };
       const dockBlurs = { ...this.dockBlurs };
@@ -593,6 +661,8 @@ export const useWorkspaceStore = defineStore('workspace', {
           favorites,
           sessions,
           tileLayouts,
+          tileGaps,
+          tileChromeHides,
           wallpapers,
           dockTransparencies,
           dockBlurs,

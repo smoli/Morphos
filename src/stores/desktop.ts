@@ -5,7 +5,6 @@ import { restoreTiles, serializeTiles } from '@/core/tilelayout';
 import { systemWindow } from '@/core/system';
 import {
   computeRects,
-  DEFAULT_GAP,
   hasLeaf,
   hitLeaf,
   insertLeaf,
@@ -79,9 +78,6 @@ const DEFAULT_W = 720;
 const DEFAULT_H = 520;
 const CASCADE = 28;
 
-/** Die Fuge zwischen zwei Kacheln (c0066 nimmt den Vorschlag aus core/tiling). */
-export const TILE_GAP = DEFAULT_GAP;
-
 /** Ohne gemessene Fläche gibt es nichts zu kacheln. */
 const NO_AREA: Rect = { x: 0, y: 0, w: 0, h: 0 };
 
@@ -147,6 +143,14 @@ export const useDesktopStore = defineStore('desktop', {
     /** Wird gerade gekachelt? Dann gibt der Baum die Geometrie vor, nicht die Maus. */
     tiling: (): boolean => useWorkspaceStore().uiMode === 'tiles',
 
+    /**
+     * Die Fuge zwischen zwei Kacheln — so weit, wie die Einstellungen dieses
+     * Verzeichnisses es sagen (c0072, core/tilesettings). Sie geht in jede
+     * Rechnung des Baums ein; ändert sie sich, rücken die Kacheln nach, denn
+     * ihre Rechtecke fallen aus dem Baum ab.
+     */
+    tileGap: (): number => useWorkspaceStore().tileGap,
+
     /** Der Kachel-Baum dieses Verzeichnisses — außerhalb des Kachel-Modus keiner. */
     tileTree(): TileTree | null {
       return this.tiling ? this.tiles[tileKey()] ?? null : null;
@@ -158,7 +162,7 @@ export const useDesktopStore = defineStore('desktop', {
      * jede Änderung am Baum (oder an der Fläche) zeichnet die Fenster neu.
      */
     tileRects(): Record<string, Rect> {
-      return computeRects(this.tileTree, this.tileArea, TILE_GAP);
+      return computeRects(this.tileTree, this.tileArea, this.tileGap);
     },
   },
 
@@ -342,8 +346,8 @@ export const useDesktopStore = defineStore('desktop', {
     dragGap(path: NodePath, point: Point): void {
       const tree = this.tileTree;
       if (!tree) return;
-      const ratio = ratioAtPoint(tree, path, point, this.tileArea, TILE_GAP);
-      const next = setRatio(tree, path, ratio, this.tileArea, TILE_GAP);
+      const ratio = ratioAtPoint(tree, path, point, this.tileArea, this.tileGap);
+      const next = setRatio(tree, path, ratio, this.tileArea, this.tileGap);
       if (next === tree) return;
       this.tiles[tileKey()] = next;
       this.schedulePersistTiles();
@@ -364,7 +368,7 @@ export const useDesktopStore = defineStore('desktop', {
     aimTileSwap(point: Point): void {
       const swap = this.tileSwap;
       if (!swap) return;
-      const hit = hitLeaf(this.tileTree, point, this.tileArea, TILE_GAP);
+      const hit = hitLeaf(this.tileTree, point, this.tileArea, this.tileGap);
       swap.targetId = hit && hit !== swap.id ? hit : null;
     },
 
@@ -405,7 +409,7 @@ export const useDesktopStore = defineStore('desktop', {
       let focus = splitting ?? this.focusedId;
       for (const id of open) {
         if (hasLeaf(tree, id)) continue;
-        tree = insertLeaf(tree, focus, id, this.tileArea, TILE_GAP);
+        tree = insertLeaf(tree, focus, id, this.tileArea, this.tileGap);
         // Reihenweise Aufnahme (beim Wechsel in den Modus): Jedes weitere
         // Fenster teilt das zuletzt aufgenommene — daraus wird die Spirale.
         focus = id;

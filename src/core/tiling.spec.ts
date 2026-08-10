@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  DEFAULT_GAP,
   MIN_TILE,
   computeRects,
   gapBands,
@@ -455,8 +454,9 @@ describe('Der Verbund füllt die Fläche', () => {
 });
 
 describe('Voreinstellungen', () => {
-  it('nennt einen Abstand und eine Mindestgröße', () => {
-    expect(DEFAULT_GAP).toBeGreaterThan(0);
-    expect(MIN_TILE).toBeGreaterThan(DEFAULT_GAP);
+  it('nennt eine Mindestgröße für eine Kachel', () => {
+    // Die Fuge ist keine Voreinstellung der Rechnung mehr, sondern eine
+    // Einstellung (core/tilesettings, c0072) — sie kommt als `gap` herein.
+    expect(MIN_TILE).toBeGreaterThan(0);
   });
 });

@@ -176,6 +176,18 @@ export interface Settings {
    */
   tileLayouts?: Record<string, TileTree>;
   /**
+   * Wie weit die Fuge zwischen zwei Kacheln ist, je Workspace-Pfad —
+   * Bildpunkte zwischen 0 (lückenlos) und `MAX_TILE_GAP`. Was hier fehlt,
+   * bekommt die Vorgabe (siehe core/tilesettings).
+   */
+  tileGaps?: Record<string, number>;
+  /**
+   * Legt eine Kachel ihre Titelleiste weg, bis der Zeiger an ihren oberen Rand
+   * kommt, je Workspace-Pfad? Was hier fehlt, bekommt die Vorgabe (siehe
+   * core/tilesettings).
+   */
+  tileChromeHides?: Record<string, boolean>;
+  /**
    * Der Hintergrund der Desktop-Fläche je Workspace-Pfad. Was hier fehlt,
    * bekommt die Vorgabe (siehe core/wallpaper).
    */

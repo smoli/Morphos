@@ -28,7 +28,7 @@ import {
 } from '@/core/transparency';
 import { DEFAULT_DOCK_EDGE } from '@/core/dock';
 import { DOCK_RESERVE } from '@/core/workarea';
-import { TILE_GAP } from '@/stores/desktop';
+import { DEFAULT_TILE_GAP as TILE_GAP } from '@/core/tilesettings';
 import type { AppData, AppSummary, MorphosHost } from '@/types';
 
 const apps: AppSummary[] = [

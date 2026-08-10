@@ -26,6 +26,7 @@ import { cleanFavorites } from '../src/core/favorites';
 import { cleanAutohides, cleanDockEdges } from '../src/core/dock';
 import { cleanSessions } from '../src/core/session';
 import { cleanTileTrees } from '../src/core/tilelayout';
+import { cleanChromeHides, cleanTileGaps } from '../src/core/tilesettings';
 import { cleanUiMode, DEFAULT_UI_MODE } from '../src/core/uimode';
 import { cleanWallpapers } from '../src/core/wallpaper';
 import { cleanBlurs, cleanTransparencies } from '../src/core/transparency';
@@ -133,6 +134,8 @@ function readSettings(): Settings {
     const favorites = cleanFavorites(parsed.favorites);
     const sessions = cleanSessions(parsed.sessions);
     const tileLayouts = cleanTileTrees(parsed.tileLayouts);
+    const tileGaps = cleanTileGaps(parsed.tileGaps);
+    const tileChromeHides = cleanChromeHides(parsed.tileChromeHides);
     const wallpapers = cleanWallpapers(parsed.wallpapers);
     const dockTransparencies = cleanTransparencies(parsed.dockTransparencies);
     const dockBlurs = cleanBlurs(parsed.dockBlurs);
@@ -149,6 +152,8 @@ function readSettings(): Settings {
       favorites,
       sessions,
       tileLayouts,
+      tileGaps,
+      tileChromeHides,
       wallpapers,
       dockTransparencies,
       dockBlurs,
@@ -167,6 +172,8 @@ function readSettings(): Settings {
       favorites: {},
       sessions: {},
       tileLayouts: {},
+      tileGaps: {},
+      tileChromeHides: {},
       wallpapers: {},
       dockTransparencies: {},
       dockBlurs: {},
@@ -606,6 +613,8 @@ ipcMain.handle('morphos:saveSettings', async (_e, settings: Settings): Promise<S
       favorites: cleanFavorites(settings?.favorites),
       sessions: cleanSessions(settings?.sessions),
       tileLayouts: cleanTileTrees(settings?.tileLayouts),
+      tileGaps: cleanTileGaps(settings?.tileGaps),
+      tileChromeHides: cleanChromeHides(settings?.tileChromeHides),
       wallpapers: cleanWallpapers(settings?.wallpapers),
       dockTransparencies: cleanTransparencies(settings?.dockTransparencies),
       dockBlurs: cleanBlurs(settings?.dockBlurs),

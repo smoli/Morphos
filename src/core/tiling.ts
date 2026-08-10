@@ -42,10 +42,11 @@ export interface Point {
   y: number;
 }
 
-/** Die Fuge zwischen zwei Kacheln; sie ist zugleich der Griff zum Ziehen. */
-export const DEFAULT_GAP = 12;
-
-/** So schmal darf eine Kachel beim Ziehen an der Fuge höchstens werden. */
+/**
+ * So schmal darf eine Kachel beim Ziehen an der Fuge höchstens werden. Wie
+ * breit die Fuge selbst ist, sagt die Rechnung nicht — das ist eine Einstellung
+ * (core/tilesettings, c0072) und kommt bei jedem Aufruf als `gap` herein.
+ */
 export const MIN_TILE = 96;
 
 /** Eine getroffene Fuge: welche Teilung, in welcher Richtung, und wo sie liegt. */

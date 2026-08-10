@@ -5,6 +5,7 @@ import { setHost } from '@/services/host';
 import { DEFAULT_WALLPAPER } from '@/core/wallpaper';
 import { DEFAULT_DOCK_BLUR, DEFAULT_DOCK_TRANSPARENCY } from '@/core/transparency';
 import { DEFAULT_DOCK_AUTOHIDE, DEFAULT_DOCK_EDGE } from '@/core/dock';
+import { DEFAULT_TILE_CHROME_HIDE, DEFAULT_TILE_GAP, MAX_TILE_GAP } from '@/core/tilesettings';
 import { leaf, split } from '@/core/tiling';
 import type { MorphosHost, AppSummary, Settings } from '@/types';
 
@@ -56,7 +57,7 @@ describe('useWorkspaceStore', () => {
     expect(ws.folder).toBe('/neu');
     expect(ws.recentFolders[0]).toBe('/neu');
     expect(ws.apps).toHaveLength(2);
-    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows', maxAgents: 2, iconPositions: {}, favorites: {}, sessions: {}, tileLayouts: {}, wallpapers: {}, dockTransparencies: {}, dockBlurs: {}, dockAutohides: {}, dockEdges: {} });
+    expect(host.saveSettings).toHaveBeenCalledWith({ recentFolders: ['/neu', '/alt'], accessRoots: {}, permissions: {}, libWhitelist: [], uiMode: 'windows', maxAgents: 2, iconPositions: {}, favorites: {}, sessions: {}, tileLayouts: {}, tileGaps: {}, tileChromeHides: {}, wallpapers: {}, dockTransparencies: {}, dockBlurs: {}, dockAutohides: {}, dockEdges: {} });
     expect(host.listApps).toHaveBeenCalledWith('/neu');
   });
 
@@ -892,6 +893,174 @@ describe('useWorkspaceStore', () => {
       await ws.init();
       await ws.openFolder('/apps');
       expect(ws.dockEdge).toBe(DEFAULT_DOCK_EDGE);
+    });
+  });
+
+  describe('Fuge des Kachel-Verbunds (c0072)', () => {
+    it('lädt die gemerkte Fuge des Workspace', async () => {
+      setHost(makeHost({
+        loadSettings: vi.fn(async () => ({
+          recentFolders: [],
+          accessRoots: {},
+          tileGaps: { '/apps': 24, '/andere': 4 },
+        })),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.init();
+      expect(ws.tileGap).toBe(DEFAULT_TILE_GAP); // noch kein Ordner geöffnet
+      await ws.openFolder('/apps');
+      expect(ws.tileGap).toBe(24);
+      expect(ws.hasTileGap).toBe(true);
+    });
+
+    it('gilt die Vorgabe, solange keine gewählt ist', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+      expect(ws.tileGap).toBe(DEFAULT_TILE_GAP);
+      expect(ws.hasTileGap).toBe(false);
+    });
+
+    it('merkt eine gewählte Fuge je Workspace und speichert sie', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(ws.setTileGap(19.6)).toBe(true);
+
+      expect(ws.tileGap).toBe(20); // beim Merken schon gerundet
+      expect(host.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ tileGaps: { '/apps': 20 } }),
+      );
+    });
+
+    it('nimmt keine unbrauchbare Fuge an', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+      const calls = (host.saveSettings as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      expect(ws.setTileGap(MAX_TILE_GAP + 1)).toBe(false);
+
+      expect(ws.hasTileGap).toBe(false);
+      expect((host.saveSettings as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(calls);
+    });
+
+    it('rührt ohne geöffneten Ordner nichts an', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      expect(ws.setTileGap(20)).toBe(false);
+      expect(ws.tileGaps).toEqual({});
+    });
+
+    it('setzt nur den aktuellen Workspace auf die Vorgabe zurück', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      ws.tileGaps = { '/andere': 4 };
+      await ws.openFolder('/apps');
+      ws.setTileGap(30);
+
+      ws.resetTileGap();
+
+      expect(ws.tileGap).toBe(DEFAULT_TILE_GAP);
+      expect(ws.hasTileGap).toBe(false);
+      expect(host.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ tileGaps: { '/andere': 4 } }),
+      );
+    });
+
+    it('überlebt beschädigte Einstellungen (dann gilt die Vorgabe)', async () => {
+      setHost(makeHost({
+        // Beschädigte Einstellungen von der Platte — der Typ lügt hier absichtlich.
+        loadSettings: vi.fn(async () => ({
+          recentFolders: [],
+          accessRoots: {},
+          tileGaps: { '/apps': 'weit' },
+        } as unknown as Settings)),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.init();
+      await ws.openFolder('/apps');
+      expect(ws.tileGap).toBe(DEFAULT_TILE_GAP);
+    });
+  });
+
+  describe('Fensterrahmen im Kachel-Modus (c0072)', () => {
+    it('lädt die gemerkte Entscheidung des Workspace', async () => {
+      setHost(makeHost({
+        loadSettings: vi.fn(async () => ({
+          recentFolders: [],
+          accessRoots: {},
+          tileChromeHides: { '/apps': true },
+        })),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.init();
+      expect(ws.tileChromeHidden).toBe(DEFAULT_TILE_CHROME_HIDE); // noch kein Ordner geöffnet
+      await ws.openFolder('/apps');
+      expect(ws.tileChromeHidden).toBe(true);
+    });
+
+    it('gilt die Vorgabe, solange nichts entschieden ist', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+      expect(ws.tileChromeHidden).toBe(DEFAULT_TILE_CHROME_HIDE);
+    });
+
+    it('merkt das Weglegen je Workspace und speichert es', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(ws.setTileChromeHidden(true)).toBe(true);
+
+      expect(ws.tileChromeHidden).toBe(true);
+      expect(host.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ tileChromeHides: { '/apps': true } }),
+      );
+    });
+
+    it('merkt die Vorgabe gar nicht erst — ein Verzeichnis ohne Eintrag ist genau das', async () => {
+      const host = makeHost();
+      setHost(host);
+      const ws = useWorkspaceStore();
+      ws.tileChromeHides = { '/andere': true };
+      await ws.openFolder('/apps');
+      ws.setTileChromeHidden(true);
+
+      expect(ws.setTileChromeHidden(false)).toBe(true);
+
+      expect(ws.tileChromeHidden).toBe(false);
+      expect(host.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ tileChromeHides: { '/andere': true } }),
+      );
+    });
+
+    it('rührt ohne geöffneten Ordner nichts an', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      expect(ws.setTileChromeHidden(true)).toBe(false);
+      expect(ws.tileChromeHides).toEqual({});
+    });
+
+    it('überlebt beschädigte Einstellungen (dann gilt die Vorgabe)', async () => {
+      setHost(makeHost({
+        // Beschädigte Einstellungen von der Platte — der Typ lügt hier absichtlich.
+        loadSettings: vi.fn(async () => ({
+          recentFolders: [],
+          accessRoots: {},
+          tileChromeHides: { '/apps': 'ja' },
+        } as unknown as Settings)),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.init();
+      await ws.openFolder('/apps');
+      expect(ws.tileChromeHidden).toBe(DEFAULT_TILE_CHROME_HIDE);
     });
   });
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue';
 import { useDesktopStore } from '@/stores/desktop';
+import { useWorkspaceStore } from '@/stores/workspace';
 import { useAgentsStore } from '@/stores/agents';
 import BusyDot from './BusyDot.vue';
 import AppIcon from './AppIcon.vue';
@@ -21,10 +22,16 @@ import type { DesktopWindow } from '@/stores/desktop';
  * machen gibt es dann nicht: Die Titelleiste trägt das Fenster stattdessen auf
  * eine andere Kachel, wo die beiden die Plätze tauschen (c0067) — und die Größe
  * ändert man an der Fuge (components/TileGaps).
+ *
+ * Gekachelt kann die Titelleiste außerdem WEGGELEGT sein (c0072): Sagen die
+ * Einstellungen es, liegt sie über dem Fensterkörper statt über ihm und kommt
+ * erst hervor, wenn der Zeiger den oberen Rand der Kachel erreicht — die App
+ * bekommt dafür die ganze Kachel.
  */
 const props = defineProps<{ win: DesktopWindow; single?: boolean; tiled?: boolean }>();
 
 const desktop = useDesktopStore();
+const workspace = useWorkspaceStore();
 const agents = useAgentsStore();
 
 const interacting = ref(false); // Ziehen/Größe ändern → Schutzschicht über den iframes
@@ -50,6 +57,28 @@ const swappable = computed(() => !full.value && !!props.tiled);
  * genau dieses hier (stores/desktop → activeId).
  */
 const active = computed(() => desktop.activeId === props.win.instanceId);
+
+/**
+ * Legt dieses Fenster seine Titelleiste weg (c0072)? Nur gekachelt: Im
+ * Fenster-Modus ist die Leiste der Griff, an dem das Fenster hängt, und im
+ * Einzel-Modus trägt sie den Weg zurück zum Desktop.
+ */
+const chromeHidden = computed(() => !!props.tiled && workspace.tileChromeHidden);
+// Der Zeiger steht am oberen Rand (oder auf der Leiste) — sie ist hervorgekommen.
+const peeking = ref(false);
+/**
+ * Weggelegt ist sie nur, solange niemand sie ruft: `peeking` holt sie hervor,
+ * und ein laufender Zug hält sie da — beim Tragen verlässt der Zeiger die
+ * Leiste sofort, sie soll darum nicht unter der Hand verschwinden.
+ */
+const chromeAway = computed(() => chromeHidden.value && !peeking.value && !interacting.value);
+
+function peekChrome(): void {
+  peeking.value = true;
+}
+function unpeekChrome(): void {
+  peeking.value = false;
+}
 
 // Dieses Fenster hängt gerade am Zeiger …
 const swapping = computed(() => desktop.tileSwap?.id === props.win.instanceId);
@@ -166,7 +195,7 @@ function stopInteraction(): void {
 <template>
   <section
     class="window-frame"
-    :class="{ full, tiled: !!tile, swapping, active }"
+    :class="{ full, tiled: !!tile, swapping, active, 'chrome-hidden': chromeHidden, 'chrome-away': chromeAway }"
     :style="frameStyle"
     @mousedown="focus"
   >
@@ -177,9 +206,18 @@ function stopInteraction(): void {
     <!-- Hier landet die getragene Kachel, wenn jetzt losgelassen wird. -->
     <div v-if="dropTarget" class="drop-target" aria-hidden="true"></div>
 
+    <!-- Der Fühler am oberen Rand: Er holt die weggelegte Leiste hervor (c0072).
+         Ein schmaler Streifen genügt — kommt die Leiste, liegt sie darüber. -->
+    <div v-if="chromeHidden" class="chrome-sensor" @mouseenter="peekChrome"></div>
+
     <!-- Im Einzel-Modus trägt die Kopfzeile KEINE Fensterknöpfe (es gibt dort
          keinen Fenstermanager), sondern nur den Weg zurück zum Desktop. -->
-    <header class="titlebar" @mousedown.self="startTitleDrag" @dblclick="!single && toggleMaximize()">
+    <header
+      class="titlebar"
+      @mousedown.self="startTitleDrag"
+      @dblclick="!single && toggleMaximize()"
+      @mouseleave="unpeekChrome"
+    >
       <button v-if="single" type="button" class="w-desktop" title="Zurück zum Desktop" @mousedown.stop @click="backToDesktop">
         ← Desktop
       </button>
@@ -271,6 +309,38 @@ function stopInteraction(): void {
 .window-frame.tiled {
   min-width: 0;
   min-height: 0;
+}
+/*
+ * Weggelegte Leiste (c0072): Sie verlässt den Fluss und legt sich ÜBER den
+ * Fensterkörper — der bekommt damit die ganze Kachel. Über ihr liegen nur noch
+ * der Hinweis auf die Zielkachel (8) und die Schutzschicht.
+ */
+.window-frame.chrome-hidden .titlebar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9;
+  transition: transform 0.14s ease, opacity 0.14s ease;
+}
+/* Fort ist sie nur, solange niemand sie ruft — und sie nimmt auch keine Maus. */
+.window-frame.chrome-away .titlebar {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+/*
+ * Der Fühler: ein schmaler Streifen am oberen Rand der Kachel. Er liegt unter
+ * der Leiste (die ihn verdeckt, sobald sie da ist) und über dem iframe der App,
+ * sonst schluckte das den Zeiger, bevor er oben ankommt.
+ */
+.chrome-sensor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 7;
+  height: 8px;
 }
 /* Getragen: Das Fenster bleibt an seinem Platz, hebt sich aber ab — es hängt
    am Zeiger und wartet auf die Kachel, mit der es tauscht (c0067). */

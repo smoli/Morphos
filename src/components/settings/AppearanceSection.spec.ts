@@ -12,6 +12,7 @@ import {
 } from '@/core/transparency';
 import { DEFAULT_DOCK_AUTOHIDE, DEFAULT_DOCK_EDGE, DOCK_EDGES } from '@/core/dock';
 import { DEFAULT_UI_MODE, UI_MODE_OPTIONS } from '@/core/uimode';
+import { DEFAULT_TILE_CHROME_HIDE, DEFAULT_TILE_GAP, MAX_TILE_GAP } from '@/core/tilesettings';
 import type { MorphosHost } from '@/types';
 
 function makeHost(over: Partial<MorphosHost> = {}): MorphosHost {
@@ -271,5 +272,91 @@ describe('AppearanceSection', () => {
     expect(ws.uiMode).toBe('tiles');
     expect(mode(wrapper, 'tiles').classes()).toContain('active');
     expect(mode(wrapper, DEFAULT_UI_MODE).classes()).not.toContain('active');
+  });
+
+  describe('Die Kacheln (c0072)', () => {
+    /** Der Regler für die Fuge zwischen zwei Kacheln. */
+    function gapSlider(wrapper: ReturnType<typeof mount>) {
+      return wrapper.get('input[type="range"].gap-level');
+    }
+
+    /** Der Schalter, der die Titelleisten der Kacheln weglegt. */
+    function chromeHide(wrapper: ReturnType<typeof mount>) {
+      return wrapper.get('input[type="checkbox"].chrome-hide');
+    }
+
+    it('steht anfangs auf der Vorgabe und nennt sie in Bildpunkten', () => {
+      const wrapper = mount(AppearanceSection);
+      expect((gapSlider(wrapper).element as HTMLInputElement).value).toBe(String(DEFAULT_TILE_GAP));
+      expect(wrapper.get('.gap-value').text()).toBe(`${DEFAULT_TILE_GAP} px`);
+      expect(gapSlider(wrapper).attributes('max')).toBe(String(MAX_TILE_GAP));
+    });
+
+    it('merkt eine geschobene Fuge im Workspace und zeigt sie in der Vorschau', async () => {
+      const wrapper = mount(AppearanceSection);
+      const ws = useWorkspaceStore();
+
+      await gapSlider(wrapper).setValue('26');
+
+      expect(ws.tileGap).toBe(26);
+      expect(ws.hasTileGap).toBe(true);
+      expect(wrapper.get('.gap-value').text()).toBe('26 px');
+      expect(wrapper.get('.tiles-preview').attributes('style')).toContain('26px');
+    });
+
+    it('setzt die Fuge auf die Vorgabe zurück — und bietet das erst an, wenn es etwas zurückzusetzen gibt', async () => {
+      const wrapper = mount(AppearanceSection);
+      const ws = useWorkspaceStore();
+      expect(wrapper.get('.gap-reset').attributes('disabled')).toBeDefined();
+
+      await gapSlider(wrapper).setValue('26');
+      expect(wrapper.get('.gap-reset').attributes('disabled')).toBeUndefined();
+
+      await wrapper.get('.gap-reset').trigger('click');
+
+      expect(ws.tileGap).toBe(DEFAULT_TILE_GAP);
+      expect(ws.hasTileGap).toBe(false);
+      expect((gapSlider(wrapper).element as HTMLInputElement).value).toBe(String(DEFAULT_TILE_GAP));
+    });
+
+    it('rührt die Fuge ohne geöffnetes Verzeichnis nicht an', async () => {
+      const ws = useWorkspaceStore();
+      ws.folder = null;
+      const wrapper = mount(AppearanceSection);
+
+      await gapSlider(wrapper).setValue('26');
+
+      expect(ws.tileGaps).toEqual({});
+    });
+
+    it('steht anfangs auf der Vorgabe: Die Kacheln tragen ihre Leiste', () => {
+      const wrapper = mount(AppearanceSection);
+      expect((chromeHide(wrapper).element as HTMLInputElement).checked).toBe(DEFAULT_TILE_CHROME_HIDE);
+      expect(wrapper.get('.tiles-preview').classes()).not.toContain('no-chrome');
+    });
+
+    it('merkt das Weglegen im Workspace — und nimmt es auch wieder zurück', async () => {
+      const wrapper = mount(AppearanceSection);
+      const ws = useWorkspaceStore();
+
+      await chromeHide(wrapper).setValue(true);
+      expect(ws.tileChromeHidden).toBe(true);
+      expect(wrapper.get('.tiles-preview').classes()).toContain('no-chrome');
+
+      await chromeHide(wrapper).setValue(false);
+      expect(ws.tileChromeHidden).toBe(false);
+      // Die Vorgabe wird nicht gemerkt — das Verzeichnis steht dann nicht mehr drin.
+      expect(ws.tileChromeHides).toEqual({});
+    });
+
+    it('rührt das Weglegen ohne geöffnetes Verzeichnis nicht an', async () => {
+      const ws = useWorkspaceStore();
+      ws.folder = null;
+      const wrapper = mount(AppearanceSection);
+
+      await chromeHide(wrapper).setValue(true);
+
+      expect(ws.tileChromeHides).toEqual({});
+    });
   });
 });
