@@ -23,26 +23,26 @@ be marked.
 
 ## Acceptance criteria
 
-- [ ] A **🎯 pick-mode toggle** (window title bar / composer) enters/exits pick
+- [x] A **🎯 pick-mode toggle** (window title bar / composer) enters/exits pick
       mode; in it, hovering an element in the app **highlights** it and clicking
       **captures** it; **Esc** / toggle exits.
-- [ ] A picked element becomes a **reference chip** in the composer (beside
+- [x] A picked element becomes a **reference chip** in the composer (beside
       attachments), recognizably labelled (tag + text); several can be added and
       removed individually.
-- [ ] The reference carries a **structured description**: tag, id, classes, text
+- [x] The reference carries a **structured description**: tag, id, classes, text
       content, a stable-ish **CSS selector / DOM path**, and size/position.
-- [ ] The bundler injects **`data-morphos-src`** on statically-authored markup
+- [x] The bundler injects **`data-morphos-src`** on statically-authored markup
       (elements from `src/index.html` and linked source), giving a picked element
       an **exact source location** (file + position) when available.
-- [ ] The next prompt includes each marked element as **context**
+- [x] The next prompt includes each marked element as **context**
       („referenziertes Element“) — the source location when present, else the
       description — so the LLM can locate and change it.
-- [ ] The picker runs as an **injected script inside the sandboxed iframe** (like
+- [x] The picker runs as an **injected script inside the sandboxed iframe** (like
       the `morphosFS` bridge) over `postMessage`; it adds **no** new capability and
       doesn't weaken the sandbox/CSP.
-- [ ] Works on **any rendered DOM** (vanilla and Preact); where a source tag is
+- [x] Works on **any rendered DOM** (vanilla and Preact); where a source tag is
       absent (runtime-generated DOM), it falls back to the description.
-- [ ] Pure pieces (selector building, `data-morphos-src` injection in the bundler,
+- [x] Pure pieces (selector building, `data-morphos-src` injection in the bundler,
       reference formatting for the prompt) are covered by **unit tests**.
 
 ## Discussion
