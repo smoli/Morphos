@@ -56,7 +56,15 @@ npx vite-node -c vitest.config.ts tools/audio-latency/report.ts messung.json
 ```
 
 Das gibt die Markdown-Tabelle für die Karte aus, dazu Puffergrößen, den Spruch
-je Arm (`ok` / `app-code` / `web-tuning` / `native-audio`) und den Abstand zum
-ersten Arm.
+je Arm (`ok` / `app-code` / `web-tuning` / `native-audio`), den Abstand zum
+ersten Arm und zum Schluss den Spruch über den **ganzen Lauf**. Der letzte ist
+der wichtigere: Erst der Blick quer über die Arme zeigt, ob der `latencyHint`
+auf dieser Plattform überhaupt etwas bewegt — unter Windows tut er es nicht.
 
-Gemessene Läufe liegen in [`measurements/`](measurements).
+Gemessene Läufe liegen in [`measurements/`](measurements):
+
+| Lauf | bester Arm | Boden |
+| --- | ---: | --- |
+| `windows-chrome151-manual.json` | **50,7 ms** | 480 Bilder, in jedem Arm gleich |
+| `macos-electron33-auto.json` | 7,8 ms | 480 / 256 / 128 Bilder je nach Hint |
+| `macos-electron33-buffer128.json` | 7,8 ms | 128 Bilder erzwungen |

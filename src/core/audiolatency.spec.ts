@@ -8,7 +8,9 @@ import {
   recommend,
   parseReport,
   formatReport,
+  judgeReport,
   type LatencyArm,
+  type LatencyReport,
 } from './audiolatency';
 
 /** Ein Messarm, wie ihn tools/audio-latency liefert — hier mit runden Zahlen. */
@@ -208,6 +210,69 @@ describe('parseReport', () => {
   it('nimmt einen Arm ohne Treffer an — der Plattformboden steht auch so fest', () => {
     const noHits = { ...valid, arms: [{ ...valid.arms[0], hits: undefined }] };
     expect(parseReport(noHits)?.arms[0].hits).toEqual([]);
+  });
+});
+
+describe('judgeReport', () => {
+  function report(arms: LatencyArm[]): LatencyReport {
+    return { platform: 'Prüfstand', shell: 'Prüfstand', arms };
+  }
+
+  it('nimmt den schnellsten Arm als das, was erreichbar ist', () => {
+    const judged = judgeReport(
+      report([arm({ label: 'langsam', outputLatency: 0.1 }), arm({ label: 'schnell' })]),
+    );
+    expect(judged.best.label).toBe('schnell');
+    expect(judged.bestMs).toBeCloseTo(17, 5);
+  });
+
+  it('misst am Abstand der Arme, ob der latencyHint überhaupt etwas bewegt', () => {
+    const spread = judgeReport(
+      report([arm({ latencyHint: 'balanced', outputLatency: 0.1 }), arm()]),
+    );
+    expect(spread.hintEffectMs).toBeCloseTo(90, 5);
+  });
+
+  it('erkennt eine Plattform, die den latencyHint schlicht überhört', () => {
+    // Windows: alle Arme melden denselben Puffer, egal was erbeten wurde.
+    const deaf = report([
+      arm({ label: 'balanced', latencyHint: 'balanced', baseLatency: 0.01, outputLatency: 0.04 }),
+      arm({ label: 'interactive', baseLatency: 0.01, outputLatency: 0.04 }),
+      arm({ label: '0.001', latencyHint: '0.001', baseLatency: 0.01, outputLatency: 0.04 }),
+    ]);
+    const judged = judgeReport(deaf);
+    expect(judged.hintEffectMs).toBe(0);
+    expect(judged.verdict).toBe('native-audio');
+    expect(judged.reason).toContain('latencyHint');
+  });
+
+  it('rät nicht zum Web-Hebel, wenn der Hebel nachweislich ins Leere greift', () => {
+    // Der schnellste Arm ist zufällig der mit „balanced“ — ohne den Blick über
+    // alle Arme hinweg käme hier fälschlich „probier doch interactive“ heraus.
+    const deaf = report([
+      arm({ latencyHint: 'balanced', baseLatency: 0.01, outputLatency: 0.04 }),
+      arm({ latencyHint: 'interactive', baseLatency: 0.01, outputLatency: 0.0401 }),
+    ]);
+    expect(recommend(deaf.arms[0]).verdict).toBe('web-tuning');
+    expect(judgeReport(deaf).verdict).toBe('native-audio');
+  });
+
+  it('lässt den Web-Hebel stehen, wo er messbar zieht', () => {
+    // Interactive wurde in diesem Lauf gar nicht gemessen, aber der Abstand
+    // zwischen den Armen zeigt: Der Hint bewegt hier etwas — also erst den.
+    const worth = report([
+      arm({ latencyHint: 'balanced', baseLatency: 0.01, outputLatency: 0.02 }),
+      arm({ latencyHint: '0.001', baseLatency: 0.01, outputLatency: 0.09 }),
+    ]);
+    const judged = judgeReport(worth);
+    expect(judged.hintEffectMs).toBeCloseTo(70, 5);
+    expect(judged.verdict).toBe('web-tuning');
+  });
+
+  it('bleibt bei einem einzigen Arm bei dessen eigenem Spruch', () => {
+    const single = judgeReport(report([arm()]));
+    expect(single.hintEffectMs).toBe(0);
+    expect(single.verdict).toBe('ok');
   });
 });
 

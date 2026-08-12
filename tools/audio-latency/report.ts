@@ -13,6 +13,7 @@ import {
   recommend,
   compareArms,
   bufferFrames,
+  judgeReport,
   RENDER_QUANTUM,
 } from '../../src/core/audiolatency';
 
@@ -51,4 +52,11 @@ for (const file of files) {
     const delta = compareArms(baseline, arm);
     console.log(`  ${delta >= 0 ? '+' : ''}${delta.toFixed(1)} ms — ${arm.label}`);
   }
+
+  const whole = judgeReport(report);
+  console.log(
+    `\nÜber den ganzen Lauf: [${whole.verdict}] bester Arm „${whole.best.label}“ ` +
+      `mit ${whole.bestMs.toFixed(1)} ms; der latencyHint bewegt ` +
+      `${whole.hintEffectMs.toFixed(1)} ms.\n  ${whole.reason}`,
+  );
 }

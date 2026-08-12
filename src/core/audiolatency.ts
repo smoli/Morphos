@@ -199,6 +199,57 @@ export function recommend(arm: LatencyArm): Recommendation {
   };
 }
 
+/**
+ * Unterhalb dieser Spanne zwischen den Armen hat der `latencyHint` nichts
+ * bewegt — was übrig bleibt, ist Messrauschen, nicht Wirkung.
+ */
+export const HINT_NOISE_MS = 1;
+
+export interface ReportVerdict {
+  /** Der schnellste gemessene Arm — das, was auf dieser Plattform geht. */
+  best: LatencyArm;
+  bestMs: number;
+  /**
+   * Wie viele Millisekunden zwischen dem langsamsten und dem schnellsten Arm
+   * liegen: der ganze Spielraum, den die Web-Einstellungen hier hergeben.
+   */
+  hintEffectMs: number;
+  verdict: Verdict;
+  reason: string;
+}
+
+/**
+ * Der Spruch über einen ganzen Lauf statt über einen einzelnen Arm. Den
+ * Unterschied macht der Blick quer über die Arme: Erst er zeigt, ob der
+ * `latencyHint` auf dieser Plattform überhaupt etwas bewegt.
+ *
+ * Das ist keine Kleinigkeit — meldet eine Plattform für „balanced“ und
+ * „interactive“ denselben Puffer, dann ist der billige Web-Hebel dort kein
+ * Hebel, und ein `recommend()` auf den einzelnen Arm würde ihn trotzdem
+ * empfehlen. Hier wird dieser Rat zurückgenommen.
+ */
+export function judgeReport(report: LatencyReport): ReportVerdict {
+  const totals = report.arms.map((arm) => budgetOf(arm).total);
+  const bestMs = Math.min(...totals);
+  const best = report.arms[totals.indexOf(bestMs)];
+  const hintEffectMs = Math.max(...totals) - bestMs;
+  const single = recommend(best);
+
+  if (single.verdict === 'web-tuning' && hintEffectMs < HINT_NOISE_MS) {
+    return {
+      best,
+      bestMs,
+      hintEffectMs,
+      verdict: 'native-audio',
+      reason:
+        `${ms(bestMs)} im besten Arm, und der latencyHint bewegt über alle Arme ` +
+        `hinweg nur ${ms(hintEffectMs)} — die Plattform überhört ihn. ` +
+        `Web-seitig ist hier nichts zu holen.`,
+    };
+  }
+  return { best, bestMs, hintEffectMs, verdict: single.verdict, reason: single.reason };
+}
+
 function num(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }

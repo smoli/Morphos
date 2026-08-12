@@ -11,12 +11,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "npm test 2>&1 | tail -6; echo \"=== typecheck ===\"; npm run typecheck 2>&1 | tail -5"
+        "arg": "git add -A -- src tools .gello && git status --short && git commit -q -F - <<'MSG' && git log --oneline -2\nc0081: Windows gemessen — der latencyHint zieht dort nicht\n\nDie Windows-Zahl steht: ~51 ms gegen 7,8–16,4 ms auf macOS, und der\nganze Abstand hängt an outputLatency (40 gegen 5 ms). Der Trefferpfad\nder App liegt auf beiden Seiten unter 0,8 ms.\n\nDer eigentliche Fund: Chromiums Windows-Backend überhört den\nlatencyHint komplett — balanced, interactive und ausdrückliche 0,001 s\nmelden alle denselben 480-Bilder-Puffer. Der billigste Web-Hebel, den\ndie Karte vorgeschlagen hatte, bringt dort messbar 0,1 ms.\n\nDamit das nicht nur in der Karte steht, urteilt judgeReport() jetzt über\nden ganzen Lauf statt über einen einzelnen Arm: Bewegen die Arme sich\nuntereinander nicht, ist der Hint kein Hebel, und der Rat \"probier doch\ninteractive\" wird zurückgenommen.\n\nZurückgenommen wird auch eine eigene Behauptung von vorhin: dass es\nkeinen WASAPI-Exclusive-Schalter gebe, war aus der macOS-Binärdatei\ngeschlossen — dort können Windows-Schalter gar nicht vorkommen. Steht\nals offene Frage in c0085.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nMSG"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T23:27:55",
+  "updated": "2026-08-12T23:28:34",
   "pickupDelay": 10,
   "owned": [
     "c0029",
