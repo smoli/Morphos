@@ -322,6 +322,92 @@ describe('useWorkspaceStore', () => {
     });
   });
 
+  describe('App aus einem Git-Repository holen (c0074)', () => {
+    const collision = {
+      token: 'import-1',
+      id: 'a-1',
+      name: 'A aus dem Netz',
+      existingName: 'A',
+      copyId: 'a-1-2',
+    };
+
+    it('reicht die Adresse zum Hauptprozess und liest das Verzeichnis neu ein', async () => {
+      const host = makeHost({ importApp: vi.fn(async () => ({ ok: true, id: 'c-3', name: 'C' })) });
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      const res = await ws.importApp('https://example.org/c.git');
+
+      expect(res).toMatchObject({ ok: true, id: 'c-3' });
+      expect(host.importApp).toHaveBeenCalledWith('/apps', 'https://example.org/c.git');
+      // Einmal beim Öffnen, einmal nach dem Import — die neue App ist da.
+      expect(host.listApps).toHaveBeenCalledTimes(2);
+    });
+
+    it('liest bei einer Rückfrage NICHT neu ein — noch ist nichts passiert', async () => {
+      const host = makeHost({ importApp: vi.fn(async () => ({ ok: false, collision })) });
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      const res = await ws.importApp('https://example.org/a.git');
+
+      expect(res.collision).toEqual(collision);
+      expect(host.listApps).toHaveBeenCalledTimes(1);
+    });
+
+    it('führt die Antwort aus und liest danach neu ein', async () => {
+      const host = makeHost({
+        resolveImport: vi.fn(async () => ({ ok: true, id: 'a-1-2', name: 'A aus dem Netz' })),
+      });
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      const res = await ws.resolveImport('import-1', 'copy');
+
+      expect(res).toMatchObject({ ok: true, id: 'a-1-2' });
+      expect(host.resolveImport).toHaveBeenCalledWith('import-1', 'copy');
+      expect(host.listApps).toHaveBeenCalledTimes(2);
+    });
+
+    it('meldet einen Fehler des Hauptprozesses weiter', async () => {
+      setHost(makeHost({ importApp: vi.fn(async () => ({ ok: false, error: 'Kein Zugriff.' })) }));
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(await ws.importApp('https://example.org/geheim.git')).toEqual({ ok: false, error: 'Kein Zugriff.' });
+    });
+
+    it('fängt einen geworfenen Fehler ab', async () => {
+      setHost(makeHost({
+        importApp: vi.fn(async () => {
+          throw new Error('Brücke weg');
+        }),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(await ws.importApp('https://example.org/a.git')).toEqual({ ok: false, error: 'Brücke weg' });
+    });
+
+    it('verlangt ein offenes Arbeitsverzeichnis', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      expect((await ws.importApp('https://example.org/a.git')).ok).toBe(false);
+    });
+
+    it('kommt ohne die Anbindung aus (Renderer-Test)', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect((await ws.importApp('https://example.org/a.git')).error).toBeTruthy();
+      expect((await ws.resolveImport('import-1', 'copy')).error).toBeTruthy();
+    });
+  });
+
   describe('Kachel-Positionen', () => {
     it('lädt die gemerkten Positionen des Workspace', async () => {
       setHost(makeHost({

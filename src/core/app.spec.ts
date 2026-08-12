@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { slugify, makeAppId, DEFAULT_ICON, DEFAULT_NAME } from './app';
+import { slugify, makeAppId, isSafeAppId, DEFAULT_ICON, DEFAULT_NAME } from './app';
 
 describe('slugify', () => {
   it('macht aus einem Namen einen dateisystemtauglichen Slug', () => {
@@ -28,6 +28,25 @@ describe('makeAppId', () => {
 
   it('liefert bei gleichem Namen unterschiedliche Ids', () => {
     expect(makeAppId('Editor')).not.toBe(makeAppId('Editor'));
+  });
+});
+
+describe('isSafeAppId', () => {
+  it('nimmt an, was als Ordnername taugt', () => {
+    expect(isSafeAppId(makeAppId('Taschenrechner'))).toBe(true);
+    expect(isSafeAppId('to-do_liste.2')).toBe(true);
+  });
+
+  it('weist alles ab, womit sich das Arbeitsverzeichnis verlassen ließe', () => {
+    for (const id of ['', '.', '..', '../weg', 'unter/ordner', 'rück\\wärts', 'mit leerzeichen', '/absolut']) {
+      expect(isSafeAppId(id), id).toBe(false);
+    }
+  });
+
+  it('weist alles ab, was gar keine Zeichenkette ist', () => {
+    expect(isSafeAppId(undefined)).toBe(false);
+    expect(isSafeAppId(null)).toBe(false);
+    expect(isSafeAppId(42)).toBe(false);
   });
 });
 

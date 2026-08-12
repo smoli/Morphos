@@ -39,6 +39,32 @@ function runGit(dir: string, args: string[], env?: Record<string, string>): Prom
   });
 }
 
+/**
+ * Was git davon abhält, nach Zugangsdaten zu FRAGEN. Geklont wird mit der
+ * Git-Einrichtung des Anwenders (Credential-Helfer, SSH-Schlüssel, Agent) — nur
+ * eine Eingabeaufforderung darf es nicht geben: Im Hauptprozess hängt sie an
+ * einem Terminal, das niemand sieht, und der Klon käme nie zum Ende. Ohne
+ * hinterlegten Zugang scheitert er stattdessen sofort mit einer Meldung.
+ */
+const NON_INTERACTIVE = {
+  GIT_TERMINAL_PROMPT: '0',
+  GIT_SSH_COMMAND: 'ssh -oBatchMode=yes',
+};
+
+/**
+ * Holt ein Repository in einen NEUEN Ordner — ein echter Klon: mit `.git`,
+ * voller Historie und `origin`. Fehlende Elternordner entstehen dabei; der
+ * Zielordner selbst darf noch nicht existieren (git besteht darauf).
+ *
+ * Die Adresse kommt vom Anwender und geht als eigenes Argument hinter `--` an
+ * git — sie kann keine Option werden. Geprüft wird sie zuvor in core/appimport.
+ */
+export async function cloneRepo(url: string, targetDir: string): Promise<void> {
+  const parent = path.dirname(targetDir);
+  fs.mkdirSync(parent, { recursive: true });
+  await runGit(parent, ['clone', '--quiet', '--', url, targetDir], NON_INTERACTIVE);
+}
+
 /** Initialisiert das Repository im Ordner, falls noch keines existiert. */
 export async function ensureRepo(dir: string): Promise<void> {
   if (fs.existsSync(path.join(dir, '.git'))) return;

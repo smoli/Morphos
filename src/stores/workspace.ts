@@ -5,6 +5,8 @@ import type {
   FsOp,
   FsPermissions,
   IconPos,
+  ImportChoice,
+  ImportResult,
   PermDecision,
   PermMode,
   SessionWindow,
@@ -608,6 +610,38 @@ export const useWorkspaceStore = defineStore('workspace', {
       } catch (err) {
         this.error = err instanceof Error ? err.message : String(err);
         return null;
+      }
+    },
+
+    /**
+     * Holt eine App aus einem Git-Repository in dieses Verzeichnis (c0074).
+     * Gelingt es, steht die App sofort auf dem Desktop; ist ihre Id belegt,
+     * kommt eine Rückfrage zurück (`collision`) — dann ist noch NICHTS
+     * geschehen, der Klon wartet auf `resolveImport`.
+     */
+    async importApp(url: string): Promise<ImportResult> {
+      if (!this.folder) return { ok: false, error: 'Kein Arbeitsverzeichnis geöffnet.' };
+      const host = getHost();
+      if (!host.importApp) return { ok: false, error: 'Das Holen aus einem Repository ist hier nicht verfügbar.' };
+      try {
+        const res = await host.importApp(this.folder, url);
+        if (res.ok) await this.refresh();
+        return res;
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
+    /** Beantwortet eine belegte Id: Kopie, Ersetzen oder Abbruch (siehe importApp). */
+    async resolveImport(token: string, choice: ImportChoice): Promise<ImportResult> {
+      const host = getHost();
+      if (!host.resolveImport) return { ok: false, error: 'Das Holen aus einem Repository ist hier nicht verfügbar.' };
+      try {
+        const res = await host.resolveImport(token, choice);
+        if (res.ok) await this.refresh();
+        return res;
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
       }
     },
 

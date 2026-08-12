@@ -14,6 +14,8 @@ import type {
   FsResponse,
   GenerateResult,
   IconResult,
+  ImportChoice,
+  ImportResult,
   SaveResult,
   Settings,
   ShellFsRequest,
@@ -72,6 +74,13 @@ contextBridge.exposeInMainWorld('morphos', {
     ipcRenderer.invoke('morphos:deleteApp', folder, id),
   setAppIcon: (folder: string, id: string, icon: string | null): Promise<IconResult> =>
     ipcRenderer.invoke('morphos:setAppIcon', folder, id, icon),
+
+  // App aus einem Git-Repository holen: klonen, prüfen, einordnen. Bei belegter
+  // Id kommt eine Rückfrage zurück, die der Anwender mit resolveImport beantwortet.
+  importApp: (folder: string, url: string): Promise<ImportResult> =>
+    ipcRenderer.invoke('morphos:importApp', folder, url),
+  resolveImport: (token: string, choice: ImportChoice): Promise<ImportResult> =>
+    ipcRenderer.invoke('morphos:resolveImport', token, choice),
 
   listVersions: (folder: string, id: string): Promise<VersionInfo[]> =>
     ipcRenderer.invoke('morphos:listVersions', folder, id),

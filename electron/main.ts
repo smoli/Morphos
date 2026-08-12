@@ -17,6 +17,8 @@ import { resolveFramework } from '../src/core/framework';
 import { sanitizeRefs } from '../src/core/pick';
 import { commitAll, countVersions, ensureRepo, listVersions, restoreTree } from '../src/core/gitstore';
 import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeAppState, writeChat } from '../src/core/appstore';
+import { isSafeAppId } from '../src/core/app';
+import { IMPORT_DIR, resolveImport, startImport } from '../src/core/appimport';
 import { validateIcon } from '../src/core/icon';
 import { resolveWithin, runFs, runShellFs } from '../src/core/fsaccess';
 import { FILE_SCHEME, parseRange, resolveFileRequest } from '../src/core/filelink';
@@ -50,6 +52,8 @@ import type {
   GenerateResult,
   IconPos,
   IconResult,
+  ImportChoice,
+  ImportResult,
   SaveResult,
   Settings,
   ShellFsRequest,
@@ -216,9 +220,7 @@ function isApprovedRoot(root: string): boolean {
 /** Stellt sicher, dass eine App-Id keinen Pfadwechsel erlaubt (Traversal-Schutz). */
 function safeId(id: string): string {
   const base = path.basename(id);
-  if (!base || base === '.' || base === '..' || !/^[A-Za-z0-9._-]+$/.test(base)) {
-    throw new Error(`Ungültige App-Id: ${id}`);
-  }
+  if (!isSafeAppId(base)) throw new Error(`Ungültige App-Id: ${id}`);
   return base;
 }
 
@@ -720,7 +722,8 @@ ipcMain.handle('morphos:listApps', async (_e, folder: string): Promise<AppSummar
     return [];
   }
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+    // Der Wartebereich der Importe ist keine App (siehe core/appimport).
+    if (!entry.isDirectory() || entry.name === IMPORT_DIR) continue;
     const dir = path.join(folder, entry.name);
     const meta = readManifest(dir);
     if (!meta) continue;
@@ -801,6 +804,35 @@ ipcMain.handle('morphos:deleteApp', async (_e, folder: string, id: string): Prom
   try {
     fs.rmSync(appDir(folder, id), { recursive: true, force: true });
     return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+/**
+ * Holt eine App aus einem Git-Repository (c0074). Der Ablauf steckt in
+ * core/appimport; hier hängt er an der IPC. Das Arbeitsverzeichnis muss ein
+ * bekanntes sein — geklont wird ausschließlich dorthin (Defense in depth), die
+ * Adresse selbst kommt vom Anwender und wird in core/appimport geprüft.
+ */
+ipcMain.handle('morphos:importApp', async (_e, folder: string, url: string): Promise<ImportResult> => {
+  if (!folder || typeof folder !== 'string' || !readSettings().recentFolders.includes(folder)) {
+    return { ok: false, error: 'Dieses Arbeitsverzeichnis ist nicht bekannt.' };
+  }
+  try {
+    return await startImport(folder, String(url ?? ''));
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+/** Die Antwort des Anwenders auf eine belegte Id: Kopie, Ersetzen oder Abbruch. */
+ipcMain.handle('morphos:resolveImport', async (_e, token: string, choice: ImportChoice): Promise<ImportResult> => {
+  if (choice !== 'copy' && choice !== 'replace' && choice !== 'cancel') {
+    return { ok: false, error: `Unbekannte Entscheidung: ${choice}` };
+  }
+  try {
+    return await resolveImport(String(token ?? ''), choice);
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }

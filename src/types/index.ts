@@ -453,6 +453,43 @@ export interface FolderResult {
   error?: string;
 }
 
+/** Die Antwort des Anwenders auf eine belegte App-Id beim Import (core/appimport). */
+export type ImportChoice = 'copy' | 'replace' | 'cancel';
+
+/**
+ * Eine belegte Id: Die geholte App will dorthin, wo schon eine App liegt. Der
+ * Klon wartet unter `token`, bis der Anwender sich entschieden hat.
+ */
+export interface ImportCollision {
+  /** Kennzeichnet den wartenden Klon (für die Antwort). */
+  token: string;
+  /** Die Id, die beide beanspruchen. */
+  id: string;
+  /** Anzeigename der geholten App. */
+  name: string;
+  /** Anzeigename der App, die diese Id schon hat. */
+  existingName: string;
+  /** Die Id, unter der die geholte App als Kopie landen würde. */
+  copyId: string;
+}
+
+/**
+ * Ergebnis eines App-Imports aus einem Git-Repository: die eingeordnete App,
+ * eine Rückfrage wegen belegter Id, ein Abbruch — oder ein Fehler.
+ */
+export interface ImportResult {
+  ok: boolean;
+  /** Id der eingeordneten App (bei Erfolg) — zugleich ihr Ordnername. */
+  id?: string;
+  /** Anzeigename der eingeordneten App (bei Erfolg). */
+  name?: string;
+  /** Gesetzt, wenn der Anwender gefragt werden muss (siehe ImportCollision). */
+  collision?: ImportCollision;
+  /** Der Anwender hat abgebrochen — kein Fehler, nur nichts passiert. */
+  cancelled?: boolean;
+  error?: string;
+}
+
 /**
  * Die vom Electron-Hauptprozess bereitgestellte Brücke. Im Renderer als
  * `window.morphos`; in Tests durch eine Attrappe ersetzbar.
@@ -537,6 +574,22 @@ export interface MorphosHost {
    * laden, gilt also auch für geschlossene Apps. Zurück kommt das wirksame Icon.
    */
   setAppIcon(folder: string, id: string, icon: string | null): Promise<IconResult>;
+
+  /**
+   * Holt eine App aus einem Git-Repository in das Arbeitsverzeichnis: klonen
+   * (mit Historie und `origin`), als Morphos-App prüfen, einordnen. Ist die Id
+   * schon belegt, kommt statt der App eine Rückfrage zurück (`collision`) —
+   * beantwortet wird sie mit `resolveImport`. Optional: im Renderer-Test fehlt
+   * die Anbindung, dann lässt sich nichts holen.
+   */
+  importApp?(folder: string, url: string): Promise<ImportResult>;
+
+  /**
+   * Beantwortet eine belegte Id: als Kopie unter neuer Id ablegen, die
+   * vorhandene App ersetzen (das bestätigt die Schale zuvor) oder abbrechen.
+   * Nach der Antwort ist der wartende Klon in jedem Fall aufgeräumt.
+   */
+  resolveImport?(token: string, choice: ImportChoice): Promise<ImportResult>;
 
   /** Liefert die Git-Versionshistorie einer App, neueste zuerst. */
   listVersions(folder: string, id: string): Promise<VersionInfo[]>;

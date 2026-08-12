@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useDesktopStore } from '@/stores/desktop';
 import { useAgentsStore } from '@/stores/agents';
+import { useNotificationsStore } from '@/stores/notifications';
 import { useAppWindow } from '@/stores/app';
 import { useSetAppIcon } from '@/composables/useSetAppIcon';
 import AppWindow from '@/components/AppWindow.vue';
@@ -10,6 +11,7 @@ import SystemWindow from '@/components/SystemWindow.vue';
 import BusyDot from '@/components/BusyDot.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import IconDialog from '@/components/IconDialog.vue';
+import ImportAppDialog from '@/components/ImportAppDialog.vue';
 import ContextMenu from '@/components/ContextMenu.vue';
 import LauncherOverlay from '@/components/LauncherOverlay.vue';
 import TileGaps from '@/components/TileGaps.vue';
@@ -42,11 +44,12 @@ import {
   type Bounds,
 } from '@/core/arrange';
 import type { Rect } from '@/core/tiling';
-import type { AppSummary, IconPos } from '@/types';
+import type { AppSummary, IconPos, ImportChoice, ImportCollision, ImportResult } from '@/types';
 
 const workspace = useWorkspaceStore();
 const desktop = useDesktopStore();
 const agents = useAgentsStore();
+const notifications = useNotificationsStore();
 const setAppIcon = useSetAppIcon();
 
 const singleMode = computed(() => workspace.uiMode === 'single');
@@ -485,6 +488,67 @@ function newFromSearch(): void {
   newApp();
 }
 
+// ---- App aus einem Git-Repository holen (c0074) ----
+
+// Jede Morphos-App ist ein Repository: Teilen heißt pushen, Holen heißt
+// klonen. Der Dialog fragt nur nach der Adresse und — wenn die Id hier schon
+// vergeben ist — nach dem Weg; geklont, geprüft und eingeordnet wird im
+// Hauptprozess (core/appimport).
+const importOpen = ref(false);
+const importBusy = ref(false);
+const importError = ref<string | null>(null);
+const importCollision = ref<ImportCollision | null>(null);
+
+function openImport(): void {
+  importOpen.value = true;
+  importBusy.value = false;
+  importError.value = null;
+  importCollision.value = null;
+}
+
+function closeImport(): void {
+  importOpen.value = false;
+  importCollision.value = null;
+  importError.value = null;
+}
+
+/** Ist die App da, verschwindet der Dialog und der Desktop meldet sie. */
+function afterImport(res: ImportResult): void {
+  importBusy.value = false;
+  if (res.ok) {
+    closeImport();
+    notifications.success(`„${res.name}“ wurde geholt.`);
+    return;
+  }
+  if (res.cancelled) {
+    closeImport();
+    return;
+  }
+  importCollision.value = res.collision ?? null;
+  importError.value = res.error ?? null;
+}
+
+async function startImport(url: string): Promise<void> {
+  importBusy.value = true;
+  importError.value = null;
+  afterImport(await workspace.importApp(url));
+}
+
+/** Die Antwort auf eine belegte Id — Ersetzen ist unwiederbringlich, also mit Rückfrage. */
+async function chooseImport(choice: ImportChoice): Promise<void> {
+  const pending = importCollision.value;
+  if (!pending) return;
+  if (
+    choice === 'replace' &&
+    !confirm(`App „${pending.existingName}“ samt ihrer Historie durch „${pending.name}“ ersetzen?`)
+  ) {
+    return;
+  }
+  importBusy.value = true;
+  importError.value = null;
+  afterImport(await workspace.resolveImport(pending.token, choice));
+}
+
 // ---- Icon einer App ändern (Dialog von der Kachel aus) ----
 const iconAppId = ref<string | null>(null);
 const iconApp = computed<AppSummary | null>(
@@ -703,6 +767,16 @@ function onMenuPick(id: string): void {
         >
           <span class="dock-glyph">＋</span>
         </button>
+        <!-- Neben dem ＋: eine App, die es schon gibt, aus ihrem Repository
+             holen (c0074) — geteilt wird eine App, indem sie gepusht wird. -->
+        <button
+          type="button"
+          class="dock-item import"
+          title="App aus Git laden…"
+          @click="openImport"
+        >
+          <span class="dock-glyph">⤓</span>
+        </button>
         <span v-if="dock.length" class="dock-sep" aria-hidden="true"></span>
         <template v-for="(entry, i) in dock" :key="entry.key">
           <!-- Ein Strich zwischen den festen Plätzen und den Apps. -->
@@ -723,6 +797,18 @@ function onMenuPick(id: string): void {
         </template>
       </div>
     </div>
+
+    <!-- „App aus Git laden…“ — Adresse, Fortschritt und die Rückfrage bei
+         belegter Id (c0074). -->
+    <ImportAppDialog
+      v-if="importOpen"
+      :busy="importBusy"
+      :error="importError"
+      :collision="importCollision"
+      @close="closeImport"
+      @submit="startImport"
+      @choose="chooseImport"
+    />
 
     <IconDialog
       v-if="iconApp"

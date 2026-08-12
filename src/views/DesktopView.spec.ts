@@ -9,12 +9,14 @@ import AppWindow from '@/components/AppWindow.vue';
 import SystemWindow from '@/components/SystemWindow.vue';
 import ExplorerPanel from '@/components/ExplorerPanel.vue';
 import IconDialog from '@/components/IconDialog.vue';
+import ImportAppDialog from '@/components/ImportAppDialog.vue';
 import ContextMenu from '@/components/ContextMenu.vue';
 import LauncherOverlay from '@/components/LauncherOverlay.vue';
 import SwitcherOverlay from '@/components/SwitcherOverlay.vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useDesktopStore } from '@/stores/desktop';
 import { useAgentsStore } from '@/stores/agents';
+import { useNotificationsStore } from '@/stores/notifications';
 import { useAppWindow } from '@/stores/app';
 import { setHost } from '@/services/host';
 import { columns, slotPos } from '@/core/arrange';
@@ -132,7 +134,7 @@ describe('DesktopView', () => {
    */
   function dockNames(wrapper: VueWrapper): string[] {
     return wrapper
-      .findAll('.dock-item:not(.new):not(.system)')
+      .findAll('.dock-item:not(.new):not(.import):not(.system)')
       .map((d) => d.attributes('title') ?? '');
   }
 
@@ -1046,11 +1048,12 @@ describe('DesktopView', () => {
 
       expect(dockSystemNames(wrapper)).toEqual(SYSTEM_WINDOWS.map((s) => s.title));
       expect(dockNames(wrapper)).toEqual([]);
-      // Erst das ＋, dann die Plätze der Schale, dann alles andere.
+      // Erst das ＋ und das Holen aus Git, dann die Plätze der Schale, dann alles andere.
       const titles = wrapper.findAll('.dock-item').map((d) => d.attributes('title'));
       expect(titles[0]).toContain('Neue App');
-      expect(titles.slice(1, 1 + SYSTEM_WINDOWS.length)).toEqual(SYSTEM_WINDOWS.map((s) => s.title));
-      // Solange nichts folgt, steht nur der Strich hinter dem ＋.
+      expect(titles[1]).toContain('Git');
+      expect(titles.slice(2, 2 + SYSTEM_WINDOWS.length)).toEqual(SYSTEM_WINDOWS.map((s) => s.title));
+      // Solange nichts folgt, steht nur der Strich hinter den festen Knöpfen.
       expect(wrapper.findAll('.dock .dock-sep')).toHaveLength(1);
     });
 
@@ -1060,7 +1063,7 @@ describe('DesktopView', () => {
       useDesktopStore().openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
       await flushPromises();
 
-      expect(wrapper.findAll('.dock-item:not(.new)').map((d) => d.attributes('title'))).toEqual([
+      expect(wrapper.findAll('.dock-item:not(.new):not(.import)').map((d) => d.attributes('title'))).toEqual([
         ...SYSTEM_WINDOWS.map((s) => s.title),
         'Editor',
         'Rechner',
@@ -2100,6 +2103,165 @@ describe('DesktopView', () => {
         expect(r.x).toBeGreaterThanOrEqual(40);
         expect(r.x + r.w).toBeLessThanOrEqual(640);
       }
+    });
+  });
+
+  describe('App aus einem Git-Repository holen (c0074)', () => {
+    const geholt: AppSummary = {
+      id: 'notiz-9', name: 'Notiz', icon: '📓', createdAt: 3, updatedAt: 7, versions: 4,
+    };
+    const collision = {
+      token: 'import-1',
+      id: 'rechner-1',
+      name: 'Rechner aus dem Netz',
+      existingName: 'Rechner',
+      copyId: 'rechner-1-2',
+    };
+
+    /** Öffnet den Dialog über den Platz im Dock. */
+    async function openImport(wrapper: VueWrapper) {
+      await wrapper.get('.dock-item.import').trigger('click');
+      await flushPromises();
+      return wrapper.getComponent(ImportAppDialog);
+    }
+
+    /** Adresse eintippen und absenden. */
+    async function submitUrl(wrapper: VueWrapper, url: string) {
+      await wrapper.get('.url-input').setValue(url);
+      await wrapper.get('form.row').trigger('submit');
+      await flushPromises();
+    }
+
+    it('steht als eigener Platz neben dem ＋ im Dock', async () => {
+      const { wrapper } = await mountView();
+      const item = wrapper.get('.dock-item.import');
+      expect(item.attributes('title')).toContain('Git');
+      // Direkt hinter dem ＋, noch vor den Ansichten der Schale.
+      expect(wrapper.findAll('.dock-item')[1].classes()).toContain('import');
+      expect(wrapper.findComponent(ImportAppDialog).exists()).toBe(false);
+    });
+
+    it('holt die App und meldet sie, wenn sie da ist', async () => {
+      const host = makeHost({
+        importApp: vi.fn(async () => ({ ok: true, id: 'notiz-9', name: 'Notiz' })),
+        listApps: vi.fn(async () => [...apps, geholt]),
+      });
+      setHost(host);
+      const { wrapper } = await mountView();
+
+      await openImport(wrapper);
+      await submitUrl(wrapper, 'https://example.org/notiz.git');
+
+      expect(host.importApp).toHaveBeenCalledWith('/apps', 'https://example.org/notiz.git');
+      // Der Dialog ist zu, die App liegt auf dem Desktop, es gibt eine Meldung.
+      expect(wrapper.findComponent(ImportAppDialog).exists()).toBe(false);
+      expect(wrapper.text()).toContain('Notiz');
+      expect(useNotificationsStore().toasts.map((t) => t.text).join()).toContain('Notiz');
+    });
+
+    it('lässt den Fehler im Dialog stehen', async () => {
+      setHost(makeHost({
+        importApp: vi.fn(async () => ({ ok: false, error: 'Das Repository konnte nicht geholt werden.' })),
+      }));
+      const { wrapper } = await mountView();
+
+      await openImport(wrapper);
+      await submitUrl(wrapper, 'https://example.org/gibtsnicht.git');
+
+      expect(wrapper.get('.error').text()).toContain('konnte nicht geholt werden');
+      expect(wrapper.findComponent(ImportAppDialog).exists()).toBe(true);
+    });
+
+    it('fragt bei belegter Id nach und legt auf Wunsch eine Kopie an', async () => {
+      const host = makeHost({
+        importApp: vi.fn(async () => ({ ok: false, collision })),
+        resolveImport: vi.fn(async () => ({ ok: true, id: 'rechner-1-2', name: 'Rechner aus dem Netz' })),
+      });
+      setHost(host);
+      const { wrapper } = await mountView();
+
+      await openImport(wrapper);
+      await submitUrl(wrapper, 'https://example.org/rechner.git');
+      expect(wrapper.get('.collision').text()).toContain('rechner-1-2');
+
+      await wrapper.get('.choice-copy').trigger('click');
+      await flushPromises();
+
+      expect(host.resolveImport).toHaveBeenCalledWith('import-1', 'copy');
+      expect(wrapper.findComponent(ImportAppDialog).exists()).toBe(false);
+    });
+
+    it('ersetzt eine vorhandene App erst nach Rückfrage', async () => {
+      const host = makeHost({
+        importApp: vi.fn(async () => ({ ok: false, collision })),
+        resolveImport: vi.fn(async () => ({ ok: true, id: 'rechner-1', name: 'Rechner aus dem Netz' })),
+      });
+      setHost(host);
+      const { wrapper } = await mountView();
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+      await openImport(wrapper);
+      await submitUrl(wrapper, 'https://example.org/rechner.git');
+
+      await wrapper.get('.choice-replace').trigger('click');
+      await flushPromises();
+      expect(confirmSpy).toHaveBeenCalled();
+      expect(host.resolveImport).not.toHaveBeenCalled();
+      // Die Rückfrage steht weiter da — der Anwender kann anders entscheiden.
+      expect(wrapper.find('.collision').exists()).toBe(true);
+
+      confirmSpy.mockReturnValue(true);
+      await wrapper.get('.choice-replace').trigger('click');
+      await flushPromises();
+      expect(host.resolveImport).toHaveBeenCalledWith('import-1', 'replace');
+      confirmSpy.mockRestore();
+    });
+
+    it('räumt den wartenden Klon weg, wenn der Anwender abbricht', async () => {
+      const host = makeHost({
+        importApp: vi.fn(async () => ({ ok: false, collision })),
+        resolveImport: vi.fn(async () => ({ ok: false, cancelled: true })),
+      });
+      setHost(host);
+      const { wrapper } = await mountView();
+
+      await openImport(wrapper);
+      await submitUrl(wrapper, 'https://example.org/rechner.git');
+      await wrapper.get('.choice-cancel').trigger('click');
+      await flushPromises();
+
+      expect(host.resolveImport).toHaveBeenCalledWith('import-1', 'cancel');
+      expect(wrapper.findComponent(ImportAppDialog).exists()).toBe(false);
+    });
+
+    it('bricht auch ab, wenn der Dialog bei offener Rückfrage geschlossen wird', async () => {
+      const host = makeHost({
+        importApp: vi.fn(async () => ({ ok: false, collision })),
+        resolveImport: vi.fn(async () => ({ ok: false, cancelled: true })),
+      });
+      setHost(host);
+      const { wrapper } = await mountView();
+
+      await openImport(wrapper);
+      await submitUrl(wrapper, 'https://example.org/rechner.git');
+      await wrapper.get('.close').trigger('click');
+      await flushPromises();
+
+      expect(host.resolveImport).toHaveBeenCalledWith('import-1', 'cancel');
+      expect(wrapper.findComponent(ImportAppDialog).exists()).toBe(false);
+    });
+
+    it('schließt sich ohne Rückfrage einfach, ohne etwas zu holen', async () => {
+      const host = makeHost();
+      setHost(host);
+      const { wrapper } = await mountView();
+
+      await openImport(wrapper);
+      await wrapper.get('.close').trigger('click');
+      await flushPromises();
+
+      expect(wrapper.findComponent(ImportAppDialog).exists()).toBe(false);
+      expect(host.importApp).toBeUndefined();
     });
   });
 });
