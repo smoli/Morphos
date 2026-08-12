@@ -10,12 +10,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "git add -A src .gello && git status --short && git log --oneline -6 --format=\"%s\""
+        "arg": "git commit -q -m \"$(cat <<'EOF'\nc0076: App-Suche als fester Platz im Dock\n\nDie Lupe steht jetzt ganz vorn im Dock, vor dem ＋ und dem Holen aus Git;\nder feste Knopf „🔍 Suchen“ auf der Desktop-Fläche entfällt. Tastenkürzel\nund Startmenü bleiben unverändert.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nEOF\n)\" && git log --oneline -1"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T21:21:38",
+  "updated": "2026-08-12T21:21:43",
   "pickupDelay": 10,
   "owned": [
     "c0029",
