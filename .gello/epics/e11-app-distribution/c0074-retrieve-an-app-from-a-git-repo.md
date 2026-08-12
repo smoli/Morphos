@@ -76,6 +76,35 @@ Open questions for planning:
 - New main-process handler (e.g. `morphos:importApp`): clone → validate → resolve
   → move; the renderer prompts for the URL and the collision choice.
 
+Implemented (2026-08-12):
+
+- `core/appimport` (new) is the whole flow, main-process only: `repoUrlError`,
+  `manifestError`, `uniqueAppId` (pure) plus `startImport` / `resolveImport`.
+- **Temp dir sits INSIDE the workspace** — `<workspace>/.morphos-import/clone-…`,
+  not the system temp dir. The clone never leaves the approved area, and placing
+  it is a rename on the same filesystem (no half-copied app folder). One level
+  deeper than the apps, so `listApps` walks past it; `listApps` skips the folder
+  by name as well. Leftovers of a crashed run are swept at the next import.
+- **Rename-on-copy is deterministic** (`rechner-ab12c` → `-2` → `-3`, like
+  `core/trash uniqueName`) instead of `makeAppId`'s random suffix: it keeps the
+  slug the user recognises and is testable.
+- **Hardening:** the URL is checked before git sees it (no `-…` options, no
+  `ext::`/`name::` transport helpers — those execute commands, no control
+  characters), and it goes behind `--`. A foreign `app.json` cannot escape the
+  workspace: its id must pass the new `core/app isSafeAppId` (which `main.ts
+  safeId` now shares). `cloneRepo` runs non-interactively
+  (`GIT_TERMINAL_PROMPT=0`, `ssh -oBatchMode=yes`) — a credential prompt in the
+  main process would hang forever with nobody to see it; configured helpers and
+  keys still work.
+- Two IPC channels: `morphos:importApp` (clone → validate → place, or ask) and
+  `morphos:resolveImport` (Kopie / Ersetzen / Abbrechen). The workspace folder
+  must be a known one (like `diskUsage`).
+- UI: `components/ImportAppDialog` + a fixed ⤓ place next to the ＋ in the dock;
+  „Ersetzen“ confirms, success is a toast, the desktop list refreshes.
+
+Left for the sibling cards: choosing a branch/tag (default branch only for now)
+and pulling/pushing updates via the kept `origin`.
+
 ## Log
 
 - 2026-08-12 status → discuss (app)
