@@ -1,10 +1,14 @@
 ---
 id: c0085
 title: "Test --audio-buffer-size on Windows, then set it in main.ts"
-status: inbox
+status: ready
 tags: [audio, latency, performance]
 depends: [c0081]
 created: 2026-08-12
+status-changed: 2026-08-12T23:52:58
+epic: e12
+order: 10
+updated: 2026-08-12
 ---
 
 # Test --audio-buffer-size on Windows, then set it in main.ts
@@ -48,3 +52,7 @@ moves the Windows floor is **untested** — that is the whole point of this card
       considered), or it is recorded that it does not help.
 - [ ] The exclusive-mode / `IAudioClient3` question from c0081 is answered.
 - [ ] The outcome is fed back to c0081's recommendation and to c0079.
+
+## Log
+
+- 2026-08-12 status → ready (app)

@@ -1,10 +1,10 @@
 ---
 id: c0081
 title: "Investigate keypress→sound latency (Windows)"
-status: review
+status: done
 created: 2026-08-12
 tags: [audio, latency, performance]
-status-changed: 2026-08-12T23:29:01
+status-changed: 2026-08-12T23:53:07
 epic: e12
 updated: 2026-08-12
 usage-tokens: 78472
@@ -245,3 +245,4 @@ typecheck`, and a re-run of the harness on this machine.
 - 2026-08-12 Windows measured (Chrome 151, hand-typed) — floor 50 ms, latencyHint
   has no effect there; findings and recommendation written (agent)
 - 2026-08-12 status → review (agent)
+- 2026-08-12 status → done (app)
