@@ -8,6 +8,8 @@ status-changed: 2026-08-12T23:00:21
 epic: e12
 updated: 2026-08-12
 awaiting: input
+usage-tokens: 45935
+usage-cost: 3.037866
 ---
 
 ```gelloquestion
