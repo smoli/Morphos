@@ -1,19 +1,9 @@
 {
-  "status": "running",
+  "status": "idle",
   "ready": [],
   "waiting": [],
-  "runs": [
-    {
-      "cardId": "c0082",
-      "phase": "running",
-      "activity": {
-        "name": "Edit",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e11-app-distribution/c0082-push-pull-new-app-version-to-remote.md"
-      },
-      "model": "claude-opus-5"
-    }
-  ],
-  "updated": "2026-08-12T23:50:39",
+  "runs": [],
+  "updated": "2026-08-12T23:50:50",
   "pickupDelay": 10,
   "owned": [
     "c0029",
