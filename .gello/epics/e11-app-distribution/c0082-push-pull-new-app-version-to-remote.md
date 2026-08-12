@@ -129,6 +129,65 @@ Antworten auf die offenen Fragen:
 Zweig; der Stand meldet das („verfolgt keinen Zweig auf origin"), statt einen
 ersten Push zu bauen — das ist c0083.
 
+## Review
+
+### 2026-08-12T23:50:10 — pass
+
+Checked: alle Akzeptanzkriterien gegen den Code, `npm test`, `npm run typecheck`,
+den Diff von `ca00d29` (kein Lint-Script im Repo — README nennt nur Tests und
+Typecheck).
+
+- Menüeinträge: `DesktopView.openIconMenu` hängt „Push"/„Pull" nur bei
+  `app.hasRemote` an; `listApps` setzt das aus `gitstore.hasRemote`
+  (`.git/config`, kein Prozess, kein Netz). Test: „bietet Push und Pull nur bei
+  einer App mit Gegenstelle".
+- Kein Force-Push: `pushRemote` ruft `push --quiet origin HEAD:refs/heads/<zweig>`
+  ohne `--force` (grep über `gitstore.ts` findet `force` nur im Kommentar); die
+  Absage kommt über `pushProblem`/`syncErrorMessage` als „erst ziehen (Pull)"
+  zurück. Tests: gitstore „schiebt nicht mit Gewalt …" (echtes Repo, Bobs Fassung
+  bleibt unversehrt) und remote `pushProblem`/`nonFastForward`.
+- Pull nur im Vorlauf: `pullFastForward` = `merge --ff-only @{u}`; bei Divergenz
+  hält schon `pullProblem` an. Test „spult nicht vor, wenn beide Seiten
+  weitergegangen sind — und ändert nichts" prüft Arbeitsstand UND Historie
+  danach.
+- Nur auf Geheiß geholt: einziger Aufrufer von `refreshRemote` ist
+  `openIconMenu`; `pushApp`/`pullApp` holen im Hauptprozess selbst zuerst. Test
+  „sieht beim Aufklappen des Menüs bei der Gegenstelle nach — und sonst nie"
+  prüft ausdrücklich, dass beim Zeichnen des Desktops nicht geholt wird.
+- Nur der geklonte Zweig: `getUpstream` liest `branch.<z>.remote`/`.merge` und
+  gibt nur bei `origin` etwas zurück; kein `checkout`/`switch` im neuen Code.
+- Ziehen während eines Laufs: `DesktopView.pullApp` bricht bei
+  `agents.isBusy(app.id)` ab (Test „zieht NICHT, solange ein Agent für diese App
+  arbeitet"); danach lädt `reloadOpenWindows` über `useAppWindow(...).open` nach
+  (Test zählt einen zusätzlichen `loadApp`-Aufruf, bei verweigerter
+  Zusammenführung keinen).
+- Zugang: `fetchRemote`/`pushRemote` nutzen `ghCredentialArgs` + `NON_INTERACTIVE`
+  wie `cloneRepo`; die Meldung teilen sich `appimport.cloneErrorMessage` und
+  `syncErrorMessage` jetzt über `remote.accessProblem` (die alten
+  appimport-Tests laufen unverändert grün). Fehlschlag beim Holen bricht Push
+  und Pull ab, bevor etwas geschrieben wird.
+- Eingrenzung: Beide IPC-Handler stehen hinter `knownWorkspaceError(folder)` +
+  `appDir(folder, id)` (mit `safeId`) und benutzen ausschließlich das vorhandene
+  `origin` (`remoteUrl`) — nirgends eine Adresse aus dem Renderer. `chat.json`
+  bleibt zu Hause, Test „lässt den Dialogverlauf zu Hause — chat.json reist nicht
+  mit" schiebt in ein echtes Bare-Repo und prüft, dass die Datei dort fehlt.
+  Ein untergeschobener Zweigname ist abgefangen (`upstreamBranchName`, Test
+  „lässt sich keinen Zweignamen unterschieben, der eine Option wäre").
+- Reine Teile unter Test: `remote.spec.ts` (Zählung, Lage, Zeichen, Vorlauf-Regel,
+  `hasOriginSection`, `accessProblem`), dazu 10 neue Integrationstests in
+  `gitstore.spec.ts` gegen echte git-Repos.
+- `npm test`: 1639 Tests in 87 Dateien grün, nichts `.skip`/`.only`;
+  `npm run typecheck`: sauber. Diff bleibt beim What — die einzige Bewegung
+  außerhalb ist das Herausziehen der Zugangsmeldung aus `appimport`, die das
+  Kriterium zum Zugang gemeinsam nutzt.
+
+Zwei Beobachtungen, kein Hindernis: (1) Die „arbeitet ein Agent?"-Prüfung liegt
+in der Schale, nicht im Hauptprozess — zwischen Prüfung und dem Vorspulen liegt
+das Holen, ein in dieser Lücke gestarteter Lauf wäre ungeprüft; (2) ein
+`morphos:pullApp` aus einem anderen Renderer-Weg hätte diese Prüfung gar nicht.
+Beides passt zur Notiz auf der Karte (die Warteschlange steht in der Schale) und
+berührt kein Kriterium.
+
 ## Log
 
 - 2026-08-12 status → discuss (app)
