@@ -7,13 +7,13 @@
       "cardId": "c0073",
       "phase": "running",
       "activity": {
-        "name": "Edit",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e0004-chat-dialog/c0073-mark-ui-elements-and-discuss.md"
+        "name": "Bash",
+        "arg": "git status --short && git diff --stat"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T20:21:47",
+  "updated": "2026-08-12T20:22:06",
   "pickupDelay": 10,
   "owned": [
     "c0029",

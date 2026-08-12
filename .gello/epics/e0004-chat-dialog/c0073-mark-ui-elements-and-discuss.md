@@ -1,10 +1,10 @@
 ---
 id: c0073
 title: Mark UI elements and Discuss
-status: in-progress
+status: review
 created: 2026-08-12
 updated: 2026-08-12
-status-changed: 2026-08-12T20:01:31
+status-changed: 2026-08-12T20:22:04
 epic: e0004
 usage-tokens: 8969
 usage-cost: 1.557137
@@ -91,8 +91,33 @@ Open questions — decided while building (2026-08-12):
 - The `data-morphos-src` annotator belongs in `core/bundle` (where the markup is
   already processed) as a pure, tested step.
 
+Umgesetzt (2026-08-12):
+
+- **`src/core/pick.ts`** (neu) — `PICKER_SDK` (das in die App injizierte
+  Picker-Skript, Protokoll `{__morphosPick: 'mode' | 'picked' | 'exit'}`),
+  `injectPicker`, `sanitizeRef`/`sanitizeRefs` (die Beschreibung kommt aus
+  generiertem Code — geprüft und gedeckelt, `MAX_ELEMENT_REFS = 8`),
+  `refKey`/`refLabel` fürs Kärtchen und `formatElementRefs` für den Prompt.
+- **`src/core/bundle.ts`** — `annotateSource(html, path)` schreibt jedem statisch
+  geschriebenen Element `data-morphos-src="src/index.html:zeile:spalte"` ins Tag;
+  Kopf/Metadaten, Kommentare und der Inhalt von `<script>`/`<style>` bleiben außen
+  vor (htm-Templates werden also nicht angefasst). Läuft VOR dem Einbetten, damit
+  die Orte auf die Quelldatei zeigen.
+- **`src/core/prompt.ts`** — Abschnitt „REFERENZIERTE ELEMENTE“ vor den
+  Dokumenten; der Systemprompt erklärt Quellorte und verbietet, `data-morphos-src`
+  selbst zu schreiben (es entsteht erst beim Bündeln).
+- **AppCanvas** injiziert den Picker (CSP zuerst), schaltet den Modus per
+  `postMessage` in den iframe (auch nach jedem Neuladen) und reicht geprüfte
+  Referenzen nach oben. **ChatDock** bekommt den 🎯-Knopf und die Kärtchen,
+  **AppWindow** hält Modus und Liste; von dort geht alles durch
+  `stores/agents` → `stores/app` → IPC → `electron/main` in den Prompt.
+- Nicht von Hand in der laufenden Electron-App durchgespielt; abgedeckt sind
+  1414 Tests, darunter das Picker-Skript, das im Test über einem echten DOM
+  ausgeführt wird (`src/core/pick.spec.ts`).
+
 ## Log
 
 - 2026-08-12 status → discuss (app)
 - 2026-08-12 status → ready (app)
 - 2026-08-12 status → in-progress (agent)
+- 2026-08-12 status → review (agent)
