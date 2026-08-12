@@ -11,12 +11,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "grep -ril \"settings\" src electron --include=*.ts --include=*.vue --include=*.js | head -40"
+        "arg": "git add electron/main.ts electron/preload.ts src/components/settings/sections.ts src/components/settings/WorkspaceFolderSection.vue src/components/settings/WorkspaceFolderSection.spec.ts src/core/gitstore.ts src/core/terminal.ts src/core/terminal.spec.ts src/core/which.ts src/core/which.spec.ts src/stores/workspace.ts src/stores/workspace.spec.ts .gello/epics/e11-app-distribution/c0075-add-option-to-open-desktop-host-folder.md && git commit -q -F - <<'EOF'\nc0075: Arbeitsverzeichnis im Dateimanager und im Terminal öffnen\n\nEin Einstellungs-Bereich „Arbeitsverzeichnis“ zeigt den Ordner dieses\nDesktops und öffnet ihn dort, wo der Anwender selbst damit arbeitet:\nim Dateimanager des Systems (shell.openPath) oder in einem Terminal.\n\ncore/terminal wählt das Terminal des Systems — macOS Terminal.app,\nWindows Terminal bzw. Eingabeaufforderung, auf Linux das erste der\nüblichen — und startet es abgekoppelt mit dem Ordner als cwd.\ncore/which findet Programme im PATH und an den üblichen Plätzen\n(gitstore.findGh nutzt es jetzt mit). Beide IPC-Kanäle öffnen nur ein\nbekanntes, noch vorhandenes Arbeitsverzeichnis.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nEOF\ngit log --oneline -1"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T21:05:51",
+  "updated": "2026-08-12T21:14:22",
   "pickupDelay": 10,
   "owned": [
     "c0029",
