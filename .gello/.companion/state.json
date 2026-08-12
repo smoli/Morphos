@@ -8,12 +8,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "git status --short; echo \"=== what did c0080 commit include ===\"; git show --stat --oneline 5fface3 | head -20"
+        "arg": "git add src/core/audiolatency.ts src/core/audiolatency.spec.ts tools tsconfig.json .gello/epics/e12-tauri/c0081-investigate-keypress-to-sound-latency.md .gello/.companion/state.json && git commit -q -F - <<'MSG' && git log --oneline -1\nc0081: Messwerkzeug und Auswertung für Tastendruck→Ton-Latenz\n\nDie Latenz war bisher ein Bauchgefühl. Jetzt gibt es eine Zahl und ein\nModell dahinter: input + dispatch + render + device, wobei render+device\nder Plattformboden ist, unter den kein App-Code kommt.\n\nGemessen wird in tools/audio-latency (eine einzelne HTML-Datei ohne Bau,\ndamit sie auf einer fremden Windows-Maschine per Doppelklick läuft, plus\nein Selbstlauf in Electron). Gedeutet wird in src/core/audiolatency.ts —\ndort, wo Tests hinkommen.\n\nmacOS-Befund: outputLatency überwiegt in jedem Arm, der Trefferpfad der\nApp liegt unter 0,3 ms. latencyHint interactive bringt -11,7 ms,\nChromiums --audio-buffer-size=128 nochmals -8,6 ms. Windows fehlt noch.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nMSG"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T23:12:57",
+  "updated": "2026-08-12T23:13:08",
   "pickupDelay": 10,
   "owned": [
     "c0029",

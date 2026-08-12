@@ -1,0 +1,207 @@
+{
+    "tool": "morphos-audio-latency",
+    "version": 1,
+    "platform": "macOS",
+    "shell": "Electron 33.4.11",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.191 Electron/33.4.11 Safari/537.36",
+    "synthesizedKeys": true,
+    "arms": [
+        {
+            "label": "balanced (Vorgabe), vorab dekodiert",
+            "latencyHint": "balanced",
+            "sampleRate": 48000,
+            "baseLatency": 0.01,
+            "outputLatency": 0.013500000000000002,
+            "hits": [
+                {
+                    "eventLagMs": 0.10000000894069672,
+                    "dispatchMs": 0
+                },
+                {
+                    "eventLagMs": 0.09999999403953552,
+                    "dispatchMs": 0.10000000894069672
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.10000000894069672
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.09999999403953552
+                },
+                {
+                    "eventLagMs": 0.09999999403953552,
+                    "dispatchMs": 0
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.09999999403953552
+                },
+                {
+                    "eventLagMs": 0.10000000894069672,
+                    "dispatchMs": 0
+                },
+                {
+                    "eventLagMs": 0.10000000894069672,
+                    "dispatchMs": 0.09999999403953552
+                },
+                {
+                    "eventLagMs": 0.09999999403953552,
+                    "dispatchMs": 0
+                }
+            ]
+        },
+        {
+            "label": "interactive, vorab dekodiert",
+            "latencyHint": "interactive",
+            "sampleRate": 48000,
+            "baseLatency": 0.0026666666666666666,
+            "outputLatency": 0.005,
+            "hits": [
+                {
+                    "eventLagMs": 0.09999999403953552,
+                    "dispatchMs": 0
+                },
+                {
+                    "eventLagMs": 0.09999999403953552,
+                    "dispatchMs": 0
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.10000000894069672
+                },
+                {
+                    "eventLagMs": 0.10000000894069672,
+                    "dispatchMs": 0
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.10000000894069672
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.09999999403953552
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.09999999403953552
+                },
+                {
+                    "eventLagMs": 0.09999999403953552,
+                    "dispatchMs": 0
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.09999999403953552
+                },
+                {
+                    "eventLagMs": 0.10000000894069672,
+                    "dispatchMs": 0
+                }
+            ]
+        },
+        {
+            "label": "interactive, je Treffer dekodiert",
+            "latencyHint": "interactive",
+            "sampleRate": 48000,
+            "baseLatency": 0.0026666666666666666,
+            "outputLatency": 0.005,
+            "hits": [
+                {
+                    "eventLagMs": 0.09999999403953552,
+                    "dispatchMs": 0.20000000298023224
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.20000000298023224
+                },
+                {
+                    "eventLagMs": 0.20000000298023224,
+                    "dispatchMs": 0.10000000894069672
+                },
+                {
+                    "eventLagMs": 0.09999999403953552,
+                    "dispatchMs": 0.20000000298023224
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 4
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.09999999403953552
+                },
+                {
+                    "eventLagMs": 0.09999999403953552,
+                    "dispatchMs": 0.09999999403953552
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.19999998807907104
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.20000000298023224
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.20000000298023224
+                }
+            ]
+        },
+        {
+            "label": "0,001 s (kleinster Wunsch), vorab dekodiert",
+            "latencyHint": "0.001",
+            "sampleRate": 48000,
+            "baseLatency": 0.0026666666666666666,
+            "outputLatency": 0.005,
+            "hits": [
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.10000000894069672
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.10000000894069672
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.09999999403953552
+                },
+                {
+                    "eventLagMs": 0.10000000894069672,
+                    "dispatchMs": 0
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.09999999403953552
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.09999999403953552
+                },
+                {
+                    "eventLagMs": 0.10000000894069672,
+                    "dispatchMs": 0
+                },
+                {
+                    "eventLagMs": 0.09999999403953552,
+                    "dispatchMs": 0
+                },
+                {
+                    "eventLagMs": 0,
+                    "dispatchMs": 0.10000000894069672
+                }
+            ]
+        }
+    ],
+    "loopback": null
+}

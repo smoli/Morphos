@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <title>Morphos — Tastendruck→Ton (c0081)</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0; padding: 24px 28px; background: #0f1115; color: #e6e8ee;
+        font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      h1 { font-size: 19px; margin: 0 0 4px; }
+      p.lead { margin: 0 0 18px; color: #98a0b3; max-width: 74ch; }
+      section { margin-bottom: 20px; }
+      button {
+        font: inherit; padding: 7px 14px; border-radius: 7px; border: 1px solid #333a4a;
+        background: #1b2030; color: #e6e8ee; cursor: pointer;
+      }
+      button:hover:enabled { background: #232a3d; }
+      button:disabled { opacity: .45; cursor: default; }
+      #stage {
+        border: 1px dashed #333a4a; border-radius: 9px; padding: 18px; text-align: center;
+        background: #141824;
+      }
+      #prompt { font-size: 17px; }
+      #arm { color: #98a0b3; font-size: 13px; margin-top: 5px; }
+      table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+      th, td { padding: 5px 9px; border-bottom: 1px solid #262c3a; text-align: right; }
+      th:first-child, td:first-child { text-align: left; }
+      thead th { color: #98a0b3; font-weight: 500; }
+      td.total { font-weight: 600; }
+      code, textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      textarea {
+        width: 100%; min-height: 150px; background: #0b0d13; color: #b9c0d0;
+        border: 1px solid #262c3a; border-radius: 7px; padding: 10px; font-size: 12px;
+      }
+      dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 16px; margin: 0; }
+      dt { color: #98a0b3; }
+      dd { margin: 0; font-variant-numeric: tabular-nums; }
+      .note { color: #98a0b3; font-size: 13px; max-width: 74ch; }
+    </style>
+  </head>
+  <body>
+    <h1>Tastendruck → Ton</h1>
+    <p class="lead">
+      Misst, wie lange es vom Tastendruck bis zum Ton dauert und auf welchen
+      Abschnitt die Zeit entfällt. Dieselbe Datei auf jeder Plattform öffnen
+      (Doppelklick genügt), messen, das JSON unten kopieren — die Auswertung
+      macht <code>src/core/audiolatency.ts</code>. Gehört zur Karte c0081.
+    </p>
+
+    <section>
+      <dl id="env"></dl>
+    </section>
+
+    <section>
+      <button id="start">Messung starten</button>
+      <button id="loopback">Schleifenmessung (Mikrofon)</button>
+      <button id="reset" disabled>Zurücksetzen</button>
+    </section>
+
+    <section id="stage">
+      <div id="prompt">Bereit.</div>
+      <div id="arm">Auf „Messung starten“ drücken, dann eine beliebige Taste — wieder und wieder.</div>
+    </section>
+
+    <section>
+      <table>
+        <thead>
+          <tr>
+            <th>Arm</th><th>input</th><th>dispatch</th><th>render</th>
+            <th>device</th><th>gesamt</th><th>Puffer</th><th>n</th>
+          </tr>
+        </thead>
+        <tbody id="rows">
+          <tr><td colspan="7" style="text-align:center;color:#666e82">— noch nichts gemessen —</td></tr>
+        </tbody>
+      </table>
+      <p class="note" style="margin-top:8px">
+        Alle Werte in Millisekunden, je Abschnitt der Median.
+        <b>input</b> = Ereignis→Handler, <b>dispatch</b> = Handler→<code>start()</code>,
+        <b>render</b> = <code>baseLatency</code>, <b>device</b> = <code>outputLatency</code>.
+      </p>
+    </section>
+
+    <section>
+      <textarea id="json" readonly placeholder="Das Ergebnis erscheint hier als JSON."></textarea>
+      <p><button id="copy" disabled>JSON kopieren</button></p>
+    </section>
+
+    <script type="module">
+      // Eine einzige Datei, ohne Bau und ohne Server: Sie muss auf einem
+      // fremden Windows-Rechner per Doppelklick laufen. Darum steckt hier auch
+      // der Klang selbst drin (erzeugt, nicht geladen) — nichts wird geholt.
+
+      const params = new URLSearchParams(location.search);
+      const HITS = Math.max(3, Number(params.get('hits')) || 15);
+      const AUTO = params.get('auto') === '1';
+
+      /** Die Einstellungen, die gegeneinander antreten. */
+      const ARMS = [
+        { label: 'balanced (Vorgabe), vorab dekodiert', hint: 'balanced', decodePerHit: false },
+        { label: 'interactive, vorab dekodiert', hint: 'interactive', decodePerHit: false },
+        { label: 'interactive, je Treffer dekodiert', hint: 'interactive', decodePerHit: true },
+        { label: '0,001 s (kleinster Wunsch), vorab dekodiert', hint: 0.001, decodePerHit: false },
+      ];
+
+      const el = (id) => document.getElementById(id);
+      const results = [];
+      let running = null;
+
+      // ---- Der Klang: ein kurzer Klick, damit der Einsatz scharf ist ----
+
+      /** Ein 20-ms-Klick als Rohdaten — steiler Einsatz, schnelles Abklingen. */
+      function clickSamples(rate) {
+        const n = Math.round(rate * 0.02);
+        const data = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+          const t = i / rate;
+          data[i] = Math.sin(2 * Math.PI * 1000 * t) * Math.exp(-t * 220);
+        }
+        return data;
+      }
+
+      /** Dieselben Rohdaten als WAV — nur damit es etwas zu dekodieren gibt. */
+      function toWav(data, rate) {
+        const buf = new ArrayBuffer(44 + data.length * 2);
+        const view = new DataView(buf);
+        const str = (off, s) => [...s].forEach((c, i) => view.setUint8(off + i, c.charCodeAt(0)));
+        str(0, 'RIFF'); view.setUint32(4, 36 + data.length * 2, true); str(8, 'WAVEfmt ');
+        view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+        view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true);
+        view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+        str(36, 'data'); view.setUint32(40, data.length * 2, true);
+        for (let i = 0; i < data.length; i++) {
+          view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, data[i])) * 0x7fff, true);
+        }
+        return buf;
+      }
+
+      // ---- Ein Messarm ----
+
+      /**
+       * Läuft einen Arm: Kontext aufbauen, HITS Tastendrücke abwarten und je
+       * Treffer die drei Zeiten festhalten. Gemessen wird ausschließlich der
+       * Weg, den auch eine echte App geht — keine Kunstgriffe im Trefferpfad.
+       */
+      async function runArm(spec) {
+        const ctx = new AudioContext({ latencyHint: spec.hint });
+        await ctx.resume();
+        const rate = ctx.sampleRate;
+        const samples = clickSamples(rate);
+        const wav = toWav(samples, rate);
+
+        // Der vorab dekodierte Puffer — genau das, was die Karte empfiehlt.
+        const ready = ctx.createBuffer(1, samples.length, rate);
+        ready.copyToChannel(samples, 0);
+
+        // Einmal still anstoßen: Erst wenn der Kontext wirklich rendert, meldet
+        // outputLatency einen Wert, und der erste Treffer trägt nicht mehr die
+        // Kosten des Anlaufs.
+        await warmUp(ctx, ready);
+
+        const hits = [];
+        const outs = [];
+        el('arm').textContent = `Arm ${results.length + 1}/${ARMS.length}: ${spec.label}`;
+
+        while (hits.length < HITS) {
+          const event = await nextKey();
+          const entered = performance.now();
+          // event.timeStamp und performance.now() teilen denselben Nullpunkt;
+          // die Differenz ist, was zwischen Betriebssystem und Handler lag.
+          const eventLagMs = Math.max(0, entered - event.timeStamp);
+
+          if (spec.decodePerHit) {
+            // Der teure Weg, den eine naive App geht: erst jetzt dekodieren.
+            const decoded = await ctx.decodeAudioData(wav.slice(0));
+            play(ctx, decoded);
+          } else {
+            play(ctx, ready);
+          }
+          const dispatchMs = performance.now() - entered;
+
+          hits.push({ eventLagMs, dispatchMs });
+          outs.push(ctx.outputLatency);
+          el('prompt').textContent = `${hits.length} / ${HITS} — weiter drücken`;
+        }
+
+        const arm = {
+          label: spec.label,
+          latencyHint: String(spec.hint),
+          sampleRate: rate,
+          baseLatency: ctx.baseLatency,
+          outputLatency: median(outs),
+          hits,
+        };
+        await ctx.close();
+        return arm;
+      }
+
+      function play(ctx, buffer) {
+        const src = ctx.createBufferSource();
+        src.buffer = buffer;
+        src.connect(ctx.destination);
+        src.start(); // sofort — ohne Vorlauf, sonst misst man den Vorlauf mit
+      }
+
+      /** Einmal lautlos durchspielen, damit Kontext und Gerät wach sind. */
+      async function warmUp(ctx, buffer) {
+        const gain = ctx.createGain();
+        gain.gain.value = 0;
+        gain.connect(ctx.destination);
+        const src = ctx.createBufferSource();
+        src.buffer = buffer;
+        src.connect(gain);
+        src.start();
+        const until = ctx.currentTime + 0.25;
+        while (ctx.currentTime < until) await frame();
+      }
+
+      const frame = () => new Promise((r) => requestAnimationFrame(r));
+
+      /** Wartet auf den nächsten Tastendruck (im Selbstlauf: auf einen erzeugten). */
+      function nextKey() {
+        return new Promise((resolve) => {
+          const on = (e) => {
+            window.removeEventListener('keydown', on, true);
+            resolve(e);
+          };
+          window.addEventListener('keydown', on, true);
+          if (AUTO) setTimeout(() => synthesizeKey(), 30);
+        });
+      }
+
+      /**
+       * Nur für den Selbstlauf ohne Menschen: ein erzeugter Tastendruck. Er
+       * misst den Weg ab dem JS-Ereignis — die Zeit, die das Betriebssystem
+       * vorher braucht, fehlt darin und muss beim Deuten dazugedacht werden.
+       */
+      function synthesizeKey() {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+      }
+
+      function median(values) {
+        const s = values.filter(Number.isFinite).sort((a, b) => a - b);
+        if (!s.length) return 0;
+        const m = s.length >> 1;
+        return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+      }
+
+      // ---- Anzeige ----
+
+      const fmt = (v) => v.toFixed(1);
+
+      function render() {
+        const rows = results.map((arm) => {
+          const input = median(arm.hits.map((h) => h.eventLagMs));
+          const dispatch = median(arm.hits.map((h) => h.dispatchMs));
+          const renderMs = arm.baseLatency * 1000;
+          const device = arm.outputLatency * 1000;
+          const total = input + dispatch + renderMs + device;
+          const frames = Math.round(arm.baseLatency * arm.sampleRate);
+          return `<tr><td>${arm.label}</td><td>${fmt(input)}</td><td>${fmt(dispatch)}</td>
+            <td>${fmt(renderMs)}</td><td>${fmt(device)}</td>
+            <td class="total">${fmt(total)}</td><td>${frames}</td><td>${arm.hits.length}</td></tr>`;
+        });
+        el('rows').innerHTML = rows.join('') ||
+          '<tr><td colspan="7" style="text-align:center;color:#666e82">— noch nichts gemessen —</td></tr>';
+        el('json').value = JSON.stringify(report(), null, 2);
+        el('copy').disabled = results.length === 0;
+      }
+
+      function report() {
+        return {
+          tool: 'morphos-audio-latency',
+          version: 1,
+          platform: platformName(),
+          shell: shellName(),
+          userAgent: navigator.userAgent,
+          synthesizedKeys: AUTO,
+          arms: results,
+          loopback: loopback,
+        };
+      }
+
+      function platformName() {
+        const ua = navigator.userAgent;
+        if (/Windows/.test(ua)) return 'Windows';
+        if (/Mac OS X|Macintosh/.test(ua)) return 'macOS';
+        if (/Linux/.test(ua)) return 'Linux';
+        return 'unbekannt';
+      }
+
+      function shellName() {
+        // Reihenfolge zählt: Electrons Kennung steht IM Chrome-Text, und Edge
+        // nennt sich ebenfalls Chrome. Der speziellste Treffer gewinnt.
+        const ua = navigator.userAgent;
+        for (const name of ['Electron', 'Edg', 'Chrome']) {
+          const m = ua.match(new RegExp(`${name}/([\\d.]+)`));
+          if (m) return `${name === 'Edg' ? 'Edge' : name} ${m[1]}`;
+        }
+        return 'unbekannt';
+      }
+
+      function showEnv() {
+        const ctx = new AudioContext({ latencyHint: 'interactive' });
+        el('env').innerHTML = [
+          ['Plattform', platformName()],
+          ['Umgebung', shellName()],
+          ['Abtastrate', `${ctx.sampleRate} Hz`],
+          ['baseLatency', `${(ctx.baseLatency * 1000).toFixed(2)} ms (${Math.round(ctx.baseLatency * ctx.sampleRate)} Bilder)`],
+          ['Treffer je Arm', String(HITS)],
+        ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+        void ctx.close();
+      }
+
+      // ---- Schleifenmessung: der einzige wirklich hörbare Beleg ----
+
+      let loopback = null;
+
+      /**
+       * Spielt Klicks und hört sie über das Mikrofon wieder ein. Gemessen wird
+       * der volle Umlauf (Ausgabe + Luft + Eingabe) — die Eingabelatenz lässt
+       * sich nicht abziehen, aber der Vergleich zweier Einstellungen auf
+       * derselben Maschine ist sauber: die Differenz ist reine Ausgabeseite.
+       */
+      async function runLoopback(hint) {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        });
+        const ctx = new AudioContext({ latencyHint: hint });
+        await ctx.resume();
+        const code = `
+          class Onset extends AudioWorkletProcessor {
+            process(inputs) {
+              const ch = inputs[0] && inputs[0][0];
+              if (ch) for (let i = 0; i < ch.length; i++) {
+                if (Math.abs(ch[i]) > 0.08) {
+                  this.port.postMessage((currentFrame + i) / sampleRate);
+                  break;
+                }
+              }
+              return true;
+            }
+          }
+          registerProcessor('onset', Onset);`;
+        await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([code], { type: 'text/javascript' })));
+        const node = new AudioWorkletNode(ctx, 'onset');
+        ctx.createMediaStreamSource(stream).connect(node);
+
+        const samples = clickSamples(ctx.sampleRate);
+        const buffer = ctx.createBuffer(1, samples.length, ctx.sampleRate);
+        buffer.copyToChannel(samples, 0);
+
+        const trips = [];
+        for (let i = 0; i < 8; i++) {
+          const heard = new Promise((resolve) => {
+            node.port.onmessage = (e) => resolve(e.data);
+          });
+          const played = ctx.currentTime;
+          play(ctx, buffer);
+          const at = await Promise.race([heard, wait(1.5).then(() => null)]);
+          if (at !== null) trips.push((at - played) * 1000);
+          await wait(0.4); // Nachhall abklingen lassen
+          node.port.onmessage = null;
+        }
+        stream.getTracks().forEach((t) => t.stop());
+        await ctx.close();
+        return { latencyHint: String(hint), roundTripMs: median(trips), samples: trips };
+      }
+
+      const wait = (s) => new Promise((r) => setTimeout(r, s * 1000));
+
+      // ---- Ablauf ----
+
+      el('start').addEventListener('click', async () => {
+        if (running) return;
+        el('start').disabled = true;
+        el('loopback').disabled = true;
+        results.length = 0;
+        running = (async () => {
+          for (const spec of ARMS) {
+            el('prompt').textContent = `0 / ${HITS} — Taste drücken`;
+            results.push(await runArm(spec));
+            render();
+          }
+          el('prompt').textContent = 'Fertig. JSON unten kopieren.';
+          el('arm').textContent = '';
+          el('reset').disabled = false;
+          el('loopback').disabled = false;
+          running = null;
+        })();
+        await running;
+      });
+
+      el('loopback').addEventListener('click', async () => {
+        el('loopback').disabled = true;
+        el('prompt').textContent = 'Schleifenmessung — bitte still sein, Lautsprecher an.';
+        try {
+          const a = await runLoopback('balanced');
+          const b = await runLoopback('interactive');
+          loopback = { arms: [a, b], deltaMs: b.roundTripMs - a.roundTripMs };
+          el('prompt').textContent =
+            `Umlauf: balanced ${fmt(a.roundTripMs)} ms, interactive ${fmt(b.roundTripMs)} ms.`;
+        } catch (err) {
+          loopback = { error: String(err) };
+          el('prompt').textContent = `Schleifenmessung nicht möglich: ${err}`;
+        }
+        render();
+        el('loopback').disabled = false;
+      });
+
+      el('reset').addEventListener('click', () => {
+        results.length = 0;
+        loopback = null;
+        render();
+        el('start').disabled = false;
+        el('prompt').textContent = 'Bereit.';
+      });
+
+      el('copy').addEventListener('click', () => {
+        el('json').select();
+        void navigator.clipboard?.writeText(el('json').value);
+      });
+
+      showEnv();
+      render();
+      // Im Selbstlauf (?auto=1) drückt niemand — dann fängt die Messung von
+      // allein an und das Ergebnis landet zusätzlich auf der Konsole.
+      if (AUTO) {
+        el('start').click();
+        const done = setInterval(() => {
+          if (results.length === ARMS.length) {
+            clearInterval(done);
+            console.log('MORPHOS_LATENCY_JSON ' + JSON.stringify(report()));
+          }
+        }, 200);
+      }
+    </script>
+  </body>
+</html>
