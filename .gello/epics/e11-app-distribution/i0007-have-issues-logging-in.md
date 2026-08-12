@@ -1,13 +1,13 @@
 ---
 id: i0007
 title: Have issues logging in
-status: in-progress
+status: review
 type: issue
 ref: c0074
 epic: e11
 created: 2026-08-12
 updated: 2026-08-12
-status-changed: 2026-08-12T20:53:34
+status-changed: 2026-08-12T21:02:22
 ---
 
 used gh auth login to log into GitHub using the browser method.
@@ -74,3 +74,5 @@ er durch.
 ## Log
 
 - 2026-08-12 status → in-progress (agent)
+- 2026-08-12 behoben in 2d2f490 (agent)
+- 2026-08-12 status → review (agent)
