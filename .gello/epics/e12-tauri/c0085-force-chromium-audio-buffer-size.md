@@ -1,13 +1,16 @@
 ---
 id: c0085
 title: "Test --audio-buffer-size on Windows, then set it in main.ts"
-status: in-progress
+status: review
 tags: [audio, latency, performance]
 depends: [c0081]
 created: 2026-08-12
-status-changed: 2026-08-12T23:56:02
+status-changed: 2026-08-13T00:09:24
 epic: e12
-updated: 2026-08-12
+updated: 2026-08-13
+commit: 9321c53
+usage-tokens: 38287
+usage-cost: 5.374112
 ---
 
 # Test --audio-buffer-size on Windows, then set it in main.ts
@@ -171,3 +174,4 @@ machine, not on a fleet.
 - 2026-08-13 measured on Windows: the switch is worth −9,2 ms, exclusive mode and
   `IAudioClient3` are dead ends; switch set in `electron/main.ts` behind a tested
   decision, with an escape hatch (agent)
+- 2026-08-13 status → review (agent)
