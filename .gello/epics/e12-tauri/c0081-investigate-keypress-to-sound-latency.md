@@ -11,333 +11,6 @@ usage-tokens: 45935
 usage-cost: 3.037866
 ---
 
-## Die Windows-Messung brauche ich von dir
-
-Alles außer den Windows-Zahlen steht (siehe **Notes** auf der Karte): Messwerkzeug,
-Auswertung mit Tests, macOS-Werte, und ein überraschender Fund — Chromiums
-`--audio-buffer-size=128` drückt den Boden auf macOS von 16,4 auf 7,8 ms und
-wirkt prozessweit, also für **alle** generierten Apps auf einmal.
-
-Auf diesem Rechner läuft kein Windows. Ein Lauf auf der Windows-Kiste beantwortet
-die Karte — **Variante A genügt**, Dauer ~2 Minuten.
-
-### A — von Hand (die wichtigste; misst auch den echten Tastenweg)
-
-1. `tools/audio-latency/index.html` auf den Windows-Rechner kopieren und
-   **doppelklicken** (Edge reicht, kein Bau, kein Server).
-2. „Messung starten“, dann **eine beliebige Taste immer wieder drücken** —
-   4 Arme × 15 Treffer, das Feld zählt mit.
-3. Unten „JSON kopieren“ und **hier auf die Karte** einfügen.
-
-### B — optional, wenn das Repo auf Windows liegt
-
-{
-  "tool": "morphos-audio-latency",
-  "version": 1,
-  "platform": "Windows",
-  "shell": "Chrome 151.0.0.0",
-  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
-  "synthesizedKeys": false,
-  "arms": [
-    {
-      "label": "balanced (Vorgabe), vorab dekodiert",
-      "latencyHint": "balanced",
-      "sampleRate": 48000,
-      "baseLatency": 0.01,
-      "outputLatency": 0.04,
-      "hits": [
-        {
-          "eventLagMs": 2.100000001490116,
-          "dispatchMs": 0.19999999552965164
-        },
-        {
-          "eventLagMs": 1.3999999985098839,
-          "dispatchMs": 0.30000000447034836
-        },
-        {
-          "eventLagMs": 0.29999999701976776,
-          "dispatchMs": 0.20000000298023224
-        },
-        {
-          "eventLagMs": 0.6000000014901161,
-          "dispatchMs": 0.10000000149011612
-        },
-        {
-          "eventLagMs": 1.1000000014901161,
-          "dispatchMs": 0.19999999552965164
-        },
-        {
-          "eventLagMs": 0.5,
-          "dispatchMs": 0
-        },
-        {
-          "eventLagMs": 0.6000000014901161,
-          "dispatchMs": 0.20000000298023224
-        },
-        {
-          "eventLagMs": 0.6000000014901161,
-          "dispatchMs": 0.19999999552965164
-        },
-        {
-          "eventLagMs": 0.8999999985098839,
-          "dispatchMs": 0.10000000149011612
-        },
-        {
-          "eventLagMs": 0.6000000014901161,
-          "dispatchMs": 0.10000000149011612
-        },
-        {
-          "eventLagMs": 0.4000000059604645,
-          "dispatchMs": 0.09999999403953552
-        },
-        {
-          "eventLagMs": 0.7999999970197678,
-          "dispatchMs": 0.20000000298023224
-        },
-        {
-          "eventLagMs": 0.7000000029802322,
-          "dispatchMs": 0
-        },
-        {
-          "eventLagMs": 0.5,
-          "dispatchMs": 0.20000000298023224
-        },
-        {
-          "eventLagMs": 0.7000000029802322,
-          "dispatchMs": 0.19999999552965164
-        }
-      ]
-    },
-    {
-      "label": "interactive, vorab dekodiert",
-      "latencyHint": "interactive",
-      "sampleRate": 48000,
-      "baseLatency": 0.01,
-      "outputLatency": 0.04,
-      "hits": [
-        {
-          "eventLagMs": 0.3999999985098839,
-          "dispatchMs": 0.10000000149011612
-        },
-        {
-          "eventLagMs": 0.5,
-          "dispatchMs": 0.10000000149011612
-        },
-        {
-          "eventLagMs": 0.4000000059604645,
-          "dispatchMs": 0.09999999403953552
-        },
-        {
-          "eventLagMs": 0.6999999955296516,
-          "dispatchMs": 0.20000000298023224
-        },
-        {
-          "eventLagMs": 0.6000000014901161,
-          "dispatchMs": 0.10000000149011612
-        },
-        {
-          "eventLagMs": 0.3999999985098839,
-          "dispatchMs": 0.10000000149011612
-        },
-        {
-          "eventLagMs": 0.6999999955296516,
-          "dispatchMs": 0.20000000298023224
-        },
-        {
-          "eventLagMs": 0.7999999970197678,
-          "dispatchMs": 0
-        },
-        {
-          "eventLagMs": 0.29999999701976776,
-          "dispatchMs": 0.20000000298023224
-        },
-        {
-          "eventLagMs": 0.8000000044703484,
-          "dispatchMs": 0.09999999403953552
-        },
-        {
-          "eventLagMs": 1.1000000014901161,
-          "dispatchMs": 0.20000000298023224
-        },
-        {
-          "eventLagMs": 0.6000000014901161,
-          "dispatchMs": 0.19999999552965164
-        },
-        {
-          "eventLagMs": 0.8999999985098839,
-          "dispatchMs": 0.10000000149011612
-        },
-        {
-          "eventLagMs": 0.6000000014901161,
-          "dispatchMs": 0
-        },
-        {
-          "eventLagMs": 0.6000000014901161,
-          "dispatchMs": 0.30000000447034836
-        }
-      ]
-    },
-    {
-      "label": "interactive, je Treffer dekodiert",
-      "latencyHint": "interactive",
-      "sampleRate": 48000,
-      "baseLatency": 0.01,
-      "outputLatency": 0.04,
-      "hits": [
-        {
-          "eventLagMs": 0.8999999985098839,
-          "dispatchMs": 1.3000000044703484
-        },
-        {
-          "eventLagMs": 0.3999999985098839,
-          "dispatchMs": 0.8000000044703484
-        },
-        {
-          "eventLagMs": 2.1999999955296516,
-          "dispatchMs": 0.8000000044703484
-        },
-        {
-          "eventLagMs": 0.7000000029802322,
-          "dispatchMs": 0.6000000014901161
-        },
-        {
-          "eventLagMs": 0.30000000447034836,
-          "dispatchMs": 0.5
-        },
-        {
-          "eventLagMs": 0.5,
-          "dispatchMs": 0.7000000029802322
-        },
-        {
-          "eventLagMs": 0.5,
-          "dispatchMs": 0.6000000014901161
-        },
-        {
-          "eventLagMs": 0.30000000447034836,
-          "dispatchMs": 0.8999999985098839
-        },
-        {
-          "eventLagMs": 0.6000000014901161,
-          "dispatchMs": 0.3999999985098839
-        },
-        {
-          "eventLagMs": 0.4000000059604645,
-          "dispatchMs": 0.5
-        },
-        {
-          "eventLagMs": 0.3999999985098839,
-          "dispatchMs": 0.7000000029802322
-        },
-        {
-          "eventLagMs": 0.7999999970197678,
-          "dispatchMs": 1
-        },
-        {
-          "eventLagMs": 0.5,
-          "dispatchMs": 0.7999999970197678
-        },
-        {
-          "eventLagMs": 0.8999999985098839,
-          "dispatchMs": 0.8000000044703484
-        },
-        {
-          "eventLagMs": 0.8000000044703484,
-          "dispatchMs": 0.6999999955296516
-        }
-      ]
-    },
-    {
-      "label": "0,001 s (kleinster Wunsch), vorab dekodiert",
-      "latencyHint": "0.001",
-      "sampleRate": 48000,
-      "baseLatency": 0.01,
-      "outputLatency": 0.04,
-      "hits": [
-        {
-          "eventLagMs": 0.6000000014901161,
-          "dispatchMs": 0.10000000149011612
-        },
-        {
-          "eventLagMs": 0.4000000059604645,
-          "dispatchMs": 0.19999999552965164
-        },
-        {
-          "eventLagMs": 1.3999999985098839,
-          "dispatchMs": 0.20000000298023224
-        },
-        {
-          "eventLagMs": 0.30000000447034836,
-          "dispatchMs": 0.09999999403953552
-        },
-        {
-          "eventLagMs": 0.29999999701976776,
-          "dispatchMs": 0.10000000149011612
-        },
-        {
-          "eventLagMs": 0.7000000029802322,
-          "dispatchMs": 0.10000000149011612
-        },
-        {
-          "eventLagMs": 0.6000000014901161,
-          "dispatchMs": 0.10000000149011612
-        },
-        {
-          "eventLagMs": 0.5,
-          "dispatchMs": 0.19999999552965164
-        },
-        {
-          "eventLagMs": 0.8999999985098839,
-          "dispatchMs": 0
-        },
-        {
-          "eventLagMs": 0.6000000014901161,
-          "dispatchMs": 0.19999999552965164
-        },
-        {
-          "eventLagMs": 2.600000001490116,
-          "dispatchMs": 0.19999999552965164
-        },
-        {
-          "eventLagMs": 0.6000000014901161,
-          "dispatchMs": 0.10000000149011612
-        },
-        {
-          "eventLagMs": 1.6000000014901161,
-          "dispatchMs": 0.19999999552965164
-        },
-        {
-          "eventLagMs": 1.2000000029802322,
-          "dispatchMs": 0
-        },
-        {
-          "eventLagMs": 0.3999999985098839,
-          "dispatchMs": 0.19999999552965164
-        }
-      ]
-    }
-  ],
-  "loopback": null
-}
-npx electron tools/audio-latency/measure.mjs --hits=15 > win.json
-npx electron tools/audio-latency/measure.mjs --hits=15 --audio-buffer-size=128 > win-128.json
-```
-
-Das prüft direkt, ob der `--audio-buffer-size`-Hebel unter Windows genauso zieht.
-Wenn ja, ist die Karte mit einer Zeile in `electron/main.ts` erledigt statt mit
-einem nativen Audiopfad.
-
-### C — optional, eine Rückfrage zur Einordnung
-
-Ist die klingende App **eine bestimmte** generierte App? Wenn du ihren Quelltext
-(oder nur den Tastatur-/Audio-Teil) hier einfügst, kann ich sagen, ob sie selbst
-etwas Teures tut — oder ob sie sauber ist und es rein an der Plattform liegt.
-
-- [ ] A gemacht, JSON steht unten
-- [ ] A + B gemacht
-- [ ] Ich komme gerade nicht an den Windows-Rechner — trag ein, was du ohne die
-      Zahlen empfehlen würdest, und lass die Messung als eigene Karte offen
-```
-
 # Investigate keypress→sound latency (Windows)
 
 A Morphos app that triggers sounds from keys has a **noticeable keypress→sound
@@ -366,12 +39,12 @@ Likely levers, cheapest first:
 
 ## Acceptance criteria
 
-- [ ] A **measured** keypress→sound figure on Windows and macOS (method noted),
+- [x] A **measured** keypress→sound figure on Windows and macOS (method noted),
       replacing the gut estimate.
-- [ ] The dominant contributor is identified (Web Audio output buffer vs input
+- [x] The dominant contributor is identified (Web Audio output buffer vs input
       event vs per-hit decode/scheduling).
-- [ ] The cheapest web-only mitigation is tried and its measured effect recorded.
-- [ ] A recommendation: web-side fix suffices, or a native audio path is needed
+- [x] The cheapest web-only mitigation is tried and its measured effect recorded.
+- [x] A recommendation: web-side fix suffices, or a native audio path is needed
       (with the finding fed back to c0079 if it argues for Rust).
 
 ## Notes
@@ -379,7 +52,7 @@ Likely levers, cheapest first:
 ### Method
 
 No audio code exists in the repo — the sound app is a *generated* app, so the
-measurement needs its own minimal repro. Built one:
+measurement needed its own minimal repro. Built one:
 
 - `tools/audio-latency/index.html` — a single self-contained page (no build, no
   server: double-click it on any machine). Runs four arms × N keypresses and
@@ -387,18 +60,35 @@ measurement needs its own minimal repro. Built one:
   `handler → start() returned` (**dispatch**), plus `baseLatency` (**render**)
   and the median `outputLatency` (**device**) of the arm.
 - `tools/audio-latency/measure.mjs` — runs the same page unattended inside
-  **Electron**, i.e. Morphos' actual shell (`npx electron … > messung.json`).
-- `src/core/audiolatency.ts` (+ 27 tests) — the interpretation: budget, dominant
-  contributor, arm-to-arm delta, verdict. Measuring is in the browser, judging
-  is in tested code.
-- `tools/audio-latency/report.ts` — prints the table below from a raw run.
+  **Electron**, i.e. Morphos' actual shell, and can force Chromium's
+  `--audio-buffer-size`.
+- `src/core/audiolatency.ts` (+ 33 tests) — the interpretation: budget, dominant
+  contributor, arm-to-arm delta, per-arm and whole-run verdict. Measuring is in
+  the browser, judging is in tested code.
+- `tools/audio-latency/report.ts` — prints the tables below from a raw run.
 
 The model: `input + dispatch + render + device`. `render + device` is the
 **platform floor** — no app code gets below it.
 
+Raw runs are checked in under `tools/audio-latency/measurements/`.
+
+### Measured: Windows (Chrome 151, 48 kHz) — **real keypresses**
+
+`measurements/windows-chrome151-manual.json`, 15 hits/arm, hand-typed:
+
+| Arm | input | dispatch | render | device | **total** | dominant |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| balanced (default), pre-decoded | 0,6 | 0,2 | 10,0 | 40,0 | **50,8** | device |
+| interactive, pre-decoded | 0,6 | 0,1 | 10,0 | 40,0 | **50,7** | device |
+| interactive, decode per hit | 0,5 | 0,7 | 10,0 | 40,0 | **51,2** | device |
+| latencyHint 0.001, pre-decoded | 0,6 | 0,1 | 10,0 | 40,0 | **50,7** | device |
+
+Buffer: **480 frames in every arm.** Verdict over the whole run:
+`native-audio` — best arm 50,7 ms, and the `latencyHint` moves 0,5 ms in total.
+
 ### Measured: macOS (Electron 33.4.11 / Chromium 130, 48 kHz)
 
-`tools/audio-latency/measurements/macos-electron33-auto.json`, 15 hits/arm:
+`measurements/macos-electron33-auto.json`, 15 hits/arm, synthesized keys:
 
 | Arm | input | dispatch | render | device | **total** | dominant |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
@@ -409,48 +99,104 @@ The model: `input + dispatch + render + device`. `render + device` is the
 
 Buffer: 480 / 256 / 256 / **128 frames** (128 = one render quantum, the floor).
 
-Caveats, stated plainly: these are **synthesized** keydowns, so `input` reads ~0
-and the real OS key path (USB polling + input pipeline, typically 5–20 ms) is
-**not** in these numbers — it is platform-side and roughly equal on both OSes.
-The per-hit decode arm decodes a tiny 20 ms click; a real 1 s sample costs more.
+With `--audio-buffer-size=128` forced on the Electron process
+(`measurements/macos-electron33-buffer128.json`), `interactive` drops
+**16,4 → 7,8 ms**.
 
-### Findings so far
+### Findings
 
-1. **`device` (`outputLatency`) dominates every arm** — the app's own hit path
-   (`input + dispatch`) is ≤ 0,3 ms. The card's hypothesis holds: it is the
-   audio output buffer, not the app and not the shell.
-2. **`latencyHint: 'interactive'` is worth −11,7 ms** on macOS (28,1 → 16,4).
-   That is the cheapest lever and it is real.
-3. **Pre-decoding is *not* the lever here** (−0,1 ms) — at least not for short
-   samples. Worth doing, but it is not where the 50–150 ms would come from.
-4. **A shell-level lever exists and Morphos owns it**: Chromium's
-   `--audio-buffer-size=128` switch (verified present in the shipped Electron
-   binary). Measured on macOS it pulls `interactive` from 16,4 → **7,8 ms** —
-   it overrides the page's `latencyHint` process-wide, so it fixes *every*
-   generated app at once, without touching generated code.
-   (`measurements/macos-electron33-buffer128.json`; trade-off: more wakeups,
-   higher risk of dropouts on weak machines.)
-5. **WASAPI exclusive mode is not reachable from Chromium** — no such switch
-   exists in the binary (checked). So if `--audio-buffer-size` does not fix
-   Windows, the remaining option really is a native audio path, which is the
-   part that would feed back into c0079.
+1. **The gut estimate was right, at its low end: Windows is ~51 ms**, macOS is
+   7,8–16,4 ms depending on the hint. Windows is **6,5× the macOS best**, and
+   the whole gap is `device` (40 vs 5 ms) plus `render` (10 vs 2,7 ms).
+2. **`device` (`outputLatency`) dominates every single arm on both platforms.**
+   The app's own hit path is ≤ 0,8 ms everywhere. The card's hypothesis holds:
+   it is the audio output buffer — not the app, not the input event, not the
+   scheduling, and not the Electron shell.
+3. **On Windows the `latencyHint` is simply ignored.** `balanced`,
+   `interactive` and an explicit `0.001 s` all report the *same* 480-frame
+   buffer and the *same* 40 ms `outputLatency`. The cheapest web lever — the
+   first thing the card proposed — measurably buys **0,1 ms**. On macOS the same
+   lever is worth −11,7 ms, so this is a Windows-backend property, not a
+   measurement artefact.
+4. **Pre-decoding is not the lever either** (+0,4 ms on Windows for a 20 ms
+   click). Still the right way to write the app, but it is not the cause.
+   Caveat: a real 1 s sample costs more to decode than this click does.
+5. **A shell-level lever exists and Morphos owns it**: Chromium's
+   `--audio-buffer-size=<frames>` switch, verified present in the shipped
+   Electron binary. On macOS it forces the 128-frame floor and overrides the
+   page's hint process-wide — so it would fix *every* generated app at once
+   without touching generated code. **Whether it moves the Windows floor is
+   untested** and is the one cheap experiment left (see c0082).
+6. **Correction to an earlier note on this card:** I first wrote that WASAPI
+   exclusive mode "is not reachable from Chromium, no such switch exists in the
+   binary". That inference was unsound — the binary I searched is the *macOS*
+   build, which cannot contain Windows-only switches. Whether Chromium still
+   exposes an exclusive-mode or `IAudioClient3` low-latency path on Windows is
+   **unverified**, and it belongs in the same follow-up experiment.
 
-### Still open
+### Caveats, stated plainly
 
-The Windows numbers — the actual subject of the card. They cannot be produced on
-this machine; the harness is built so one run on the Windows box answers it.
-See the question below.
+- The Windows run is **Chrome 151**; Morphos ships **Chromium 130** (Electron
+  33). The floor is a property of the Windows audio backend and driver, so it
+  should carry over, but the confirming run in Electron is part of c0082.
+- The macOS run uses **synthesized** keydowns, so its `input` reads ~0. The
+  Windows run is hand-typed and shows the real value: **0,6 ms** — i.e. the OS
+  key path is negligible on both, and the macOS totals are not flattered by more
+  than a millisecond.
+- `outputLatency` is Chromium's own estimate. An independent acoustic check
+  (mic loopback) is built into the harness but was not run; the fact that the
+  reported number tracks the forced buffer size on macOS is decent corroboration.
+
+### Recommendation
+
+**A web-side fix does not suffice on Windows.** It is measured, not assumed: the
+two levers the card proposed are worth 0,1 ms and −0,4 ms there. Ordered by cost:
+
+1. **Cheap and decisive — try `--audio-buffer-size` on Windows first** (c0082).
+   One command with the harness already in the repo. If it moves the 50 ms
+   floor, this card's problem is a **one-line change in `electron/main.ts`**
+   that fixes every sound app Morphos will ever generate. Do this before
+   anything else.
+2. **Free and correct regardless** — teach generated sound apps to use
+   `latencyHint: 'interactive'` with pre-decoded `AudioBuffer`s on `keydown`.
+   Worth −11,7 ms on macOS, harmless on Windows. Belongs in the generation
+   prompt, not in a hand-edit (c0083).
+3. **Only if 1 fails: a native audio path.** WASAPI at a genuinely small period
+   (or exclusive mode) is the only thing left that can reach the 40 ms. That is
+   a real native component and a real cost.
+
+**Feedback to c0079 (Tauri):** this does **not** argue for Tauri. The floor is
+Chromium's Windows audio backend, and WebView2 is the same Chromium with the
+same WASAPI path — Tauri would inherit the identical 50 ms. Both shells can pass
+the `--audio-buffer-size` switch (Electron via `app.commandLine`, WebView2 via
+`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`), so step 1 is shell-neutral. Even step 3
+is shell-neutral: native audio can be reached from Electron via a native addon or
+a sidecar just as it can from Rust. **Latency is off the list of Tauri arguments**
+— which is what c0079 already assumed, now with numbers behind it.
 
 ## Discussion
 
 - Split out of **c0079** (Tauri): latency was the trigger for exploring Tauri,
   but is almost certainly a Web-Audio/WASAPI issue, not a shell issue.
+  → Confirmed by measurement.
 - Open: is this general (all sound apps) or specific to the one app's code? The
   measurement should use a minimal repro to separate the platform floor from the
   app's own scheduling.
+  → **Answered: general.** The minimal repro — which does nothing but play a
+  pre-decoded 20 ms click — already sits at 50,7 ms on Windows. No app can beat
+  that, so the specific app's code is not the cause.
+- Question to the human (2026-08-12): asked for a Windows run, since this machine
+  has no Windows. Answered with variant A, hand-typed in Chrome 151; stored as
+  `measurements/windows-chrome151-manual.json`. Variants B (Electron +
+  `--audio-buffer-size`) and C (the app's own source) were not run — B is now
+  c0082, and C turned out not to be needed, see above.
 
 ## Log
 
 - 2026-08-12 created (decoupled from c0079)
 - 2026-08-12 status → ready (app)
 - 2026-08-12 status → in-progress (agent)
+- 2026-08-12 harness + tested analysis built, macOS measured (agent)
+- 2026-08-12 question to the human: Windows run (agent)
+- 2026-08-12 Windows measured (Chrome 151, hand-typed) — floor 50 ms, latencyHint
+  has no effect there; findings and recommendation written (agent)
