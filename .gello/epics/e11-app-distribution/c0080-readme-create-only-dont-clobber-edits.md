@@ -1,13 +1,12 @@
 ---
 id: c0080
 title: "Readme: create-only, don't clobber hand-edits"
-status: ready
+status: in-progress
 created: 2026-08-12
 epic: e11
 depends: [c0077]
 tags: [readme, git]
-status-changed: 2026-08-12T22:47:11
-order: 10
+status-changed: 2026-08-12T22:47:27
 updated: 2026-08-12
 ---
 
@@ -49,3 +48,4 @@ which the shipped implementation diverged from.
 
 - 2026-08-12 created (follow-up from c0077 discussion)
 - 2026-08-12 status → ready (app)
+- 2026-08-12 status → in-progress (agent)
