@@ -1,7 +1,8 @@
-import type { AppDocs, ChatMessage, Framework, SourceFile } from '@/types';
+import type { AppDocs, ChatMessage, ElementRef, Framework, SourceFile } from '@/types';
 import { serializeFiles } from './files';
 import { CONCEPT_FILE, EMPTY_DOCS, USERDOC_FILE } from './docs';
 import { PREACT_LIB } from './framework';
+import { formatElementRefs } from './pick';
 
 /** Für den Prompt aufbereitete Referenzdatei: Text inline, Bild als Pfad. */
 export interface PromptAttachment {
@@ -17,6 +18,8 @@ export interface PromptAttachment {
 export interface PromptContext {
   chat?: ChatMessage[];
   attachments?: PromptAttachment[];
+  /** In der laufenden App markierte Elemente, auf die sich der Wunsch bezieht (core/pick). */
+  elements?: ElementRef[];
   /** Der aktuelle Stand der beiden Dokumente der App (core/docs). */
   docs?: AppDocs;
   /**
@@ -108,6 +111,15 @@ export const SYSTEM_PROMPT = [
   '- Der Anwender kann Dateien mitschicken. Text-Referenzen stehen unten mit Inhalt;',
   '  Bild-Referenzen (z. B. Screenshots) sind als Pfad angegeben — lies sie mit dem',
   '  Read-Tool und orientiere dich an dem, was du siehst.',
+  '',
+  'MARKIERTE ELEMENTE (optional):',
+  '- Der Anwender kann Elemente der laufenden App anklicken und mitschicken; sie stehen',
+  '  dann unten unter "REFERENZIERTE ELEMENTE". Beziehe den Wunsch auf genau diese Stellen.',
+  '- Ein Quellort ("Quelle: src/index.html:12:5") nennt Datei, Zeile und Spalte — ändere',
+  '  dort. Fehlt er, ist das Element erst zur Laufzeit entstanden: Finde die Stelle im',
+  '  Code, die es erzeugt (Selektor, Text und Attribute zeigen dir, welche).',
+  '- Das Attribut data-morphos-src setzt erst das Bündeln; in deinen Quelldateien steht es',
+  '  NICHT. Schreibe es niemals selbst.',
   '',
   'BIBLIOTHEKEN (optional):',
   '- Eine Bibliothek deklarierst du in src/index.html als',
@@ -244,6 +256,10 @@ export function buildPrompt(
     }
     parts.push('');
   }
+
+  // Was der Anwender im Fenster markiert hat, steht dicht am Wunsch — „mach das
+  // größer“ ergibt nur mit diesen Elementen einen Sinn.
+  parts.push(...formatElementRefs(context.elements ?? []));
 
   // Das Konzept steuert JEDE Generierung, die Anleitung wird fortgeschrieben —
   // beide gehen deshalb immer mit, direkt vor den Quelldateien.

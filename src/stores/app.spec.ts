@@ -4,7 +4,7 @@ import { useAppWindow } from './app';
 import { setHost } from '@/services/host';
 // Jeder Test bekommt eine frische Pinia — dieselbe Instanz-Id ist damit isoliert.
 const useAppStore = () => useAppWindow('test');
-import type { AgentEvent, AppData, GenerateResult, MorphosHost, SourceFile, VersionInfo } from '@/types';
+import type { AgentEvent, AppData, ElementRef, GenerateResult, MorphosHost, SourceFile, VersionInfo } from '@/types';
 
 const DOC = (body: string, title = 'Test', icon = '🧪'): string =>
   `<!DOCTYPE html><html><head><title>${title}</title><meta name="morphos:icon" content="${icon}"></head><body>${body}</body></html>`;
@@ -93,6 +93,7 @@ describe('useAppStore', () => {
       [],
       expect.any(String),
       'preact',
+      [],
     );
     expect(store.name).toBe('Taschenrechner');
     expect(store.icon).toBe('🧮');
@@ -817,5 +818,25 @@ describe('useAppStore', () => {
 
       expect(store.newFramework).toBe('preact');
     });
+  });
+});
+
+describe('useAppWindow — markierte Elemente', () => {
+  const REF: ElementRef = { tag: 'button', selector: 'body > button#go', text: 'Los', source: 'src/index.html:5:3' };
+
+  it('schickt sie mit dem Wunsch an den Host und vermerkt sie im Verlauf', async () => {
+    const doc = DOC('x');
+    const host = makeHost({
+      generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(doc), html: doc })),
+    });
+    setHost(host);
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    await store.generate('mach das größer', [], [REF]);
+
+    const call = (host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[0];
+    expect(call[call.length - 1]).toEqual([REF]);
+    expect(store.chat[0].elements).toEqual(['<button> „Los“']);
   });
 });

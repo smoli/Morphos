@@ -43,6 +43,8 @@ export interface ChatMessage {
   text: string;
   /** Dateinamen mitgeschickter Referenzen (nur zur Anzeige). */
   attachments?: string[];
+  /** Beschriftungen mitgeschickter markierter Elemente (nur zur Anzeige, siehe core/pick). */
+  elements?: string[];
   time: number;
 }
 
@@ -52,6 +54,27 @@ export interface Attachment {
   path: string;
   name: string;
   kind: 'image' | 'text';
+}
+
+/**
+ * Ein vom Anwender in der laufenden App markiertes Element (siehe core/pick).
+ * Es beschreibt die Stelle so genau, dass das LLM sie im Quelltext wiederfindet:
+ * am zuverlässigsten über `source` — den beim Bündeln gesetzten Quellort —, sonst
+ * über Selektor, Text und Attribute.
+ */
+export interface ElementRef {
+  /** Tag-Name in Kleinschreibung, z. B. "button". */
+  tag: string;
+  /** CSS-Pfad zum Element im Dokument der App. */
+  selector: string;
+  id?: string;
+  classes?: string[];
+  /** Sichtbarer Text des Elements (gekürzt). */
+  text?: string;
+  /** Quellort aus `data-morphos-src`: "src/index.html:12:5" — fehlt bei zur Laufzeit erzeugtem DOM. */
+  source?: string;
+  /** Größe und Position im Fenster der App, in Bildpunkten. */
+  rect?: { x: number; y: number; w: number; h: number };
 }
 
 /**
@@ -447,7 +470,8 @@ export interface MorphosHost {
    * Dokumente und/oder eine Rückfrage (`say`). `runId` markiert den Lauf, unter
    * dem seine Fortschrittsereignisse gemeldet werden. `framework` ist die im
    * Composer getroffene Wahl für eine NEUE App — eine bestehende bringt ihre
-   * eigene mit (siehe core/framework).
+   * eigene mit (siehe core/framework). `elements` sind die in der laufenden App
+   * markierten Elemente, auf die sich der Wunsch bezieht (siehe core/pick).
    */
   generate(
     prompt: string,
@@ -457,6 +481,7 @@ export interface MorphosHost {
     attachments: Attachment[],
     runId?: string,
     framework?: Framework,
+    elements?: ElementRef[],
   ): Promise<GenerateResult>;
 
   /**

@@ -6,6 +6,7 @@ import WelcomeScreen from './WelcomeScreen.vue';
 import IconDialog from './IconDialog.vue';
 import DocsPanel from './DocsPanel.vue';
 import ChatDock from './ChatDock.vue';
+import AppCanvas from './AppCanvas.vue';
 import { useAppWindow } from '@/stores/app';
 import { useAgentsStore } from '@/stores/agents';
 import { useDesktopStore } from '@/stores/desktop';
@@ -399,7 +400,7 @@ describe('AppWindow', () => {
       await wrapper.get('textarea').setValue('Mach die Tasten blau');
       await wrapper.get('textarea').trigger('keydown', { key: 'Enter' });
 
-      expect(spy).toHaveBeenCalledWith(win.instanceId, 'Mach die Tasten blau', []);
+      expect(spy).toHaveBeenCalledWith(win.instanceId, 'Mach die Tasten blau', [], []);
     });
 
     it('bleibt nach dem Absenden offen (der Dialog geht weiter)', async () => {
@@ -474,7 +475,7 @@ describe('AppWindow', () => {
 
       useAgentsStore().jobs = [{
         jobId: 'job-1', appKey: 'rechner-1', state: 'running', instanceId: win.instanceId,
-        appId: 'rechner-1', label: 'Rechner', prompt: 'Mach was', attachments: [], cancelled: false,
+        appId: 'rechner-1', label: 'Rechner', prompt: 'Mach was', attachments: [], elements: [], cancelled: false,
       }];
       await flushPromises();
 
@@ -499,5 +500,81 @@ describe('AppWindow', () => {
     window.dispatchEvent(new MouseEvent('mousemove', { clientX: 260, clientY: 140 }));
     await wrapper.vm.$nextTick();
     expect(desktop.find(win.instanceId)!.x).toBe(startX);
+  });
+});
+
+describe('AppWindow — Elemente markieren', () => {
+  beforeEach(() => setActivePinia(createPinia()));
+
+  const REF = { tag: 'button', selector: 'body > button#go', text: 'Los', source: 'src/index.html:5:3' };
+
+  /** Fenster mit offenem Chat — der 🎯-Knopf sitzt im Composer. */
+  async function mountWithChat() {
+    const frame = await mountFrameForApp();
+    await frame.wrapper.get('.w-chat').trigger('click');
+    return frame;
+  }
+
+  it('schaltet den Pick-Modus vom Composer in die App durch', async () => {
+    const { wrapper } = await mountWithChat();
+    expect(wrapper.getComponent(AppCanvas).props('picking')).toBeFalsy();
+
+    await wrapper.get('.pick').trigger('click');
+    expect(wrapper.getComponent(AppCanvas).props('picking')).toBe(true);
+  });
+
+  it('macht aus einem angeklickten Element ein Kärtchen — jedes nur einmal', async () => {
+    const { wrapper } = await mountWithChat();
+    const canvas = wrapper.getComponent(AppCanvas);
+    canvas.vm.$emit('pick', REF);
+    canvas.vm.$emit('pick', REF);
+    canvas.vm.$emit('pick', { tag: 'h1', selector: 'body > h1', text: 'Titel' });
+    await flushPromises();
+
+    expect(wrapper.getComponent(ChatDock).props('elements')).toHaveLength(2);
+    expect(wrapper.findAll('.ref-chip')).toHaveLength(2);
+    expect(wrapper.get('.ref-chip').text()).toContain('Los');
+  });
+
+  it('nimmt ein Kärtchen auf Wunsch wieder weg', async () => {
+    const { wrapper } = await mountWithChat();
+    wrapper.getComponent(AppCanvas).vm.$emit('pick', REF);
+    await flushPromises();
+    await wrapper.get('.ref-chip .chip-del').trigger('click');
+    expect(wrapper.findAll('.ref-chip')).toHaveLength(0);
+  });
+
+  it('beendet den Modus, wenn die App Escape meldet', async () => {
+    const { wrapper } = await mountWithChat();
+    await wrapper.get('.pick').trigger('click');
+    wrapper.getComponent(AppCanvas).vm.$emit('exit-pick');
+    await flushPromises();
+    expect(wrapper.getComponent(AppCanvas).props('picking')).toBe(false);
+  });
+
+  it('schickt die markierten Elemente mit dem Wunsch und räumt sie danach weg', async () => {
+    const { wrapper, win } = await mountWithChat();
+    const agents = useAgentsStore();
+    const spy = vi.spyOn(agents, 'submit').mockReturnValue('job-1');
+    await wrapper.get('.pick').trigger('click');
+    wrapper.getComponent(AppCanvas).vm.$emit('pick', REF);
+    await flushPromises();
+
+    await wrapper.get('textarea').setValue('mach das größer');
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' });
+
+    expect(spy).toHaveBeenCalledWith(win.instanceId, 'mach das größer', [], [REF]);
+    await flushPromises();
+    expect(wrapper.findAll('.ref-chip')).toHaveLength(0);
+    expect(wrapper.getComponent(AppCanvas).props('picking')).toBe(false);
+  });
+
+  it('beendet den Modus, wenn der Chat zugeht', async () => {
+    const { wrapper, win } = await mountWithChat();
+    await wrapper.get('.pick').trigger('click');
+    await wrapper.get('.w-chat').trigger('click');
+    await flushPromises();
+    expect(useAppWindow(win.instanceId).composerOpen).toBe(false);
+    expect(wrapper.getComponent(AppCanvas).props('picking')).toBe(false);
   });
 });

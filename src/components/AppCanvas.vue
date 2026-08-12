@@ -1,15 +1,25 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { injectBridge, dispatchFsRequest } from '@/core/appfs';
+import { injectPicker, sanitizeRef } from '@/core/pick';
 import { dispatchDialogRequest } from '@/core/dialog';
 import { getHost } from '@/services/host';
 import FileDialog from './FileDialog.vue';
-import type { DialogRequest, FsOp } from '@/types';
+import type { DialogRequest, ElementRef, FsOp } from '@/types';
 
 const props = defineProps<{
   html: string;
   accessRoot?: string | null;
   authorize?: (op: FsOp, path: string) => Promise<boolean>;
+  /** Der Anwender markiert gerade Elemente in dieser App (siehe core/pick). */
+  picking?: boolean;
+}>();
+
+const emit = defineEmits<{
+  /** Ein Element wurde angeklickt — geprüfte Beschreibung für den Composer. */
+  pick: [ref: ElementRef];
+  /** Escape in der App: der Anwender verlässt den Pick-Modus. */
+  'exit-pick': [];
 }>();
 
 // Bewusst OHNE allow-same-origin: der generierte Code bleibt isoliert und
@@ -30,7 +40,10 @@ const docUrl = ref('');
 
 function loadDocument(html: string): void {
   const previous = docUrl.value;
-  docUrl.value = URL.createObjectURL(new Blob([injectBridge(html)], { type: 'text/html' }));
+  // Erst der Picker, dann die Brücke: Beide setzen ihr Skript an den Anfang des
+  // Kopfes, die zuletzt eingesetzte CSP steht damit vor beiden.
+  const doc = injectBridge(injectPicker(html));
+  docUrl.value = URL.createObjectURL(new Blob([doc], { type: 'text/html' }));
   // Das Freigeben löst nur die URL auf; das bereits geladene alte Dokument
   // bleibt bis zum Austausch stehen.
   if (previous) URL.revokeObjectURL(previous);
@@ -60,9 +73,36 @@ function onPick(path: string | null): void {
   resolve?.(path);
 }
 
+/**
+ * Sagt dem Picker im iframe, ob gerade markiert wird. Die App bekommt dadurch
+ * keine neue Fähigkeit — es ist dieselbe postMessage-Brücke wie beim Dateizugriff.
+ */
+function sendPickMode(on: boolean): void {
+  iframe.value?.contentWindow?.postMessage({ __morphosPick: 'mode', on }, '*');
+}
+
+watch(() => props.picking, (on) => sendPickMode(!!on));
+
+// Nach jeder Generierung lädt der iframe ein neues Dokument — der Picker darin
+// weiß nichts vom laufenden Modus und muss ihn erneut gesagt bekommen.
+function onLoad(): void {
+  if (props.picking) sendPickMode(true);
+}
+
 async function onMessage(event: MessageEvent): Promise<void> {
   const win = iframe.value?.contentWindow;
   if (!win || event.source !== win) return; // nur Nachrichten des eigenen iframes
+  const pick = event.data as { __morphosPick?: string; ref?: unknown };
+  if (pick?.__morphosPick === 'picked') {
+    const ref = sanitizeRef(pick.ref);
+    if (ref) emit('pick', ref);
+    return;
+  }
+  if (pick?.__morphosPick === 'exit') {
+    emit('exit-pick');
+    return;
+  }
+
   const data = event.data as {
     __morphosFS?: string;
     id?: string;
@@ -107,6 +147,7 @@ onBeforeUnmount(() => {
       :src="docUrl"
       :sandbox="SANDBOX"
       referrerpolicy="no-referrer"
+      @load="onLoad"
     ></iframe>
     <FileDialog v-if="dialog" :request="dialog.request" :root="dialog.root" @pick="onPick" />
   </div>

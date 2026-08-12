@@ -4,7 +4,8 @@ import { getHost } from '@/services/host';
 import { agentEventIcon, agentEventLabel } from '@/core/agent';
 import { useElapsed } from '@/composables/useElapsed';
 import { renderMarkdown } from '@/core/markdown';
-import type { AgentEvent, Attachment, ChatMessage, Framework } from '@/types';
+import { refKey, refLabel } from '@/core/pick';
+import type { AgentEvent, Attachment, ChatMessage, ElementRef, Framework } from '@/types';
 
 /**
  * Der Chat einer App: Verlauf, Eingabe, Anhänge und der Fortschritt des
@@ -31,11 +32,20 @@ const props = defineProps<{
   newApp?: boolean;
   /** Die aktuelle Framework-Wahl für die neue App. */
   framework?: Framework;
+  /** Gibt es überhaupt eine laufende App, in der man markieren kann? */
+  canPick?: boolean;
+  /** Der Anwender markiert gerade Elemente in der App (🎯). */
+  picking?: boolean;
+  /** Die bereits markierten Elemente — sie gehen mit dem nächsten Wunsch mit. */
+  elements?: ElementRef[];
 }>();
 
 const emit = defineEmits<{
   submit: [text: string, attachments: Attachment[]];
   'update:framework': [framework: Framework];
+  'update:picking': [on: boolean];
+  /** Ein Kärtchen wurde weggenommen (Selektor des Elements). */
+  'remove-element': [key: string];
 }>();
 
 // Preact ist die Vorgabe — der Haken ist an, bis der Anwender ihn wegnimmt.
@@ -198,6 +208,14 @@ async function attach(): Promise<void> {
   }
 }
 
+/**
+ * Der Zielmodus: In ihm klickt der Anwender Elemente in der laufenden App an,
+ * statt sie zu bedienen — jedes wird zu einem Kärtchen neben den Anhängen.
+ */
+function togglePick(): void {
+  emit('update:picking', !props.picking);
+}
+
 function removeAttachment(path: string): void {
   attachments.value = attachments.value.filter((a) => a.path !== path);
 }
@@ -246,8 +264,9 @@ function fmt(ts: number): string {
             <div v-if="msg.role === 'assistant'" class="msg assistant md" v-html="renderMarkdown(msg.text)"></div>
             <div v-else class="msg user">
               <div class="text">{{ msg.text }}</div>
-              <div v-if="msg.attachments?.length" class="atts">
+              <div v-if="msg.attachments?.length || msg.elements?.length" class="atts">
                 <span v-for="name in msg.attachments" :key="name" class="att">📎 {{ name }}</span>
+                <span v-for="label in msg.elements" :key="label" class="att">🎯 {{ label }}</span>
               </div>
               <div class="time">{{ fmt(msg.time) }}</div>
             </div>
@@ -274,10 +293,23 @@ function fmt(ts: number): string {
           </div>
         </div>
 
-        <div v-if="attachments.length" class="chips">
+        <div v-if="attachments.length || elements?.length" class="chips">
           <span v-for="a in attachments" :key="a.path" class="chip" :title="a.path">
             {{ a.kind === 'image' ? '🖼' : '📄' }} {{ a.name }}
             <button type="button" class="chip-del" title="Entfernen" @click="removeAttachment(a.path)">✕</button>
+          </span>
+          <!-- Markierte Elemente der App: dieselbe Reihe wie die Anhänge — beides
+               ist Beiwerk zum Wunsch, das mit ihm abgeschickt wird. -->
+          <span
+            v-for="ref in elements"
+            :key="refKey(ref)"
+            class="chip ref-chip"
+            :title="ref.source ? `${ref.selector}\n${ref.source}` : ref.selector"
+          >
+            🎯 {{ refLabel(ref) }}
+            <button type="button" class="chip-del" title="Entfernen" @click="emit('remove-element', refKey(ref))">
+              ✕
+            </button>
           </span>
         </div>
         <div v-if="attachError" class="attach-error">{{ attachError }}</div>
@@ -310,6 +342,18 @@ function fmt(ts: number): string {
           </button>
           <button type="button" class="attach" title="Referenzdatei anhängen (Bild oder Text)" @click="attach">
             📎
+          </button>
+          <button
+            v-if="canPick"
+            type="button"
+            class="pick"
+            :class="{ on: picking }"
+            :title="picking
+              ? 'Markieren beenden (Esc)'
+              : 'Element in der App markieren: anklicken, um sich im Wunsch darauf zu beziehen'"
+            @click="togglePick"
+          >
+            🎯
           </button>
           <textarea
             ref="input"
@@ -570,7 +614,8 @@ function fmt(ts: number): string {
 }
 .toggle,
 .popout,
-.attach {
+.attach,
+.pick {
   flex-shrink: 0;
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -582,7 +627,16 @@ function fmt(ts: number): string {
 }
 .toggle:hover,
 .popout:hover,
-.attach:hover {
+.attach:hover,
+.pick:hover {
+  border-color: var(--accent);
+}
+/* Der Zielmodus läuft — der Knopf zeigt es, solange er an ist. */
+.pick.on {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.ref-chip {
   border-color: var(--accent);
 }
 textarea {

@@ -14,6 +14,11 @@ describe('SYSTEM_PROMPT', () => {
     expect(SYSTEM_PROMPT).toMatch(/localStorage/i);
   });
 
+  it('warnt davor, das beim Bündeln gesetzte data-morphos-src selbst zu schreiben', () => {
+    expect(SYSTEM_PROMPT).toContain('data-morphos-src');
+    expect(SYSTEM_PROMPT).toContain('MARKIERTE ELEMENTE');
+  });
+
   it('erklärt das inkrementelle Blockformat für die Ausgabe', () => {
     expect(SYSTEM_PROMPT).toContain('===MORPHOS:FILE');
     expect(SYSTEM_PROMPT).toContain('===MORPHOS:END===');
@@ -199,5 +204,21 @@ describe('buildPrompt', () => {
     expect(p).toContain('primär: #ff0000');
     expect(p).toContain('/tmp/screenshot.png');
     expect(p).toMatch(/Read/);
+  });
+
+  it('nennt die markierten Elemente samt Quellort vor dem Wunsch', () => {
+    const p = buildPrompt('mach das größer', FILES, [], {
+      elements: [
+        { tag: 'button', selector: 'body > button#go', text: 'Los', source: 'src/index.html:7:3' },
+      ],
+    });
+    expect(p).toContain('REFERENZIERTE ELEMENTE');
+    expect(p).toContain('src/index.html:7:3');
+    expect(p).toContain('body > button#go');
+    expect(p.indexOf('REFERENZIERTE ELEMENTE')).toBeLessThan(p.indexOf('mach das größer'));
+  });
+
+  it('lässt den Abschnitt weg, wenn nichts markiert ist', () => {
+    expect(buildPrompt('x', FILES, [], {})).not.toContain('REFERENZIERTE ELEMENTE');
   });
 });

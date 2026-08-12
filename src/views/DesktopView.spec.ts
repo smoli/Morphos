@@ -272,6 +272,7 @@ describe('DesktopView', () => {
         label: 'Rechner',
         prompt: 'Mach was',
         attachments: [],
+        elements: [],
         cancelled: false,
       }];
     }
@@ -378,7 +379,7 @@ describe('DesktopView', () => {
       await wrapper.get('.w-composer textarea').setValue('Ein Spiel');
       await wrapper.get('.w-composer textarea').trigger('keydown', { key: 'Enter' });
 
-      expect(spy).toHaveBeenCalledWith(instanceId, 'Ein Spiel', []);
+      expect(spy).toHaveBeenCalledWith(instanceId, 'Ein Spiel', [], []);
     });
   });
 

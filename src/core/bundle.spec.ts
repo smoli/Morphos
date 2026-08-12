@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bundle } from './bundle';
+import { annotateSource, bundle } from './bundle';
 import type { SourceFile } from '@/types';
 
 function makeFiles(index: string, extra: SourceFile[] = []): SourceFile[] {
@@ -74,6 +74,67 @@ describe('bundle', () => {
     const out = bundle(makeFiles(html));
     expect(out).toContain('<title>App</title>');
     expect(out).toContain('morphos:icon');
-    expect(out).toContain('<h1>Hi</h1>');
+    // Der Rumpf trägt zusätzlich seinen Quellort (annotateSource) — sein Inhalt bleibt.
+    expect(out).toContain('Hi</h1>');
+  });
+});
+
+describe('annotateSource', () => {
+  it('gibt jedem Element im Rumpf seinen Quellort (Datei:Zeile:Spalte)', () => {
+    const html = '<html>\n<body>\n  <h1>Hi</h1>\n</body>\n</html>';
+    const out = annotateSource(html, 'src/index.html');
+    expect(out).toContain('<h1 data-morphos-src="src/index.html:3:3">Hi</h1>');
+    expect(out).toContain('<body data-morphos-src="src/index.html:2:1">');
+  });
+
+  it('lässt Kopf und Metadaten in Ruhe (dort ist nichts anzuklicken)', () => {
+    const html = '<html><head><meta charset="utf-8"><title>App</title><link rel="stylesheet" href="a.css"></head><body></body></html>';
+    const out = annotateSource(html, 'src/index.html');
+    expect(out).toContain('<meta charset="utf-8">');
+    expect(out).toContain('<title>App</title>');
+    expect(out).toContain('<link rel="stylesheet" href="a.css">');
+    expect(out).not.toContain('<html data-morphos-src');
+  });
+
+  it('rührt Markup in Skripten und Styles nicht an (htm-Templates, CSS)', () => {
+    const html = '<body>\n<script>render(html`<div class="x">a</div>`)</script>\n<style>div{color:red}</style>\n</body>';
+    const out = annotateSource(html, 'src/index.html');
+    expect(out).toContain('html`<div class="x">a</div>`');
+    expect(out).toContain('<style>div{color:red}</style>');
+  });
+
+  it('geht an Kommentaren und an < in Attributwerten vorbei', () => {
+    const html = '<body><!-- <div>alt</div> --><p title="a<b">x</p></body>';
+    const out = annotateSource(html, 'src/index.html');
+    expect(out).toContain('<!-- <div>alt</div> -->');
+    expect(out).toContain('<p data-morphos-src="src/index.html:1:30" title="a<b">');
+  });
+
+  it('markiert nicht doppelt und lässt leeres HTML in Ruhe', () => {
+    const html = '<body><p>x</p></body>';
+    const once = annotateSource(html, 'src/index.html');
+    expect(annotateSource(once, 'src/index.html')).toBe(once);
+    expect(annotateSource('', 'src/index.html')).toBe('');
+  });
+
+  it('zählt Zeilen und Spalten ab eins', () => {
+    const out = annotateSource('<body>\n\n<div><span>x</span></div>\n</body>', 'src/index.html');
+    expect(out).toContain('<div data-morphos-src="src/index.html:3:1">');
+    expect(out).toContain('<span data-morphos-src="src/index.html:3:6">');
+  });
+});
+
+describe('bundle — Quellorte', () => {
+  it('gibt dem gebündelten Dokument die Quellorte von src/index.html mit', () => {
+    const html = '<html><head></head><body>\n<button class="go">Los</button>\n</body></html>';
+    const out = bundle(makeFiles(html));
+    expect(out).toContain('<button data-morphos-src="src/index.html:2:1" class="go">');
+  });
+
+  it('markiert eingebettete Skripte nicht — deren Markup entsteht erst zur Laufzeit', () => {
+    const html = '<html><body><div id="app"></div><script src="app.js"></script></body></html>';
+    const out = bundle(makeFiles(html, [{ path: 'src/app.js', content: 'el.innerHTML = "<span>x</span>";' }]));
+    expect(out).toContain('"<span>x</span>"');
+    expect(out).toContain('<div data-morphos-src=');
   });
 });

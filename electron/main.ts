@@ -14,6 +14,7 @@ import { applyDocs, hasDocChanges, splitDocs, toDocs } from '../src/core/docs';
 import { bundle, ENTRY_FILE } from '../src/core/bundle';
 import { BUILTIN_LIBS, extractLibs, isBuiltinLib, splitLibs } from '../src/core/libs';
 import { resolveFramework } from '../src/core/framework';
+import { sanitizeRefs } from '../src/core/pick';
 import { commitAll, countVersions, ensureRepo, listVersions, restoreTree } from '../src/core/gitstore';
 import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeAppState, writeChat } from '../src/core/appstore';
 import { validateIcon } from '../src/core/icon';
@@ -41,6 +42,7 @@ import type {
   Attachment,
   ChatMessage,
   DiskUsageResult,
+  ElementRef,
   FolderResult,
   Framework,
   FsRequest,
@@ -361,7 +363,8 @@ function runClaude(
 }
 
 /**
- * Eine Generierung: Prompt bauen (samt Dialog, Referenzen und den beiden
+ * Eine Generierung: Prompt bauen (samt Dialog, Referenzen, markierten Elementen
+ * und den beiden
  * Dokumenten der App), Claude CLI aufrufen, Datei-Blöcke und Rückfrage lesen,
  * Dokumente von den Quellen trennen, Änderungen anwenden, Bibliotheken auflösen
  * (Whitelist + Cache) und zum Artefakt bündeln.
@@ -378,6 +381,7 @@ async function generate(
   currentDocs: AppDocs,
   chat: ChatMessage[],
   attachments: Attachment[],
+  elements: ElementRef[],
   requestedFramework?: Framework,
   onEvent: (event: AgentEvent) => void = () => {},
   runId = '',
@@ -387,7 +391,7 @@ async function generate(
   const prepared = preparePromptAttachments(attachments);
   if (prepared.error) return { ok: false, error: prepared.error };
   const framework = resolveFramework(current, requestedFramework);
-  const context: PromptContext = { chat, attachments: prepared.atts, docs: currentDocs, framework };
+  const context: PromptContext = { chat, attachments: prepared.atts, elements, docs: currentDocs, framework };
 
   // Bild-Referenzen liest die CLI selbst — Read nur für genau diese Pfade freigeben.
   const extraArgs = prepared.atts
@@ -496,6 +500,7 @@ ipcMain.handle('morphos:generate', async (
     attachments: Attachment[];
     runId?: string;
     framework?: Framework;
+    elements?: ElementRef[];
   },
 ): Promise<GenerateResult> => {
   if (!payload?.prompt?.trim()) return { ok: false, error: 'Bitte gib einen Wunsch ein.' };
@@ -509,6 +514,9 @@ ipcMain.handle('morphos:generate', async (
   const attachments = Array.isArray(payload.attachments)
     ? payload.attachments.filter((a) => a && typeof a.path === 'string' && typeof a.name === 'string')
     : [];
+  // Was der Anwender in der App markiert hat, kommt aus generiertem Code — es
+  // wird geprüft und gedeckelt, bevor es in den Prompt geht (siehe core/pick).
+  const elements = sanitizeRefs(payload.elements);
   // Die Framework-Wahl kommt aus dem Composer; alles Unbekannte gilt als
   // „nicht gewählt“ und läuft damit auf vanilla hinaus.
   const framework: Framework | undefined =
@@ -521,7 +529,7 @@ ipcMain.handle('morphos:generate', async (
     if (sender.isDestroyed()) return;
     sender.send('morphos:agentEvent', runId, agentEvent);
   };
-  return generate(payload.prompt, current, docs, chat, attachments, framework, onEvent, runId);
+  return generate(payload.prompt, current, docs, chat, attachments, elements, framework, onEvent, runId);
 });
 
 // Abbruch eines laufenden Agenten: Der Kindprozess zu dieser Lauf-Id wird

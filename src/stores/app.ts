@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia';
-import type { AgentEvent, AppData, AppDocs, Attachment, ChatMessage, Framework, SourceFile, VersionInfo } from '@/types';
+import type { AgentEvent, AppData, AppDocs, Attachment, ChatMessage, ElementRef, Framework, SourceFile, VersionInfo } from '@/types';
 import { getHost } from '@/services/host';
 import { agentEventLabel } from '@/core/agent';
+import { refLabel } from '@/core/pick';
 import { extractIcon, extractTitle } from '@/core/html';
 import { EMPTY_DOCS, toDocs } from '@/core/docs';
 import { DEFAULT_FRAMEWORK } from '@/core/framework';
@@ -204,7 +205,7 @@ export function useAppWindow(instanceId: string) {
      * Während der Lauf arbeitet, strömen seine Fortschrittsereignisse herein
      * (activity) — der Chat zeigt live, was der Agent gerade tut.
      */
-    async generate(prompt: string, attachments: Attachment[] = []): Promise<void> {
+    async generate(prompt: string, attachments: Attachment[] = [], elements: ElementRef[] = []): Promise<void> {
       if (this.busy) return;
       const text = prompt.trim();
       if (!text) {
@@ -229,6 +230,7 @@ export function useAppWindow(instanceId: string) {
         const plainFiles = this.files.map((f) => ({ path: f.path, content: f.content }));
         const plainDocs = { concept: this.docs.concept, userdoc: this.docs.userdoc };
         const plainAtts = attachments.map((a) => ({ path: a.path, name: a.name, kind: a.kind }));
+        const plainRefs = JSON.parse(JSON.stringify(elements)) as ElementRef[];
         // Der bisherige Dialog OHNE den aktuellen Wunsch — der geht separat in den Prompt.
         const priorChat = JSON.parse(JSON.stringify(this.chat)) as ChatMessage[];
 
@@ -236,6 +238,7 @@ export function useAppWindow(instanceId: string) {
           role: 'user',
           text,
           ...(plainAtts.length ? { attachments: plainAtts.map((a) => a.name) } : {}),
+          ...(plainRefs.length ? { elements: plainRefs.map(refLabel) } : {}),
           time: Date.now(),
         });
         this.pendingQuestion = null;
@@ -243,7 +246,7 @@ export function useAppWindow(instanceId: string) {
         // Die Framework-Wahl geht immer mit; für eine bestehende App entscheidet
         // ohnehin deren eigener Quelltext (siehe core/framework).
         const res = await getHost().generate(
-          text, plainFiles, plainDocs, priorChat, plainAtts, runId, this.newFramework,
+          text, plainFiles, plainDocs, priorChat, plainAtts, runId, this.newFramework, plainRefs,
         );
         // Abgebrochen: Das (Teil-)Ergebnis wird verworfen und der Wunsch aus dem
         // Dialog genommen — die App bleibt, wie sie war, und der Abbruch selbst

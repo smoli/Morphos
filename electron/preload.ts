@@ -7,6 +7,7 @@ import type {
   Attachment,
   ChatMessage,
   DiskUsageResult,
+  ElementRef,
   FolderResult,
   Framework,
   FsRequest,
@@ -35,8 +36,9 @@ contextBridge.exposeInMainWorld('morphos', {
     attachments: Attachment[],
     runId?: string,
     framework?: Framework,
+    elements?: ElementRef[],
   ): Promise<GenerateResult> =>
-    ipcRenderer.invoke('morphos:generate', { prompt, files, docs, chat, attachments, runId, framework }),
+    ipcRenderer.invoke('morphos:generate', { prompt, files, docs, chat, attachments, runId, framework, elements }),
 
   // Fortschritt eines laufenden Agentenlaufs (Strom der Claude CLI).
   onAgentEvent: (cb: (runId: string, event: AgentEvent) => void): (() => void) => {

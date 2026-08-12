@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import ChatDock from './ChatDock.vue';
 import { setHost } from '@/services/host';
-import type { ChatMessage, MorphosHost } from '@/types';
+import type { ChatMessage, ElementRef, MorphosHost } from '@/types';
 
 const messages: ChatMessage[] = [
   { role: 'user', text: 'Ein Spiel', time: 1 },
@@ -540,5 +540,52 @@ describe('ChatDock', () => {
       expect(wrapper.text()).toContain('shot.png');
       openSpy.mockRestore();
     });
+  });
+});
+
+describe('ChatDock — markierte Elemente', () => {
+  beforeEach(() => setHost(makeHost()));
+
+  const REFS: ElementRef[] = [
+    { tag: 'button', selector: '#go', text: 'Los' },
+    { tag: 'h1', selector: 'body > h1', text: 'Überschrift' },
+  ];
+
+  it('zeigt den 🎯-Knopf nur, wenn es eine laufende App zu markieren gibt', () => {
+    expect(mountDock({ canPick: false }).find('.pick').exists()).toBe(false);
+    expect(mountDock({ canPick: true }).find('.pick').exists()).toBe(true);
+  });
+
+  it('schaltet den Pick-Modus über den 🎯-Knopf um', async () => {
+    const wrapper = mountDock({ canPick: true, picking: false });
+    await wrapper.get('.pick').trigger('click');
+    expect(wrapper.emitted('update:picking')![0]).toEqual([true]);
+
+    const on = mountDock({ canPick: true, picking: true });
+    expect(on.get('.pick').classes()).toContain('on');
+    await on.get('.pick').trigger('click');
+    expect(on.emitted('update:picking')![0]).toEqual([false]);
+  });
+
+  it('zeigt jedes markierte Element als Kärtchen mit Tag und Text', () => {
+    const wrapper = mountDock({ elements: REFS });
+    const chips = wrapper.findAll('.ref-chip');
+    expect(chips).toHaveLength(2);
+    expect(chips[0].text()).toContain('<button>');
+    expect(chips[0].text()).toContain('Los');
+    expect(chips[1].text()).toContain('Überschrift');
+  });
+
+  it('nimmt ein Kärtchen einzeln wieder weg', async () => {
+    const wrapper = mountDock({ elements: REFS });
+    await wrapper.findAll('.ref-chip .chip-del')[1].trigger('click');
+    expect(wrapper.emitted('remove-element')![0]).toEqual(['body > h1']);
+  });
+
+  it('zeigt im Verlauf, worauf sich ein Wunsch bezogen hat', () => {
+    const wrapper = mountDock({
+      messages: [{ role: 'user', text: 'mach das größer', elements: ['<button> „Los“'], time: 1 }],
+    });
+    expect(wrapper.text()).toContain('<button> „Los“');
   });
 });

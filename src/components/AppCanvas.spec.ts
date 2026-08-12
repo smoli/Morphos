@@ -198,3 +198,78 @@ describe('AppCanvas — Dateidialoge über die Brücke', () => {
     expect(answers).toEqual([]);
   });
 });
+
+describe('AppCanvas — Elemente markieren (Pick-Modus)', () => {
+  /**
+   * Mountet die Leinwand am Dokument (erst dann hat der iframe ein
+   * contentWindow) und liefert Werkzeug, um wie der Picker im iframe zu senden —
+   * samt dem, was die Shell in den iframe hineinschickt.
+   */
+  function canvas(picking = false) {
+    const wrapper = mount(AppCanvas, {
+      props: { html: '<html><head></head><body></body></html>', picking },
+      attachTo: document.body,
+    });
+    const win = wrapper.get('iframe').element.contentWindow as Window;
+    const sent: Record<string, unknown>[] = [];
+    vi.spyOn(win, 'postMessage').mockImplementation((msg: unknown) => {
+      sent.push(msg as Record<string, unknown>);
+    });
+    const send = async (msg: Record<string, unknown>, source: Window = win): Promise<void> => {
+      window.dispatchEvent(new MessageEvent('message', { data: msg, source: source as MessageEventSource }));
+      await flushPromises();
+    };
+    return { wrapper, send, sent };
+  }
+
+  const REF = { tag: 'BUTTON', id: 'go', classes: ['primary'], text: 'Los', selector: 'body > button#go' };
+
+  it('injiziert den Picker in das Dokument der App', async () => {
+    const wrapper = mount(AppCanvas, { props: { html: '<html><head></head><body></body></html>' } });
+    const doc = await documentOf(wrapper);
+    expect(doc).toContain('data-morphos-picker');
+    // Die CSP steht davor — sie gilt auch für unser eigenes Skript.
+    expect(doc.indexOf('Content-Security-Policy')).toBeLessThan(doc.indexOf('data-morphos-picker'));
+  });
+
+  it('schaltet den Pick-Modus im iframe an und wieder aus', async () => {
+    const { wrapper, sent } = canvas();
+    await wrapper.setProps({ picking: true });
+    expect(sent).toEqual([{ __morphosPick: 'mode', on: true }]);
+    await wrapper.setProps({ picking: false });
+    expect(sent[1]).toEqual({ __morphosPick: 'mode', on: false });
+  });
+
+  it('schaltet ihn nach dem Neuladen der App wieder ein', async () => {
+    const { wrapper, sent } = canvas(true);
+    sent.length = 0;
+    await wrapper.get('iframe').trigger('load');
+    expect(sent).toEqual([{ __morphosPick: 'mode', on: true }]);
+  });
+
+  it('meldet ein markiertes Element geprüft nach oben', async () => {
+    const { wrapper, send } = canvas(true);
+    await send({ __morphosPick: 'picked', ref: REF });
+    const picked = wrapper.emitted('pick');
+    expect(picked).toHaveLength(1);
+    expect(picked![0][0]).toEqual({ tag: 'button', id: 'go', classes: ['primary'], text: 'Los', selector: 'body > button#go' });
+  });
+
+  it('verwirft, was keine brauchbare Beschreibung ist', async () => {
+    const { wrapper, send } = canvas(true);
+    await send({ __morphosPick: 'picked', ref: { tag: '' } });
+    expect(wrapper.emitted('pick')).toBeUndefined();
+  });
+
+  it('nimmt nur Nachrichten des eigenen iframes an', async () => {
+    const { wrapper, send } = canvas(true);
+    await send({ __morphosPick: 'picked', ref: REF }, window);
+    expect(wrapper.emitted('pick')).toBeUndefined();
+  });
+
+  it('reicht das Escape aus der App als Ende des Modus nach oben', async () => {
+    const { wrapper, send } = canvas(true);
+    await send({ __morphosPick: 'exit' });
+    expect(wrapper.emitted('exit-pick')).toHaveLength(1);
+  });
+});

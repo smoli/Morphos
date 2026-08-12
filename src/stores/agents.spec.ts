@@ -101,6 +101,20 @@ describe('useAgentsStore', () => {
     expect(agents.count).toBe(0);
   });
 
+  it('trägt die markierten Elemente des Wunsches bis in die Generierung', async () => {
+    const host = makeHost();
+    setHost(host);
+    const agents = useAgentsStore();
+    const win = openWindow('a-1', 'A');
+    const ref = { tag: 'button', selector: 'body > button#go', text: 'Los' };
+
+    agents.submit(win, 'mach das größer', [], [ref]);
+    await flush();
+
+    const call = (host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[0];
+    expect(call[call.length - 1]).toEqual([ref]);
+  });
+
   describe('Deckel und Warteschlange', () => {
     it('startet bis zum Deckel und reiht den Rest ein', async () => {
       const slow = makeSlowHost();

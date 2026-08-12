@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useAppWindow } from '@/stores/app';
 import { useDesktopStore } from '@/stores/desktop';
 import { useWorkspaceStore } from '@/stores/workspace';
@@ -16,8 +16,9 @@ import DocsPanel from './DocsPanel.vue';
 import AppIcon from './AppIcon.vue';
 import IconDialog from './IconDialog.vue';
 import { shortcutKeys } from '@/core/shortcuts';
+import { MAX_ELEMENT_REFS, refKey } from '@/core/pick';
 import type { DesktopWindow } from '@/stores/desktop';
-import type { Attachment } from '@/types';
+import type { Attachment, ElementRef } from '@/types';
 
 /**
  * Ein Fenster, das eine erzeugte App zeigt: der Instanz-Store, die App im
@@ -81,10 +82,33 @@ function syncMeta(): void {
   if (store.id) desktop.setAppMeta(props.win.instanceId, store.id, store.name, store.icon);
 }
 
+// ---- Markierte Elemente (c0073): Im Zielmodus klickt der Anwender Elemente in
+//      der laufenden App an; sie sammeln sich als Kärtchen im Composer und gehen
+//      mit dem nächsten Wunsch als Kontext mit (siehe core/pick).
+const picking = ref(false);
+const elementRefs = ref<ElementRef[]>([]);
+
+function onPicked(ref: ElementRef): void {
+  if (elementRefs.value.some((r) => refKey(r) === refKey(ref))) return;
+  if (elementRefs.value.length >= MAX_ELEMENT_REFS) return;
+  elementRefs.value.push(ref);
+}
+
+function removeRef(key: string): void {
+  elementRefs.value = elementRefs.value.filter((r) => refKey(r) !== key);
+}
+
+// Der Zielmodus lebt im Composer: Geht der Chat zu, ist auch das Markieren
+// vorbei — sonst schluckte die App weiter jeden Klick.
+watch(() => store.composerOpen, (open) => { if (!open) picking.value = false; });
+
 // Jeder Wunsch dieses Fensters — aus dem Chat oder vom WelcomeScreen eines
 // leeren Entwurfs — geht in die zentrale Warteschlange (siehe stores/agents).
 function onPrompt(text: string, attachments: Attachment[] = []): void {
-  agents.submit(props.win.instanceId, text, attachments);
+  agents.submit(props.win.instanceId, text, attachments, elementRefs.value.map((r) => ({ ...r })));
+  // Die Markierungen gehören zu genau diesem Wunsch — danach ist der Tisch leer.
+  elementRefs.value = [];
+  picking.value = false;
 }
 
 const chatTitle = computed(
@@ -178,7 +202,12 @@ async function onIcon(icon: string | null): Promise<void> {
         :queued="queuedHere"
         :new-app="store.isDraft"
         :framework="store.newFramework"
+        :can-pick="store.hasApp"
+        :picking="picking"
+        :elements="elementRefs"
         @update:framework="store.newFramework = $event"
+        @update:picking="picking = $event"
+        @remove-element="removeRef"
         @submit="onPrompt"
         @keydown.esc.stop="store.closeComposer()"
       />
@@ -189,6 +218,9 @@ async function onIcon(icon: string | null): Promise<void> {
       :html="store.currentHtml"
       :access-root="workspace.accessRoot"
       :authorize="workspace.authorizeFs"
+      :picking="picking"
+      @pick="onPicked"
+      @exit-pick="picking = false"
     />
     <WelcomeScreen v-else @pick="onPrompt" />
 

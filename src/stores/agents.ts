@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import type { Attachment } from '@/types';
+import type { Attachment, ElementRef } from '@/types';
 import type { JobState } from '@/core/queue';
 import { isAppBusy, MAX_RECENT_RUNS, startableJobs } from '@/core/queue';
 import { DEFAULT_NAME } from '@/core/app';
@@ -25,6 +25,8 @@ export interface AgentJob {
   label: string;
   prompt: string;
   attachments: Attachment[];
+  /** In der App markierte Elemente, auf die sich der Wunsch bezieht (core/pick). */
+  elements: ElementRef[];
   /** Abgebrochen: Das Ergebnis wird verworfen, der Auftrag ist aus der Liste. */
   cancelled: boolean;
 }
@@ -100,7 +102,12 @@ export const useAgentsStore = defineStore('agents', {
      * frei ist und für die App gerade kein Agent arbeitet — sonst wartet er.
      * Liefert die Auftrags-Id (oder null, wenn nichts anzunehmen war).
      */
-    submit(instanceId: string, prompt: string, attachments: Attachment[] = []): string | null {
+    submit(
+      instanceId: string,
+      prompt: string,
+      attachments: Attachment[] = [],
+      elements: ElementRef[] = [],
+    ): string | null {
       const text = prompt.trim();
       if (!text) return null;
       if (!useWorkspaceStore().folder) return null;
@@ -118,6 +125,7 @@ export const useAgentsStore = defineStore('agents', {
         prompt: text,
         // Reine Werte: der Auftrag überlebt sein Fenster und dessen Store.
         attachments: attachments.map((a) => ({ ...a })),
+        elements: elements.map((e) => ({ ...e })),
         cancelled: false,
       };
       this.jobs.push(job);
@@ -174,7 +182,7 @@ export const useAgentsStore = defineStore('agents', {
         }
         if (job.cancelled) return;
 
-        await store.generate(job.prompt, job.attachments);
+        await store.generate(job.prompt, job.attachments, job.elements);
         this.announce(job, store);
         await this.afterRun(job, store);
       } finally {
