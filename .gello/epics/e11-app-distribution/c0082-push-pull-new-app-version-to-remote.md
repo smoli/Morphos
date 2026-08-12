@@ -27,28 +27,28 @@ Boundaries:
 
 ## Acceptance criteria
 
-- [ ] Apps that **have an `origin` remote** show **„Push"/„Pull"** in the app-tile
+- [x] Apps that **have an `origin` remote** show **„Push"/„Pull"** in the app-tile
       context menu; apps without a remote don't (publishing is c0083).
-- [ ] **„Push"** pushes new local commits to `origin/<default-branch>`; if the
+- [x] **„Push"** pushes new local commits to `origin/<default-branch>`; if the
       remote has advanced (non-fast-forward) the push is **refused** with a
       "erst ziehen" message and is **never force-pushed**.
-- [ ] **„Pull"** **fast-forwards** local to the remote when local hasn't diverged;
+- [x] **„Pull"** **fast-forwards** local to the remote when local hasn't diverged;
       on **real divergence** it **stops with a clear message and changes nothing**
       (resolution is c0084).
-- [ ] An **ahead/behind indicator** on the app tile reflects the **last fetch**;
+- [x] An **ahead/behind indicator** on the app tile reflects the **last fetch**;
       remote state is fetched **on demand only** (menu open / explicit refresh /
       before a push or pull) — **never in the background**.
-- [ ] Only the **default branch** (cloned, tracked as `origin/<branch>`) is synced;
+- [x] Only the **default branch** (cloned, tracked as `origin/<branch>`) is synced;
       no branch switching.
-- [ ] **Pull is refused while an agent is generating** for that app; after a
+- [x] **Pull is refused while an agent is generating** for that app; after a
       successful pull, an **open app window reloads** to the new on-disk state.
-- [ ] Auth reuses **system git + the `gh` credential helper** (like `cloneRepo`):
+- [x] Auth reuses **system git + the `gh` credential helper** (like `cloneRepo`):
       public repos anonymously, private if configured; **auth/network failures**
       surface a clear error and **leave the repo unchanged**.
-- [ ] Push/pull are **confined** to the app's own repo and use its **existing
+- [x] Push/pull are **confined** to the app's own repo and use its **existing
       `origin`** (never a URL from app content); `chat.json` stays git-ignored and
       does not travel.
-- [ ] Pure pieces (ahead/behind parsing, fast-forward-vs-divergence detection,
+- [x] Pure pieces (ahead/behind parsing, fast-forward-vs-divergence detection,
       remote-present detection) covered by **unit tests**; the fetch/push/pull
       orchestration lives in the main process.
 
