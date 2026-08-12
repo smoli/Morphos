@@ -1,9 +1,11 @@
 {
   "status": "idle",
-  "ready": [],
+  "ready": [
+    "i0007"
+  ],
   "waiting": [],
   "runs": [],
-  "updated": "2026-08-12T20:51:08",
+  "updated": "2026-08-12T20:53:20",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -57,5 +59,7 @@
     "c0074"
   ],
   "afk": true,
-  "firstSeen": {}
+  "firstSeen": {
+    "i0007": "2026-08-12T20:53:20"
+  }
 }
