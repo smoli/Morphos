@@ -100,6 +100,18 @@ settled with numbers, and it does **not** argue for Tauri:
 - **Conclusion for this doc: strike latency from the list of Tauri arguments.**
   It should appear only as “explicitly not a reason”, with c0081 as the source.
 
+Follow-up from **c0085** (2026-08-13) — the cheap lever was tried on Windows and
+this conclusion holds, with sharper numbers:
+
+- `--audio-buffer-size=128` moves the Windows floor **52,0 → 42,8 ms** and is now
+  set in `electron/main.ts`. It is a **Chromium** switch, and WebView2 accepts
+  the same one via `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` — shell-neutral.
+- The remaining 40 ms is WASAPI shared mode itself. Chromium's exclusive-mode
+  path was measured and is **3× worse**; `IAudioClient3` changes nothing. So the
+  only remaining fix is a native low-latency audio path — reachable from Electron
+  via a native addon or a sidecar just as from Rust, i.e. still **not** a Tauri
+  argument.
+
 ## Log
 
 - 2026-08-12 status → discuss (app)

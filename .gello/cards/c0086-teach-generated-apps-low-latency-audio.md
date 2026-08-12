@@ -32,8 +32,19 @@ Note this is a *comfort* fix, not the Windows fix: on Windows the hint is
 ignored entirely (that is c0085). Worth doing anyway because it is free and it
 is the correct way to write the code.
 
+**Update from c0085 (2026-08-13) — it is no longer only comfort.** Morphos now
+forces Chromium's audio buffer to 128 frames process-wide, which is worth
+−9,2 ms on Windows and −8,6 ms on macOS *for free*. But a page that asks for a
+**numeric** `latencyHint` opts out of it: measured on Windows, the
+`latencyHint: 0.001` arm kept 480 frames and 52,0 ms while `'interactive'` and
+`'balanced'` dropped to 128 frames and 42,8 ms. So the prompt must say
+`'interactive'` **and rule out a number** — a generated app that tries to be
+clever loses 9 ms on every platform.
+
 ## Acceptance criteria
 
 - [ ] The prompt carries the pattern, with a test covering that it appears.
+- [ ] The prompt rules out a *numeric* `latencyHint` (it defeats the shell's
+      forced buffer — c0085), with a test.
 - [ ] A newly generated sound app measurably uses `interactive` (check with
       `tools/audio-latency`).

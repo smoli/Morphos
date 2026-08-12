@@ -45,14 +45,129 @@ moves the Windows floor is **untested** — that is the whole point of this card
 
 ## Acceptance criteria
 
-- [ ] Measured Windows numbers with and without `--audio-buffer-size`, stored in
+- [x] Measured Windows numbers with and without `--audio-buffer-size`, stored in
       `tools/audio-latency/measurements/`.
-- [ ] Either the switch is set in `electron/main.ts` (with the dropout trade-off
+- [x] Either the switch is set in `electron/main.ts` (with the dropout trade-off
       considered), or it is recorded that it does not help.
-- [ ] The exclusive-mode / `IAudioClient3` question from c0081 is answered.
-- [ ] The outcome is fed back to c0081's recommendation and to c0079.
+- [x] The exclusive-mode / `IAudioClient3` question from c0081 is answered.
+- [x] The outcome is fed back to c0081's recommendation and to c0079.
+
+## Notes
+
+### Measured: Windows 11, Electron 33.4.11 / Chromium 130, 48 kHz
+
+Self-run (`measure.mjs`, synthesized keys), 15 hits/arm. Raw files
+`measurements/windows-electron33-auto.json` and `…-buffer128.json`.
+
+| Arm | render | device | **total** | buffer |
+| --- | ---: | ---: | ---: | ---: |
+| **without the switch** | | | | |
+| balanced (default), pre-decoded | 10,0 | 42,0 | **52,0** | 480 |
+| interactive, pre-decoded | 10,0 | 42,0 | **52,0** | 480 |
+| interactive, decode per hit | 10,0 | 42,0 | **52,3** | 480 |
+| latencyHint 0.001, pre-decoded | 10,0 | 42,0 | **52,1** | 480 |
+| **`--audio-buffer-size=128`** | | | | |
+| balanced (default), pre-decoded | 2,7 | 41,0 | **43,9** | 128 |
+| interactive, pre-decoded | 2,7 | 40,0 | **42,8** | 128 |
+| interactive, decode per hit | 2,7 | 41,0 | **44,1** | 128 |
+| latencyHint 0.001, pre-decoded | 10,0 | 42,0 | **52,0** | **480** |
+
+`input` and `dispatch` are ≤ 0,3 ms in every arm, as on macOS.
+
+### Findings
+
+1. **The Chrome-151 numbers hold in the shipped shell.** Electron 33 / Chromium
+   130 on Windows measures 52,0 ms with 480 frames in every arm — c0081's
+   50,7 ms (Chrome 151, hand-typed) carries over, and its caveat is settled.
+2. **The switch works on Windows: 52,0 → 42,8 ms (−9,2 ms, −18 %).** It is a
+   real, repeatable win, but not the fix: the whole saving comes from `render`
+   (10 → 2,7 ms). `device` stays at 40–42 ms. The floor is still 5,5× macOS.
+3. **A numeric `latencyHint` defeats the switch.** The 0.001 s arm keeps its
+   480 frames and its 52,0 ms even when the process forces 128 — reproduced in
+   all four runs that set the switch. `'interactive'` and `'balanced'` take it.
+   So the switch is process-wide but *not* unconditional, and a generated app
+   can lose it by asking for something too clever. **Input for c0086:** the
+   generation prompt must teach `latencyHint: 'interactive'` and forbid a number.
+4. **Exclusive mode is reachable — and 3× worse.** `enable-exclusive-audio` is
+   in the shipped Windows binary and it engages: `device` 40 → 128 ms, total
+   **133,4 ms** (`…-exclusive.json`); with the small buffer still 130,8 ms
+   (`…-exclusive-buffer128.json`). On this hardware Chromium's exclusive path
+   picks a 128 ms period, i.e. it trades latency away rather than winning it.
+5. **`IAudioClient3` buys nothing.** `AllowIAudioClient3` is a feature in the
+   binary; enabling it changes not one number (52,0 ms alone, 43,5 ms with the
+   switch — the switch's own result). Either it is already on, or this driver's
+   minimum period is the default period.
+6. **Two further shell levers are dead too:** audio service in-process
+   (`disable-features=AudioServiceOutOfProcess`) 43,2 ms — the IPC hop is not
+   the cost; `--force-wave-audio` 130,8 ms — much worse.
+
+**Conclusion: the 40 ms `device` is the WASAPI shared-mode path itself, and no
+Chromium switch reaches it.** Everything the shell can do is now done, and it
+is worth 9 ms.
+
+### What was changed
+
+`electron/main.ts` appends `audio-buffer-size` before `whenReady`, from
+`forcedBufferFrames(process.platform, process.env.MORPHOS_AUDIO_BUFFER_SIZE)`
+in `src/core/audiolatency.ts` (11 new tests, 45 in that file now). Verified
+end-to-end in the built app over the DevTools protocol: a fresh
+`AudioContext` in Morphos reports **128 frames** (2,67 ms) instead of 480, and
+**480 again** with `MORPHOS_AUDIO_BUFFER_SIZE=aus`.
+
+**The dropout trade-off, as weighed.** A smaller buffer means more wakeups for
+the audio thread, and on a weak machine that can crackle. Against a hard 128
+everywhere, two limits:
+
+- **Only where it is measured.** `win32` and `darwin` get 128 unasked; every
+  other platform (Linux/PulseAudio is untested here) is left alone. Forcing a
+  buffer on a platform nobody measured would be guessing with someone's sound.
+- **An escape hatch, not a setting.** `MORPHOS_AUDIO_BUFFER_SIZE=aus` switches
+  it off, a number overrides it (clamped to 128…8192 frames). A user-facing
+  setting was considered and rejected *for now*: it is a knob nobody can reason
+  about without a measurement, and the risk it guards against is theoretical —
+  no dropout has been observed. If one ever is, promoting the env var to a real
+  setting is a small step, and the decision function is already tested.
+
+Note the residual risk honestly: the 40 ms WASAPI buffer downstream still
+cushions the render thread, which is why 128 frames is far less daring on
+Windows than the same number is on macOS — but this was measured on one
+machine, not on a fleet.
+
+### Feedback to c0081 and c0079
+
+- **c0081, step 1 of its recommendation:** done, and it is a partial success —
+  9 ms of the 52, not the 40 ms that matter. Its step 3 (native audio) is
+  therefore **still on the table**, now with the extra knowledge that
+  Chromium's own exclusive-mode path is not the shortcut: it is measurably
+  worse, so a native path means a real WASAPI implementation at a small period,
+  not a switch.
+- **c0086** gains a hard requirement from finding 3 (no numeric `latencyHint`).
+- **c0079 (Tauri):** unchanged and, if anything, firmer. The lever that worked
+  is a Chromium switch, and WebView2 takes it too
+  (`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`). Latency still argues neither for
+  nor against Tauri.
+
+### Caveats
+
+- One machine, one sound card. The 128 ms exclusive-mode period especially is a
+  property of this driver, not of Windows.
+- The switch runs synthesized keydowns, so `input` reads ~0; c0081's hand-typed
+  Windows run puts the real value at 0,6 ms, i.e. it changes no conclusion.
+- `outputLatency` remains Chromium's own estimate; the acoustic loopback check
+  in the harness is still unrun.
+- The repo's test suite is **not green on this Windows machine**, independently
+  of this card: 13 failures (symlink tests that need admin privileges, `gh` not
+  in PATH, two git tests) fail identically on a clean checkout. `audiolatency`
+  is 45/45 green, `npm run typecheck` is clean.
+- `win.json` / `win-128.json` in the repo root are the card's own example
+  command run earlier; my runs reproduce them exactly and are stored properly
+  under `measurements/`. The two root files are untracked leftovers and can be
+  deleted.
 
 ## Log
 
 - 2026-08-12 status → ready (app)
 - 2026-08-12 status → in-progress (agent)
+- 2026-08-13 measured on Windows: the switch is worth −9,2 ms, exclusive mode and
+  `IAudioClient3` are dead ends; switch set in `electron/main.ts` behind a tested
+  decision, with an escape hatch (agent)
