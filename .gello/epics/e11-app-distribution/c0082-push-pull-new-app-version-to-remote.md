@@ -1,11 +1,12 @@
 ---
 id: c0082
 title: Push /pull new app version to remote
-status: discuss
+status: ready
 created: 2026-08-12
 updated: 2026-08-12
-status-changed: 2026-08-12T23:03:54
+status-changed: 2026-08-12T23:25:24
 epic: e11
+order: 0
 ---
 
 ## What
@@ -96,3 +97,4 @@ existing `knownWorkspaceError` + `appDir`/`safeId` guards, like `importApp`. The
 ## Log
 
 - 2026-08-12 status → discuss (app)
+- 2026-08-12 status → ready (app)
