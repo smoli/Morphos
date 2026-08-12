@@ -6,6 +6,7 @@ created: 2026-08-12
 updated: 2026-08-12
 status-changed: 2026-08-12T21:14:14
 epic: e11
+commit: 892d273
 ---
 
 # Add option to open Desktop host folder
@@ -80,3 +81,4 @@ Implemented (2026-08-12):
 - 2026-08-12 status → ready (app)
 - 2026-08-12 status → in-progress (agent)
 - 2026-08-12 status → review (agent)
+- 2026-08-12 implemented in 892d273 (agent)
