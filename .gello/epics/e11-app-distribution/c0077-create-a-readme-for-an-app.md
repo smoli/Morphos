@@ -1,9 +1,11 @@
 ---
 id: c0077
 title: Create a readme for an app
-status: inbox
+status: discuss
 created: 2026-08-12
 updated: 2026-08-12
+status-changed: 2026-08-12T20:37:27
+epic: e11
 ---
 
 Add the option to create a Readme for the app.
@@ -27,3 +29,7 @@ Structure
 
 
 ```
+
+## Log
+
+- 2026-08-12 status → discuss (app)

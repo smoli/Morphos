@@ -7,13 +7,13 @@
       "cardId": "c0074",
       "phase": "running",
       "activity": {
-        "name": "Bash",
-        "arg": "tail -40 src/core/gitstore.spec.ts"
+        "name": "Edit",
+        "arg": "/Users/stephan/WebstormProjects/Morphos/src/core/app.ts"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T20:36:43",
+  "updated": "2026-08-12T20:37:27",
   "pickupDelay": 10,
   "owned": [
     "c0029",
