@@ -4,6 +4,16 @@
       "id": "b7765be1-aea1-467d-ae13-15a670670ca5",
       "kind": "stop",
       "cardId": "c0051"
+    },
+    {
+      "id": "22489d29-5077-4a34-b53c-e615ec5da1ec",
+      "kind": "stop",
+      "cardId": "c0073"
+    },
+    {
+      "id": "ea7044e0-9f47-446d-84da-d5f5bc357b74",
+      "kind": "restart",
+      "cardId": "c0073"
     }
   ]
 }
