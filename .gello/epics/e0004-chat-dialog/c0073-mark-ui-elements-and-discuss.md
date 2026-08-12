@@ -1,12 +1,11 @@
 ---
 id: c0073
 title: Mark UI elements and Discuss
-status: ready
+status: in-progress
 created: 2026-08-12
 updated: 2026-08-12
-status-changed: 2026-08-12T20:01:15
+status-changed: 2026-08-12T20:01:31
 epic: e0004
-order: 10
 ---
 
 ## What
@@ -89,3 +88,4 @@ Open questions for planning:
 
 - 2026-08-12 status → discuss (app)
 - 2026-08-12 status → ready (app)
+- 2026-08-12 status → in-progress (agent)
