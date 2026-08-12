@@ -1,12 +1,11 @@
 ---
 id: c0081
 title: "Investigate keypress→sound latency (Windows)"
-status: ready
+status: in-progress
 created: 2026-08-12
 tags: [audio, latency, performance]
-status-changed: 2026-08-12T23:00:00
+status-changed: 2026-08-12T23:00:21
 epic: e12
-order: 10
 updated: 2026-08-12
 ---
 
@@ -58,3 +57,4 @@ Likely levers, cheapest first:
 
 - 2026-08-12 created (decoupled from c0079)
 - 2026-08-12 status → ready (app)
+- 2026-08-12 status → in-progress (agent)
