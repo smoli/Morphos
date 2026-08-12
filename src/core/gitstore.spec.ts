@@ -1,8 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ensureRepo, commitAll, cloneRepo, listVersions, restoreVersion, countVersions } from './gitstore';
+import {
+  ensureRepo,
+  commitAll,
+  cloneRepo,
+  findGh,
+  ghCredentialArgs,
+  listVersions,
+  restoreVersion,
+  countVersions,
+} from './gitstore';
 
 let dir: string;
 
@@ -139,5 +149,82 @@ describe('gitstore', () => {
     it('scheitert mit einer Meldung, wenn es die Gegenstelle nicht gibt', async () => {
       await expect(cloneRepo(path.join(target, 'nichts'), path.join(target, 'klon'))).rejects.toThrow();
     });
+  });
+
+  // i0007: Wer sich mit `gh auth login` angemeldet hat, hat damit noch keinen
+  // Credential-Helfer in seiner Git-Konfiguration — https-Klone scheiterten,
+  // obwohl der Anwender „eingeloggt" war.
+  describe('ghCredentialArgs', () => {
+    it('trägt gh als Helfer für die Gegenstelle der https-Adresse ein', () => {
+      expect(ghCredentialArgs('https://github.com/jemand/app.git', '/opt/homebrew/bin/gh')).toEqual([
+        '-c',
+        "credential.https://github.com.helper=!'/opt/homebrew/bin/gh' auth git-credential",
+      ]);
+    });
+
+    it('bleibt bei der Gegenstelle der Adresse — auch Firmen-Server und Port', () => {
+      expect(ghCredentialArgs('http://git.firma.local:8080/team/app', '/usr/bin/gh')[1])
+        .toBe("credential.http://git.firma.local:8080.helper=!'/usr/bin/gh' auth git-credential");
+      expect(ghCredentialArgs('https://Jemand@GitHub.com/x/y', '/usr/bin/gh')[1])
+        .toBe("credential.https://github.com.helper=!'/usr/bin/gh' auth git-credential");
+    });
+
+    it('hält sich heraus, wo kein Passwort gefragt ist (ssh, Pfad) oder gh fehlt', () => {
+      expect(ghCredentialArgs('https://github.com/x/y', null)).toEqual([]);
+      expect(ghCredentialArgs('git@github.com:x/y.git', '/usr/bin/gh')).toEqual([]);
+      expect(ghCredentialArgs('ssh://git@github.com/x/y.git', '/usr/bin/gh')).toEqual([]);
+      expect(ghCredentialArgs('/Volumes/Austausch/app', '/usr/bin/gh')).toEqual([]);
+      expect(ghCredentialArgs('file:///Volumes/Austausch/app', '/usr/bin/gh')).toEqual([]);
+    });
+
+    it('macht aus einem Pfad kein Shell-Schlupfloch', () => {
+      expect(ghCredentialArgs('https://github.com/x/y', "/opt/mein 'gh'/gh")[1])
+        .toBe("credential.https://github.com.helper=!'/opt/mein '\\''gh'\\''/gh' auth git-credential");
+      expect(ghCredentialArgs('https://github.com/x/y', '/opt/gh\nrm -rf /')).toEqual([]);
+    });
+  });
+
+  describe('findGh', () => {
+    let bin: string;
+    let gh: string;
+
+    beforeEach(() => {
+      bin = path.join(dir, 'mein ordner');
+      fs.mkdirSync(bin, { recursive: true });
+      gh = path.join(bin, 'gh');
+      fs.writeFileSync(gh, '#!/bin/sh\nexit 0\n', 'utf8');
+      fs.chmodSync(gh, 0o755);
+    });
+
+    it('findet die GitHub-CLI im PATH', () => {
+      expect(findGh({ PATH: `${path.join(dir, 'leer')}${path.delimiter}${bin}` }, [])).toBe(gh);
+    });
+
+    it('sieht auch an den üblichen Plätzen nach — ein Programm aus dem Dock hat kaum PATH', () => {
+      expect(findGh({}, [path.join(dir, 'leer'), bin])).toBe(gh);
+    });
+
+    it('meldet null, wenn es sie nicht gibt (dann bleibt alles wie bisher)', () => {
+      expect(findGh({ PATH: path.join(dir, 'leer') }, [])).toBe(null);
+    });
+  });
+
+  // Beweist, dass git die erzeugten Argumente wirklich annimmt und den Helfer
+  // ruft — der Fehler von i0007 lag genau in dieser Verdrahtung.
+  it.skipIf(process.platform === 'win32')('lässt git den Zugang wirklich bei gh holen', () => {
+    const gh = path.join(dir, 'gh');
+    fs.writeFileSync(gh, '#!/bin/sh\necho username=x-access-token\necho password=geheim\n', 'utf8');
+    fs.chmodSync(gh, 0o755);
+
+    const out = execFileSync(
+      'git',
+      // `credential.helper=` leert die Kette zuvor: Der Test soll nicht die
+      // Helfer der Maschine befragen, auf der er läuft.
+      ['-c', 'credential.helper=', ...ghCredentialArgs('https://git.example.org/x/y.git', gh), 'credential', 'fill'],
+      { input: 'protocol=https\nhost=git.example.org\n\n', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } },
+    ).toString();
+
+    expect(out).toContain('username=x-access-token');
+    expect(out).toContain('password=geheim');
   });
 });

@@ -52,6 +52,68 @@ const NON_INTERACTIVE = {
 };
 
 /**
+ * Der Zugang zur Gegenstelle bleibt Sache des Anwenders — mit einer Ausnahme,
+ * die sonst wie ein Fehler aussieht (i0007): Wer sich mit der GitHub-CLI
+ * angemeldet hat (`gh auth login`), hält sein Token in gh; in der
+ * Git-Konfiguration steht deshalb noch nichts davon (das täte erst
+ * `gh auth setup-git`). git fragte also seine üblichen Helfer, bekam nichts,
+ * wollte nachfragen — und scheiterte an der abgeschalteten Eingabeaufforderung.
+ * Für den Anwender: „Ich bin doch angemeldet."
+ *
+ * Also hängt Morphos für http(s)-Adressen gh als ZUSÄTZLICHEN Helfer an die
+ * Kette. Über `-c` steht er in der Rangfolge hinter allem Konfigurierten: Die
+ * eigenen Helfer des Anwenders werden zuerst gefragt, gh nur, wenn keiner
+ * geantwortet hat. Das Token bleibt dabei bei gh — Morphos sieht es nie und
+ * speichert nichts. Kennt gh die Gegenstelle nicht (gitlab.com…), schweigt der
+ * Helfer und git macht weiter wie ohne ihn.
+ */
+const GH_CREDENTIAL = 'auth git-credential';
+
+/** Die Gegenstelle einer http(s)-Adresse (`https://github.com`), sonst leer. */
+const HTTP_URL = /^(https?):\/\/(?:[^/@\s]*@)?([A-Za-z0-9._-]+(?::\d+)?)(?:[/?#]|$)/i;
+
+/** Steuerzeichen — was davon im Pfad steckt, geht git nichts an. */
+const CONTROL_CHARS = new RegExp('[\\u0000-\\u001f\\u007f]');
+
+/**
+ * Die `-c`-Argumente, die gh als Credential-Helfer für die Gegenstelle DIESER
+ * Adresse eintragen — leer, wenn es nichts einzutragen gibt: ohne gh, bei
+ * ssh-, git- und Datei-Adressen (dort fragt niemand nach einem Passwort).
+ */
+export function ghCredentialArgs(url: string, ghPath: string | null): string[] {
+  if (!ghPath || CONTROL_CHARS.test(ghPath)) return [];
+  const match = HTTP_URL.exec(url.trim());
+  if (!match) return [];
+  const [, scheme, host] = match;
+  const quoted = `'${ghPath.replace(/'/g, `'\\''`)}'`;
+  return ['-c', `credential.${scheme.toLowerCase()}://${host.toLowerCase()}.helper=!${quoted} ${GH_CREDENTIAL}`];
+}
+
+/** Die üblichen Plätze der GitHub-CLI, falls der PATH sie nicht hergibt. */
+const GH_PLACES = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/opt/local/bin'];
+
+/**
+ * Der Pfad zur GitHub-CLI — aus dem PATH, sonst von den üblichen Plätzen (ein
+ * aus dem Dock gestartetes Programm erbt den PATH der Anmeldeschale nicht).
+ * `null`, wenn es sie nicht gibt; dann bleibt alles wie bisher.
+ */
+export function findGh(env: NodeJS.ProcessEnv = process.env, places: string[] = GH_PLACES): string | null {
+  const names = process.platform === 'win32' ? ['gh.exe', 'gh.cmd'] : ['gh'];
+  const dirs = [...(env.PATH ?? '').split(path.delimiter).filter(Boolean), ...places];
+  for (const dir of dirs) {
+    for (const name of names) {
+      const candidate = path.join(dir, name);
+      try {
+        if (fs.statSync(candidate).isFile()) return candidate;
+      } catch {
+        /* nicht da — nächster Platz */
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Holt ein Repository in einen NEUEN Ordner — ein echter Klon: mit `.git`,
  * voller Historie und `origin`. Fehlende Elternordner entstehen dabei; der
  * Zielordner selbst darf noch nicht existieren (git besteht darauf).
@@ -62,7 +124,8 @@ const NON_INTERACTIVE = {
 export async function cloneRepo(url: string, targetDir: string): Promise<void> {
   const parent = path.dirname(targetDir);
   fs.mkdirSync(parent, { recursive: true });
-  await runGit(parent, ['clone', '--quiet', '--', url, targetDir], NON_INTERACTIVE);
+  const args = [...ghCredentialArgs(url, findGh()), 'clone', '--quiet', '--', url, targetDir];
+  await runGit(parent, args, NON_INTERACTIVE);
 }
 
 /** Initialisiert das Repository im Ordner, falls noch keines existiert. */

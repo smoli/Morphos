@@ -5,6 +5,7 @@ import path from 'node:path';
 import { commitAll, countVersions, ensureRepo, listVersions } from './gitstore';
 import {
   IMPORT_DIR,
+  cloneErrorMessage,
   manifestError,
   repoUrlError,
   resolveImport,
@@ -89,6 +90,43 @@ describe('appimport (rein)', () => {
     it('zählt hoch, bis die Id frei ist', () => {
       expect(uniqueAppId(['rechner-ab12c'], 'rechner-ab12c')).toBe('rechner-ab12c-2');
       expect(uniqueAppId(['rechner-ab12c', 'rechner-ab12c-2'], 'rechner-ab12c')).toBe('rechner-ab12c-3');
+    });
+  });
+
+  // i0007: „fatal: could not read Username" sagt dem Anwender nichts.
+  describe('cloneErrorMessage', () => {
+    it('erklärt den fehlenden Zugang über https und nennt den Weg dorthin', () => {
+      const msg = cloneErrorMessage(
+        "fatal: could not read Username for 'https://github.com': terminal prompts disabled",
+        'https://github.com/jemand/geheim.git',
+      );
+      expect(msg).toContain('github.com');
+      expect(msg).toContain('gh auth login');
+      expect(msg).not.toContain('terminal prompts disabled');
+    });
+
+    it('erkennt auch die abgelehnte Anmeldung und das unauffindbare Repository', () => {
+      for (const reason of [
+        "remote: Invalid username or password.\nfatal: Authentication failed for 'https://github.com/x/y.git/'",
+        "remote: Repository not found.\nfatal: repository 'https://github.com/x/y.git/' not found",
+      ]) {
+        expect(cloneErrorMessage(reason, 'https://github.com/x/y.git')).toContain('gh auth login');
+      }
+    });
+
+    it('erklärt den SSH-Zugang eigens — dort hilft kein gh', () => {
+      const msg = cloneErrorMessage(
+        'git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.',
+        'git@github.com:jemand/geheim.git',
+      );
+      expect(msg).toContain('github.com');
+      expect(msg).toContain('Schlüssel');
+      expect(msg).not.toContain('gh auth login');
+    });
+
+    it('reicht alles Übrige unverfälscht durch', () => {
+      const msg = cloneErrorMessage('fatal: destination path already exists', 'https://github.com/x/y.git');
+      expect(msg).toContain('fatal: destination path already exists');
     });
   });
 });

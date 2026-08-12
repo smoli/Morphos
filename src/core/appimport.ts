@@ -84,6 +84,49 @@ export function manifestError(meta: unknown): string {
   return '';
 }
 
+/** Die Gegenstelle einer Adresse, so wie der Anwender sie kennt (`github.com`). */
+function hostOf(url: string): string {
+  const value = url.trim();
+  const scheme = /^[A-Za-z][A-Za-z0-9+.-]*:\/\/(?:[^/@\s]*@)?([^/?#\s]+)/.exec(value);
+  if (scheme) return scheme[1];
+  const scp = /^[^@\s]+@([^:\s]+):/.exec(value);
+  return scp ? scp[1] : 'der Gegenstelle';
+}
+
+/** git kann nicht fragen (siehe gitstore NON_INTERACTIVE) — so klingt das dann. */
+const NO_ACCESS = /could not read Username|could not read Password|Authentication failed|terminal prompts disabled|Invalid username or password|repository .* not found|Repository not found|403 Forbidden|401 Unauthorized/i;
+
+/** Dasselbe über ssh: kein Schlüssel, keiner der passt, keine Rückfrage. */
+const NO_KEY = /Permission denied \(publickey|Host key verification failed|Could not read from remote repository|Permission denied, please try again/i;
+
+/**
+ * Aus dem Klagelaut von git eine Meldung machen, mit der der Anwender etwas
+ * anfangen kann (i0007): „fatal: could not read Username for
+ * 'https://github.com': terminal prompts disabled" sagt nichts darüber, dass
+ * schlicht kein Zugang hinterlegt ist — und schon gar nicht, wo er herkommt.
+ *
+ * Zwei Wege gibt es, und sie sind verschieden: über https hilft die
+ * GitHub-CLI (Morphos fragt sie beim Klonen von sich aus, siehe gitstore),
+ * über ssh nur ein hinterlegter Schlüssel. Alles Übrige — kaputte Adresse,
+ * kein Netz — bleibt wörtlich stehen, da weiß git es besser.
+ */
+export function cloneErrorMessage(reason: string, url: string): string {
+  const host = hostOf(url);
+  const ssh = !/^https?:\/\//i.test(url.trim());
+  if (ssh && NO_KEY.test(reason)) {
+    return `Kein Zugang zu ${host}: Der SSH-Schlüssel wird nicht angenommen (oder es gibt das Repository dort nicht).`
+      + ` Prüfe im Terminal „ssh -T git@${host}" — ein Schlüssel mit Passwort braucht einen laufenden ssh-agent,`
+      + ' denn Morphos fragt bewusst nicht nach.';
+  }
+  if (NO_ACCESS.test(reason) || NO_KEY.test(reason)) {
+    return `Kein Zugang zu ${host}: Entweder ist das Repository privat und es liegt kein Zugang dafür bereit,`
+      + ' oder es gibt diese Adresse nicht.'
+      + ` Für GitHub genügt „gh auth login" im Terminal (Morphos fragt die GitHub-CLI beim Holen von sich aus);`
+      + ' sonst hilft ein eingerichteter Credential-Helfer oder die SSH-Adresse (git@…) mit hinterlegtem Schlüssel.';
+  }
+  return `Das Repository konnte nicht geholt werden: ${reason}`;
+}
+
 /**
  * Eine im Arbeitsverzeichnis noch freie Id: `rechner-ab12c` →
  * `rechner-ab12c-2` → `rechner-ab12c-3`. So bekommt eine Kopie ihren eigenen
@@ -205,7 +248,7 @@ export async function startImport(folder: string, url: string): Promise<ImportRe
     discardClone(dir);
     return {
       ok: false,
-      error: `Das Repository konnte nicht geholt werden: ${err instanceof Error ? err.message : String(err)}`,
+      error: cloneErrorMessage(err instanceof Error ? err.message : String(err), String(url)),
     };
   }
 
