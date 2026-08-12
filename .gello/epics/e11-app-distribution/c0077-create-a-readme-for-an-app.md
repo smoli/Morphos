@@ -7,8 +7,8 @@ commit: e31d059
 updated: 2026-08-12
 status-changed: 2026-08-12T21:36:42
 epic: e11
-usage-tokens: 54652
-usage-cost: 6.977186
+usage-tokens: 64612
+usage-cost: 8.140769
 ---
 
 Add the option to create a Readme for the app.
@@ -118,6 +118,62 @@ Implemented (2026-08-12):
 - Not covered by tests, as everywhere in this repo: the IPC handler in
   `electron/main.ts` itself (there is no main-process test level) — its two
   parts, `writeReadme` and `commitAll`, are tested separately.
+
+## Review
+
+### 2026-08-12T21:39:07 — pass
+
+Checked: alle acht Akzeptanzkriterien gegen den Code, der Diff von `e31d059`,
+`npm test`, `npm run typecheck`.
+
+- Menüeintrag + Toast: `DesktopView.vue:601` setzt „Readme erstellen“ (📄)
+  zwischen „Icon ändern“ und den Dock-Eintrag, `createReadme()` meldet Erfolg
+  und Fehler als Toast; beides durch `DesktopView.spec.ts` (Menüreihenfolge,
+  Erfolgs- und Fehlerfall) und `workspace.spec.ts` (vier Fälle, inkl. fehlendem
+  Arbeitsverzeichnis und fehlender Anbindung) gedeckt. Wiederholtes Schreiben
+  ist idempotent — `readme.spec` „schreibt beim zweiten Mal einfach neu“ prüft
+  auch, dass nur eine Readme-Datei im Ordner liegt.
+- Struktur: `buildReadme` (`readme.ts:186`) liefert Icon mittig, Name,
+  Kurzbeschreibung, `## Details` mit den beiden Verweisen und `## Morphos` mit
+  der Standzeile; je ein Test pro Teil. (Die Karte skizziert `# Details`/
+  `# Morphos`, der Code nimmt H2 unter der H1-Überschrift — die Kriterien
+  schreiben keine Ebene fest, das ist die richtige Lesart.)
+- Beschreibung: `shortDescription` nimmt den ersten echten Absatz von
+  `concept.md` (Überschriften, Code-Fences, Kommentare übersprungen, Markdown
+  entfernt, bei 300 Zeichen an der Wortgrenze gekappt), weicht auf
+  `userdocumentation.md` aus und fällt sonst auf den neutralen Satz zurück;
+  `details()` lässt den Verweis auf ein fehlendes Dokument weg. Sechs Tests in
+  `readme.spec`.
+- Icon: `iconAsset` schreibt das Bild-Icon nach Mime-Typ als `icon.png`/`.jpg`/
+  `.gif`/`.webp` neben das Readme, ein Emoji steht inline im zentrierten H1;
+  `writeReadme` räumt eine nicht mehr gültige Bilddatei weg (eigener Test), SVG
+  und kaputte data:-URIs werden abgewiesen.
+- Commit: `main.ts:850` ruft `ensureRepo` + `commitAll('Readme erstellt' |
+  'Readme aktualisiert')`; `ensureGitignore` schließt nur `/chat.json` aus, also
+  reisen `README.md` und `icon.*` mit. `readme.spec` „wird ein Commit im
+  Repository der App“ belegt über `listVersions`, dass der zweite Commit
+  zustande kommt.
+- Geschlossene App und bekanntes Arbeitsverzeichnis: `writeReadme` liest
+  Manifest und Dokumente über `readManifest`/`readDocs` von der Platte, die App
+  muss nicht offen sein; der Handler geht durch `knownWorkspaceError` (wie
+  `revealFolder`/`diskUsage`) und `appDir`/`safeId`, ohne `app.json` wirft
+  `writeReadme` „Diese App hat kein Manifest (app.json).“ vor jedem Schreiben —
+  Meldung als `{ ok: false, error }` getestet in `readme.spec` und
+  `workspace.spec`.
+- `README.md` bleibt schalengeschrieben: `isValidOutputPath('README.md')` ist
+  `false` (`files.spec:44`, dazu der FILE-Block-Test in `files.spec:141`), DELETE
+  nimmt nur `isValidSourcePath` (`files.ts:77`), `writeAppState` löscht nur
+  `src/` — `readme.spec` „bleibt stehen, wenn die App neu generiert wird“ prüft
+  genau das an der echten `writeAppState`.
+- `__MORPHOS_COMMIT__`: `vite.config.ts` definiert die Konstante für den
+  Hauptprozess-Build, ohne Git bleibt sie leer; im gebauten
+  `dist-electron/main.js` steht sie als `commit: "4bb6372"` — der Define greift.
+  `cleanVersion`/`cleanCommit` verschweigen unglaubwürdige Werte (Test dazu).
+- Grün: `npm test` 1544 Tests in 84 Dateien, `npm run typecheck` ohne Befund.
+  Kein Lint-Skript im Manifest — es gibt keines zu laufen.
+- Diff bleibt im What: `core/readme` (neu) plus IPC, Preload, Typ, Store, Menü
+  und die Build-Konstante für die Standzeile. Kein Debug-Code, kein `.only`/
+  `.skip`, kein abgeschwächter Test.
 
 ## Log
 
