@@ -6,6 +6,7 @@ ref: c0074
 epic: e11
 created: 2026-08-12
 updated: 2026-08-12
+commit: 2fe200b
 status-changed: 2026-08-12T22:36:06
 ---
 
@@ -39,3 +40,4 @@ In the dock make the icon for the git down-load the git logo
 
 - 2026-08-12 status → in-progress (agent)
 - 2026-08-12 status → review (agent)
+- 2026-08-12 implemented in 2fe200b (agent)

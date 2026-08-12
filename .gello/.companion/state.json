@@ -8,12 +8,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "git add -A src .gello && git status --short && git commit -q -m \"$(cat <<'EOF'\nc0078: Git-Logo als Zeichen im Dock\n\nDer Platz „App aus Git laden…“ trug bisher den Textpfeil ⤓. Jetzt steht dort\ndas Git-Logo selbst — der Platz ist an dem zu erkennen, woher die App kommt.\n\n- components/GitLogo.vue: das Logo (Jason Long, CC BY 3.0) als Pfad im SVG,\n  size-Prop wie AppIcon, role=\"img\" mit aria-label. Inline statt als Datei.\n- DesktopView.vue: .dock-item.import trägt das Logo mit 28 px — optisch\n  zwischen Lupe (26) und ＋ (30).\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nEOF\n)\" && git log --oneline -1"
+        "arg": "python3 - <<'EOF'\nimport re,io\np='.gello/epics/e11-app-distribution/c0078-make-the-icon-the-git-logo.md'\ns=open(p).read()\nif 'commit:' not in s.split('---')[1]:\n    s=s.replace('status-changed:','commit: 2fe200b\\nstatus-changed:',1)\nopen(p,'w').write(s)\nEOF\ngit add -A .gello && git commit -q -m \"board: 1 card updated\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\" && git log --oneline -2"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T22:36:12",
+  "updated": "2026-08-12T22:36:21",
   "pickupDelay": 10,
   "owned": [
     "c0029",
