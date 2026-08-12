@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { COMMON_PLACES, findOnPath } from './which';
 import type { VersionInfo } from '@/types';
 
 /**
@@ -89,28 +90,12 @@ export function ghCredentialArgs(url: string, ghPath: string | null): string[] {
   return ['-c', `credential.${scheme.toLowerCase()}://${host.toLowerCase()}.helper=!${quoted} ${GH_CREDENTIAL}`];
 }
 
-/** Die üblichen Plätze der GitHub-CLI, falls der PATH sie nicht hergibt. */
-const GH_PLACES = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/opt/local/bin'];
-
 /**
- * Der Pfad zur GitHub-CLI — aus dem PATH, sonst von den üblichen Plätzen (ein
- * aus dem Dock gestartetes Programm erbt den PATH der Anmeldeschale nicht).
+ * Der Pfad zur GitHub-CLI (siehe core/which: PATH, sonst die üblichen Plätze).
  * `null`, wenn es sie nicht gibt; dann bleibt alles wie bisher.
  */
-export function findGh(env: NodeJS.ProcessEnv = process.env, places: string[] = GH_PLACES): string | null {
-  const names = process.platform === 'win32' ? ['gh.exe', 'gh.cmd'] : ['gh'];
-  const dirs = [...(env.PATH ?? '').split(path.delimiter).filter(Boolean), ...places];
-  for (const dir of dirs) {
-    for (const name of names) {
-      const candidate = path.join(dir, name);
-      try {
-        if (fs.statSync(candidate).isFile()) return candidate;
-      } catch {
-        /* nicht da — nächster Platz */
-      }
-    }
-  }
-  return null;
+export function findGh(env: NodeJS.ProcessEnv = process.env, places: string[] = COMMON_PLACES): string | null {
+  return findOnPath(process.platform === 'win32' ? ['gh.exe', 'gh.cmd'] : ['gh'], env, places);
 }
 
 /**

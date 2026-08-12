@@ -114,6 +114,11 @@ contextBridge.exposeInMainWorld('morphos', {
   // Platzbedarf der Apps und des Datenordners — gerechnet wird im Hauptprozess.
   diskUsage: (folder: string): Promise<DiskUsageResult> => ipcRenderer.invoke('morphos:diskUsage', folder),
 
+  // Das Arbeitsverzeichnis dort öffnen, wo der Anwender selbst damit arbeitet:
+  // im Dateimanager des Systems bzw. in einem Terminal.
+  revealFolder: (folder: string): Promise<SaveResult> => ipcRenderer.invoke('morphos:revealFolder', folder),
+  openTerminal: (folder: string): Promise<SaveResult> => ipcRenderer.invoke('morphos:openTerminal', folder),
+
   // Steuerung des rahmenlosen Programmfensters.
   minimizeWindow: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
   toggleMaximizeWindow: (): Promise<void> => ipcRenderer.invoke('window:toggleMaximize'),

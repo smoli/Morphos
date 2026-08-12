@@ -408,6 +408,65 @@ describe('useWorkspaceStore', () => {
     });
   });
 
+  describe('Arbeitsverzeichnis öffnen (c0075)', () => {
+    it('reicht den Ordner zum Dateimanager des Systems weiter', async () => {
+      const host = makeHost({ revealFolder: vi.fn(async () => ({ ok: true })) });
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(await ws.revealFolder()).toEqual({ ok: true });
+      expect(host.revealFolder).toHaveBeenCalledWith('/apps');
+    });
+
+    it('reicht den Ordner zum Terminal weiter', async () => {
+      const host = makeHost({ openTerminal: vi.fn(async () => ({ ok: true })) });
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(await ws.openTerminal()).toEqual({ ok: true });
+      expect(host.openTerminal).toHaveBeenCalledWith('/apps');
+    });
+
+    it('meldet einen Fehler des Hauptprozesses weiter', async () => {
+      setHost(makeHost({ openTerminal: vi.fn(async () => ({ ok: false, error: 'Kein Terminal gefunden.' })) }));
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(await ws.openTerminal()).toEqual({ ok: false, error: 'Kein Terminal gefunden.' });
+    });
+
+    it('fängt einen geworfenen Fehler ab', async () => {
+      setHost(makeHost({
+        revealFolder: vi.fn(async () => {
+          throw new Error('Brücke weg');
+        }),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(await ws.revealFolder()).toEqual({ ok: false, error: 'Brücke weg' });
+    });
+
+    it('verlangt ein offenes Arbeitsverzeichnis', async () => {
+      setHost(makeHost({ revealFolder: vi.fn(async () => ({ ok: true })) }));
+      const ws = useWorkspaceStore();
+
+      expect((await ws.revealFolder()).ok).toBe(false);
+      expect((await ws.openTerminal()).ok).toBe(false);
+    });
+
+    it('kommt ohne die Anbindung aus (Renderer-Test)', async () => {
+      setHost(makeHost());
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect((await ws.revealFolder()).error).toBeTruthy();
+      expect((await ws.openTerminal()).error).toBeTruthy();
+    });
+  });
+
   describe('Kachel-Positionen', () => {
     it('lädt die gemerkten Positionen des Workspace', async () => {
       setHost(makeHost({

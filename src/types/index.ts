@@ -630,6 +630,20 @@ export interface MorphosHost {
    */
   diskUsage?(folder: string): Promise<DiskUsageResult>;
 
+  /**
+   * Zeigt das Arbeitsverzeichnis im Dateimanager des Systems (Finder,
+   * Explorer, Dateien …) — von dort aus arbeitet der Anwender selbst mit den
+   * App-Ordnern. Optional: im Renderer-Test fehlt die Anbindung.
+   */
+  revealFolder?(folder: string): Promise<SaveResult>;
+
+  /**
+   * Öffnet ein Terminal IM Arbeitsverzeichnis (siehe core/terminal) — für
+   * alles, was Morphos nicht selbst tut: git push, ein Blick in die Dateien.
+   * Optional: im Renderer-Test fehlt die Anbindung.
+   */
+  openTerminal?(folder: string): Promise<SaveResult>;
+
   // ---- Steuerung des rahmenlosen Electron-Fensters (optional; im Renderer/Test
   //      fehlt die Anbindung — die Titelleiste ruft daher defensiv mit ?. auf) ----
   /** Minimiert das Programmfenster. */

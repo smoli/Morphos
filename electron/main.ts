@@ -25,6 +25,7 @@ import { FILE_SCHEME, parseRange, resolveFileRequest } from '../src/core/filelin
 import { streamMimeType } from '../src/core/preview';
 import { FolderWatchers } from '../src/core/watch';
 import { collectDiskUsage } from '../src/core/diskusage';
+import { openTerminal } from '../src/core/terminal';
 import { cleanFavorites } from '../src/core/favorites';
 import { cleanAutohides, cleanDockEdges } from '../src/core/dock';
 import { cleanSessions } from '../src/core/session';
@@ -708,6 +709,41 @@ ipcMain.handle('morphos:diskUsage', async (_e, folder: string): Promise<DiskUsag
   }
   try {
     return { ok: true, usage: await collectDiskUsage(folder, settings.accessRoots[folder] ?? null) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+/**
+ * Das Arbeitsverzeichnis dort öffnen, wo der Anwender selbst damit arbeitet:
+ * im Dateimanager des Systems oder in einem Terminal (c0075) — für alles, was
+ * Morphos nicht tut (git push, ein Blick in die Dateien).
+ *
+ * Geöffnet wird ausschließlich ein BEKANNTES Arbeitsverzeichnis (wie bei
+ * diskUsage/importApp): Ein beliebiger Pfad aus dem Renderer würde sonst zum
+ * Startbefehl für alles, was im Dateimanager mit einem Doppelklick aufgeht.
+ */
+function knownWorkspaceError(folder: unknown): string | null {
+  if (!folder || typeof folder !== 'string') return 'Kein Arbeitsverzeichnis geöffnet.';
+  if (!readSettings().recentFolders.includes(folder)) return 'Dieses Arbeitsverzeichnis ist nicht bekannt.';
+  if (!fs.existsSync(folder)) return 'Diesen Ordner gibt es nicht (mehr).';
+  return null;
+}
+
+ipcMain.handle('morphos:revealFolder', async (_e, folder: string): Promise<SaveResult> => {
+  const problem = knownWorkspaceError(folder);
+  if (problem) return { ok: false, error: problem };
+  // openPath meldet den Fehler als Text zurück, nicht als Ausnahme.
+  const error = await shell.openPath(folder);
+  return error ? { ok: false, error } : { ok: true };
+});
+
+ipcMain.handle('morphos:openTerminal', async (_e, folder: string): Promise<SaveResult> => {
+  const problem = knownWorkspaceError(folder);
+  if (problem) return { ok: false, error: problem };
+  try {
+    await openTerminal(folder);
+    return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }

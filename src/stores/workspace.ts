@@ -9,6 +9,7 @@ import type {
   ImportResult,
   PermDecision,
   PermMode,
+  SaveResult,
   SessionWindow,
   UiMode,
   Wallpaper,
@@ -640,6 +641,33 @@ export const useWorkspaceStore = defineStore('workspace', {
         const res = await host.resolveImport(token, choice);
         if (res.ok) await this.refresh();
         return res;
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
+    /**
+     * Zeigt das Arbeitsverzeichnis im Dateimanager des Systems (c0075). Geöffnet
+     * wird im Hauptprozess — der Renderer kennt nur den Pfad.
+     */
+    async revealFolder(): Promise<SaveResult> {
+      if (!this.folder) return { ok: false, error: 'Kein Arbeitsverzeichnis geöffnet.' };
+      const host = getHost();
+      if (!host.revealFolder) return { ok: false, error: 'Der Dateimanager ist hier nicht verfügbar.' };
+      try {
+        return await host.revealFolder(this.folder);
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
+    /** Öffnet ein Terminal im Arbeitsverzeichnis (c0075, siehe core/terminal). */
+    async openTerminal(): Promise<SaveResult> {
+      if (!this.folder) return { ok: false, error: 'Kein Arbeitsverzeichnis geöffnet.' };
+      const host = getHost();
+      if (!host.openTerminal) return { ok: false, error: 'Das Terminal ist hier nicht verfügbar.' };
+      try {
+        return await host.openTerminal(this.folder);
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) };
       }

@@ -13,6 +13,7 @@ import ShortcutsSection from './ShortcutsSection.vue';
 import TelemetrySection from './TelemetrySection.vue';
 import WallpaperSection from './WallpaperSection.vue';
 import AppearanceSection from './AppearanceSection.vue';
+import WorkspaceFolderSection from './WorkspaceFolderSection.vue';
 
 export interface SettingsSection {
   /** Stabiler Schlüssel (auch für „zuletzt offener Bereich“ o. Ä.). */
@@ -27,6 +28,7 @@ export interface SettingsSection {
 
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { id: 'agents', label: 'Agenten', icon: '🤖', component: AgentsSection },
+  { id: 'workspace', label: 'Arbeitsverzeichnis', icon: '🗂', component: WorkspaceFolderSection },
   { id: 'data', label: 'Datenordner', icon: '📂', component: DataFolderSection },
   { id: 'permissions', label: 'Berechtigungen', icon: '🔐', component: PermissionsSection },
   { id: 'libs', label: 'Bibliotheken', icon: '📦', component: LibrariesSection },
