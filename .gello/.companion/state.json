@@ -10,13 +10,13 @@
       "cardId": "c0081",
       "phase": "running",
       "activity": {
-        "name": "Write",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/cards/c0085-force-chromium-audio-buffer-size.md"
+        "name": "Bash",
+        "arg": "sed -i '' 's/(see c0082)/(see c0085)/; s/floor, this card/floor, this card/; s/^   floor (c0082)\\./   floor (c0085)./; s/(c0082)\\./(c0085)./; s/(c0083)\\./(c0086)./; s/part of c0082\\./part of c0085./' .gello/epics/e12-tauri/c0081-investigate-keypress-to-sound-latency.md && grep -n \"c008[0-9]\" .gello/epics/e12-tauri/c0081-investigate-keypress-to-sound-latency.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T23:27:04",
+  "updated": "2026-08-12T23:27:24",
   "pickupDelay": 10,
   "owned": [
     "c0029",

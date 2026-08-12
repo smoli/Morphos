@@ -126,7 +126,7 @@ With `--audio-buffer-size=128` forced on the Electron process
    Electron binary. On macOS it forces the 128-frame floor and overrides the
    page's hint process-wide — so it would fix *every* generated app at once
    without touching generated code. **Whether it moves the Windows floor is
-   untested** and is the one cheap experiment left (see c0082).
+   untested** and is the one cheap experiment left (see c0085).
 6. **Correction to an earlier note on this card:** I first wrote that WASAPI
    exclusive mode "is not reachable from Chromium, no such switch exists in the
    binary". That inference was unsound — the binary I searched is the *macOS*
@@ -138,7 +138,7 @@ With `--audio-buffer-size=128` forced on the Electron process
 
 - The Windows run is **Chrome 151**; Morphos ships **Chromium 130** (Electron
   33). The floor is a property of the Windows audio backend and driver, so it
-  should carry over, but the confirming run in Electron is part of c0082.
+  should carry over, but the confirming run in Electron is part of c0085.
 - The macOS run uses **synthesized** keydowns, so its `input` reads ~0. The
   Windows run is hand-typed and shows the real value: **0,6 ms** — i.e. the OS
   key path is negligible on both, and the macOS totals are not flattered by more
@@ -152,7 +152,7 @@ With `--audio-buffer-size=128` forced on the Electron process
 **A web-side fix does not suffice on Windows.** It is measured, not assumed: the
 two levers the card proposed are worth 0,1 ms and −0,4 ms there. Ordered by cost:
 
-1. **Cheap and decisive — try `--audio-buffer-size` on Windows first** (c0082).
+1. **Cheap and decisive — try `--audio-buffer-size` on Windows first** (c0085).
    One command with the harness already in the repo. If it moves the 50 ms
    floor, this card's problem is a **one-line change in `electron/main.ts`**
    that fixes every sound app Morphos will ever generate. Do this before
@@ -160,7 +160,7 @@ two levers the card proposed are worth 0,1 ms and −0,4 ms there. Ordered by co
 2. **Free and correct regardless** — teach generated sound apps to use
    `latencyHint: 'interactive'` with pre-decoded `AudioBuffer`s on `keydown`.
    Worth −11,7 ms on macOS, harmless on Windows. Belongs in the generation
-   prompt, not in a hand-edit (c0083).
+   prompt, not in a hand-edit (c0086).
 3. **Only if 1 fails: a native audio path.** WASAPI at a genuinely small period
    (or exclusive mode) is the only thing left that can reach the 40 ms. That is
    a real native component and a real cost.
