@@ -2,22 +2,21 @@
   "status": "running",
   "ready": [
     "c0076",
-    "c0075",
     "c0077"
   ],
   "waiting": [],
   "runs": [
     {
-      "cardId": "i0007",
+      "cardId": "c0075",
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "rm -rf /tmp/i0007chk && echo cleaned"
+        "arg": "grep -ril \"settings\" src electron --include=*.ts --include=*.vue --include=*.js | head -40"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T21:05:25",
+  "updated": "2026-08-12T21:05:51",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -69,11 +68,11 @@
     "c0072",
     "c0073",
     "c0074",
-    "i0007"
+    "i0007",
+    "c0075"
   ],
   "afk": true,
   "firstSeen": {
-    "c0075": "2026-08-12T20:54:24",
     "c0076": "2026-08-12T20:54:26",
     "c0077": "2026-08-12T20:54:31"
   }
