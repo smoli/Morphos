@@ -41,30 +41,30 @@ on an explicit action per app — and committed, so it travels with a push.
 
 ## Acceptance criteria
 
-- [ ] A per-app action **„Readme erstellen“** (context menu of the app tile)
+- [x] A per-app action **„Readme erstellen“** (context menu of the app tile)
       writes `README.md` into the app folder; success and failure are reported
       as a toast. Running it again **rewrites** the file (idempotent).
-- [ ] The README follows the card's structure: **icon centered**, the **app
+- [x] The README follows the card's structure: **icon centered**, the **app
       name**, a **short description**, a **Details** section linking
       `concept.md` and `userdocumentation.md`, and a **Morphos** section naming
       the version/commit the app needs.
-- [ ] The short description comes from the app's **`concept.md`** (first
+- [x] The short description comes from the app's **`concept.md`** (first
       paragraph, headings/code fences skipped, capped), falling back to
       `userdocumentation.md` and then to a neutral line; a link to a **missing**
       doc is left out.
-- [ ] An **image icon** travels as a real file next to the README (`icon.png`,
+- [x] An **image icon** travels as a real file next to the README (`icon.png`,
       `.jpg`, `.gif`, `.webp`) so it shows on a repo page; an **emoji** icon is
       rendered centered inline. A stale icon file of an earlier README is
       removed.
-- [ ] README (and icon file) are **committed** to the app's repo — a clone
+- [x] README (and icon file) are **committed** to the app's repo — a clone
       brings them along.
-- [ ] It works for a **closed** app (manifest and docs are read from disk), and
+- [x] It works for a **closed** app (manifest and docs are read from disk), and
       only inside a **known workspace folder** (like `diskUsage`/`importApp`);
       an unknown folder or an app without `app.json` is refused with a clear
       message.
-- [ ] `README.md` stays **shell-written**: the LLM's file protocol still rejects
+- [x] `README.md` stays **shell-written**: the LLM's file protocol still rejects
       it, and a generation neither deletes nor overwrites it.
-- [ ] Building the readme (structure, description extraction, icon asset,
+- [x] Building the readme (structure, description extraction, icon asset,
       version line) and the write+commit are covered by **unit tests**, the menu
       entry and the store action by **component/store tests**.
 

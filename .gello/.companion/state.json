@@ -7,13 +7,13 @@
       "cardId": "c0077",
       "phase": "running",
       "activity": {
-        "name": "Edit",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e11-app-distribution/c0077-create-a-readme-for-an-app.md"
+        "name": "Bash",
+        "arg": "python3 - <<'EOF'\nimport re\np = '.gello/epics/e11-app-distribution/c0077-create-a-readme-for-an-app.md'\ns = open(p).read()\nstart = s.index('## Acceptance criteria')\nend = s.index('## Log')\nblock = s[start:end].replace('- [ ]', '- [x]')\ns = s[:start] + block + s[end:]\nopen(p, 'w').write(s)\nEOF\ngrep -c \"\\- \\[x\\]\" .gello/epics/e11-app-distribution/c0077-create-a-readme-for-an-app.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T21:27:53",
+  "updated": "2026-08-12T21:35:53",
   "pickupDelay": 10,
   "owned": [
     "c0029",
