@@ -10,6 +10,8 @@ import type {
   PermDecision,
   PermMode,
   ReadmeResult,
+  RemoteResult,
+  RemoteStatus,
   SaveResult,
   SessionWindow,
   UiMode,
@@ -88,6 +90,12 @@ interface WorkspaceState {
   dockAutohides: Record<string, boolean>;
   /** An welchem Rand das Dock steht, je Workspace-Pfad (siehe core/dock). */
   dockEdges: Record<string, DockEdge>;
+  /**
+   * Der zuletzt abgefragte Stand der Gegenstelle, je App-Id (c0082). Nur für
+   * diese Sitzung: Was hier steht, ist die Auskunft des letzten Holens — und
+   * geholt wird allein auf Geheiß.
+   */
+  remoteStatuses: Record<string, RemoteStatus>;
   /** Aktuell zur Genehmigung anstehende Anfrage (für den Dialog). */
   pendingPermission: PendingPermission | null;
   apps: AppSummary[];
@@ -124,6 +132,7 @@ export const useWorkspaceStore = defineStore('workspace', {
     dockBlurs: {},
     dockAutohides: {},
     dockEdges: {},
+    remoteStatuses: {},
     pendingPermission: null,
     apps: [],
     loading: false,
@@ -180,6 +189,8 @@ export const useWorkspaceStore = defineStore('workspace', {
     /** An welchem Rand das Dock hier steht — ohne eigene Wahl die Vorgabe. */
     dockEdge: (s): DockEdge =>
       (s.folder ? s.dockEdges[s.folder] ?? DEFAULT_DOCK_EDGE : DEFAULT_DOCK_EDGE),
+    /** Der zuletzt abgefragte Stand der Gegenstelle dieser App (oder keiner). */
+    remoteOf: (s) => (appId: string): RemoteStatus | null => s.remoteStatuses[appId] ?? null,
   },
 
   actions: {
@@ -264,6 +275,9 @@ export const useWorkspaceStore = defineStore('workspace', {
       // ablehnen — die wartenden Promises dürfen nicht ewig hängen bleiben.
       while (permissionQueue.length) permissionQueue.shift()!.resolve('deny-once');
       this.pendingPermission = null;
+      // Die Auskünfte über Gegenstellen galten den Apps des anderen
+      // Verzeichnisses (die Ids sagen nichts über den Ordner, in dem sie liegen).
+      this.remoteStatuses = {};
       this.folder = path;
       this.recentFolders = [path, ...this.recentFolders.filter((f) => f !== path)].slice(0, MAX_RECENT);
       void this.persistSettings();
@@ -652,6 +666,64 @@ export const useWorkspaceStore = defineStore('workspace', {
       }
     },
 
+    /**
+     * Sieht nach, wie diese App zu ihrer Gegenstelle steht (c0082) — mit
+     * `fetch` wird dafür wirklich bei `origin` angeklopft. Das geschieht nur
+     * auf Geheiß: beim Aufklappen des Kachelmenüs und vor jedem Schieben und
+     * Ziehen, nie von selbst im Hintergrund.
+     */
+    async refreshRemote(id: string, fetch = true): Promise<RemoteStatus | null> {
+      if (!this.folder) return null;
+      const host = getHost();
+      if (!host.remoteStatus) return null;
+      try {
+        const status = await host.remoteStatus(this.folder, id, fetch);
+        this.remoteStatuses = { ...this.remoteStatuses, [id]: status };
+        return status;
+      } catch (err) {
+        const status: RemoteStatus = {
+          hasRemote: true,
+          error: err instanceof Error ? err.message : String(err),
+        };
+        this.remoteStatuses = { ...this.remoteStatuses, [id]: status };
+        return status;
+      }
+    },
+
+    /**
+     * Schiebt die neuen Versionen einer App zur Gegenstelle. Ist die weiter,
+     * wird nichts geschoben — der Grund kommt zurück (siehe core/remote).
+     */
+    async pushApp(id: string): Promise<RemoteResult> {
+      return this.syncApp(id, 'pushApp');
+    },
+
+    /**
+     * Spult eine App auf den Stand ihrer Gegenstelle vor. Gelingt das, ist der
+     * Ordner ein anderer als vorher: Die Kachelliste wird nachgezogen (ein
+     * offenes Fenster lädt die Schale neu, siehe views/DesktopView).
+     */
+    async pullApp(id: string): Promise<RemoteResult> {
+      const res = await this.syncApp(id, 'pullApp');
+      if (res.ok && res.changed) await this.refresh();
+      return res;
+    },
+
+    /** Der gemeinsame Weg von Push und Pull: aufrufen, Stand merken, melden. */
+    async syncApp(id: string, op: 'pushApp' | 'pullApp'): Promise<RemoteResult> {
+      if (!this.folder) return { ok: false, error: 'Kein Arbeitsverzeichnis geöffnet.' };
+      const host = getHost();
+      const call = host[op];
+      if (!call) return { ok: false, error: 'Der Abgleich mit einer Gegenstelle ist hier nicht verfügbar.' };
+      try {
+        const res = await call.call(host, this.folder, id);
+        if (res.status) this.remoteStatuses = { ...this.remoteStatuses, [id]: res.status };
+        return res;
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
     /** Beantwortet eine belegte Id: Kopie, Ersetzen oder Abbruch (siehe importApp). */
     async resolveImport(token: string, choice: ImportChoice): Promise<ImportResult> {
       const host = getHost();
@@ -699,6 +771,8 @@ export const useWorkspaceStore = defineStore('workspace', {
         await getHost().deleteApp(this.folder, id);
         this.forgetIconPosition(id);
         this.forgetFavorite(id);
+        const { [id]: _weg, ...rest } = this.remoteStatuses;
+        this.remoteStatuses = rest;
         await this.refresh();
       } catch (err) {
         this.error = err instanceof Error ? err.message : String(err);

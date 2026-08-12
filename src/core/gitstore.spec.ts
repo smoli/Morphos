@@ -4,15 +4,23 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  aheadBehind,
   ensureRepo,
   commitAll,
   cloneRepo,
-  findGh,
-  ghCredentialArgs,
-  listVersions,
-  restoreVersion,
   countVersions,
+  fetchRemote,
+  findGh,
+  getUpstream,
+  ghCredentialArgs,
+  hasRemote,
+  listVersions,
+  pullFastForward,
+  pushRemote,
+  remoteUrl,
+  restoreVersion,
 } from './gitstore';
+import { writeChat } from './appstore';
 
 let dir: string;
 
@@ -148,6 +156,163 @@ describe('gitstore', () => {
 
     it('scheitert mit einer Meldung, wenn es die Gegenstelle nicht gibt', async () => {
       await expect(cloneRepo(path.join(target, 'nichts'), path.join(target, 'klon'))).rejects.toThrow();
+    });
+  });
+
+  // c0082: Abgleich mit der Gegenstelle — nur im Vorlauf, nie mit Gewalt.
+  // Gespielt wird mit echten Repositories im Dateisystem: ein nacktes als
+  // Gegenstelle und zwei Klone davon, die einander in die Quere kommen.
+  describe('Gegenstelle (fetch/push/pull)', () => {
+    let tmp: string;
+    let origin: string;
+    let alice: string;
+    let bob: string;
+
+    /** Der Stand einer Datei im nackten Repository — was dort wirklich ankam. */
+    function onOrigin(rel: string): string {
+      return execFileSync('git', ['-C', origin, 'show', `HEAD:${rel}`]).toString();
+    }
+
+    function put(repo: string, rel: string, content: string): void {
+      fs.writeFileSync(path.join(repo, rel), content, 'utf8');
+    }
+
+    beforeEach(async () => {
+      tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'morphos-sync-'));
+      // Eine App mit einer Version wird zur Gegenstelle …
+      const seed = path.join(tmp, 'seed');
+      fs.mkdirSync(seed);
+      await ensureRepo(seed);
+      put(seed, 'app.json', '{"id":"a","name":"A"}');
+      await commitAll(seed, 'erste');
+      origin = path.join(tmp, 'origin.git');
+      execFileSync('git', ['clone', '--bare', '--quiet', seed, origin]);
+
+      // … und zwei Anwender holen sie sich.
+      alice = path.join(tmp, 'alice');
+      bob = path.join(tmp, 'bob');
+      await cloneRepo(origin, alice);
+      await cloneRepo(origin, bob);
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    });
+
+    it('erkennt eine Gegenstelle am Klon — und keine bei einer eigenen App', async () => {
+      expect(hasRemote(alice)).toBe(true);
+      expect(await remoteUrl(alice)).toBe(origin);
+
+      await ensureRepo(dir);
+      expect(hasRemote(dir)).toBe(false);
+      expect(await remoteUrl(dir)).toBe(null);
+      expect(hasRemote(path.join(tmp, 'gibtesnicht'))).toBe(false);
+    });
+
+    it('kennt den verfolgten Zweig — und nur den auf origin', async () => {
+      const up = (await getUpstream(alice))!;
+      expect(up.remoteBranch).toBe(up.branch);
+      expect(up.name).toBe(`origin/${up.branch}`);
+
+      await ensureRepo(dir);
+      write('a.txt', 'x');
+      await commitAll(dir, 'eins');
+      expect(await getUpstream(dir)).toBe(null);
+    });
+
+    it('zählt nach dem Klonen Gleichstand', async () => {
+      expect(await aheadBehind(alice)).toEqual({ ahead: 0, behind: 0 });
+    });
+
+    it('schiebt eigene Versionen zur Gegenstelle', async () => {
+      put(alice, 'app.json', '{"id":"a","name":"A2"}');
+      await commitAll(alice, 'zweite');
+      expect(await aheadBehind(alice)).toEqual({ ahead: 1, behind: 0 });
+
+      const up = (await getUpstream(alice))!;
+      await pushRemote(alice, up.remoteBranch);
+
+      expect(onOrigin('app.json')).toContain('A2');
+      expect(await aheadBehind(alice)).toEqual({ ahead: 0, behind: 0 });
+    });
+
+    it('sieht fremde Versionen erst NACH dem Holen', async () => {
+      put(bob, 'app.json', '{"id":"a","name":"von Bob"}');
+      await commitAll(bob, 'Bobs Fassung');
+      await pushRemote(bob, (await getUpstream(bob))!.remoteBranch);
+
+      // Ungeholt weiß Alice von nichts — es wird nicht im Hintergrund gefragt.
+      expect(await aheadBehind(alice)).toEqual({ ahead: 0, behind: 0 });
+      await fetchRemote(alice);
+      expect(await aheadBehind(alice)).toEqual({ ahead: 0, behind: 1 });
+    });
+
+    it('spult auf den Stand der Gegenstelle vor', async () => {
+      put(bob, 'app.json', '{"id":"a","name":"von Bob"}');
+      await commitAll(bob, 'Bobs Fassung');
+      await pushRemote(bob, (await getUpstream(bob))!.remoteBranch);
+
+      await fetchRemote(alice);
+      await pullFastForward(alice);
+
+      expect(fs.readFileSync(path.join(alice, 'app.json'), 'utf8')).toContain('von Bob');
+      expect(await aheadBehind(alice)).toEqual({ ahead: 0, behind: 0 });
+      expect((await listVersions(alice)).map((v) => v.prompt)).toEqual(['Bobs Fassung', 'erste']);
+    });
+
+    it('schiebt nicht mit Gewalt: Ist die Gegenstelle weiter, scheitert der Push', async () => {
+      put(bob, 'app.json', '{"id":"a","name":"von Bob"}');
+      await commitAll(bob, 'Bobs Fassung');
+      await pushRemote(bob, (await getUpstream(bob))!.remoteBranch);
+
+      put(alice, 'app.json', '{"id":"a","name":"von Alice"}');
+      await commitAll(alice, 'Alices Fassung');
+      await fetchRemote(alice);
+      expect(await aheadBehind(alice)).toEqual({ ahead: 1, behind: 1 });
+
+      await expect(pushRemote(alice, (await getUpstream(alice))!.remoteBranch)).rejects.toThrow();
+      // Bobs Fassung steht unversehrt auf der Gegenstelle.
+      expect(onOrigin('app.json')).toContain('von Bob');
+    });
+
+    it('spult nicht vor, wenn beide Seiten weitergegangen sind — und ändert nichts', async () => {
+      put(bob, 'app.json', '{"id":"a","name":"von Bob"}');
+      await commitAll(bob, 'Bobs Fassung');
+      await pushRemote(bob, (await getUpstream(bob))!.remoteBranch);
+
+      put(alice, 'app.json', '{"id":"a","name":"von Alice"}');
+      await commitAll(alice, 'Alices Fassung');
+      await fetchRemote(alice);
+
+      await expect(pullFastForward(alice)).rejects.toThrow();
+      expect(fs.readFileSync(path.join(alice, 'app.json'), 'utf8')).toContain('von Alice');
+      expect((await listVersions(alice)).map((v) => v.prompt)).toEqual(['Alices Fassung', 'erste']);
+    });
+
+    it('holt und schiebt nur, wo es eine Gegenstelle gibt', async () => {
+      await ensureRepo(dir);
+      write('a.txt', 'x');
+      await commitAll(dir, 'eins');
+      await expect(fetchRemote(dir)).rejects.toThrow(/Gegenstelle/);
+      await expect(pushRemote(dir, 'main')).rejects.toThrow(/Gegenstelle/);
+      expect(await aheadBehind(dir)).toBe(null);
+    });
+
+    it('lässt den Dialogverlauf zu Hause — chat.json reist nicht mit', async () => {
+      // Wie beim Speichern einer App (core/appstore): chat.json ist von Git
+      // ausgenommen und hat auf der Gegenstelle nichts verloren.
+      writeChat(alice, [{ role: 'user', text: 'geheim', time: 1 }]);
+      put(alice, 'app.json', '{"id":"a","name":"A2"}');
+      await commitAll(alice, 'zweite');
+      await pushRemote(alice, (await getUpstream(alice))!.remoteBranch);
+
+      expect(onOrigin('app.json')).toContain('A2');
+      expect(() => onOrigin('chat.json')).toThrow();
+    });
+
+    it('lässt sich keinen Zweignamen unterschieben, der eine Option wäre', async () => {
+      await expect(pushRemote(alice, '--mirror')).rejects.toThrow(/Ungültiger Zweig/);
+      await expect(pushRemote(alice, 'refs/tags/v1')).rejects.toThrow(/Ungültiger Zweig/);
     });
   });
 

@@ -387,6 +387,198 @@ describe('DesktopView', () => {
     });
   });
 
+  // c0082: Apps mit einer Gegenstelle lassen sich von der Kachel aus schieben
+  // und ziehen — nur im Vorlauf, und geholt wird ausschließlich auf Geheiß.
+  describe('Abgleich mit der Gegenstelle (c0082)', () => {
+    /** Der Rechner hat eine Gegenstelle, der Editor nicht. */
+    const withRemote: AppSummary[] = [{ ...apps[0], hasRemote: true }, apps[1]];
+
+    const status = (extra: Record<string, unknown> = {}) => ({
+      hasRemote: true,
+      url: 'https://example.org/rechner.git',
+      upstream: 'origin/main',
+      ahead: 0,
+      behind: 0,
+      ...extra,
+    });
+
+    function syncHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
+      return makeHost({
+        listApps: vi.fn(async () => withRemote),
+        remoteStatus: vi.fn(async () => status()),
+        pushApp: vi.fn(async () => ({ ok: true, status: status() })),
+        pullApp: vi.fn(async () => ({ ok: true, changed: true, status: status() })),
+        ...overrides,
+      });
+    }
+
+    function toastText(): string {
+      return useNotificationsStore().toasts.map((t) => t.text).join(' ');
+    }
+
+    it('bietet Push und Pull nur bei einer App mit Gegenstelle', async () => {
+      setHost(syncHost());
+      const { wrapper } = await mountView();
+
+      await openIconMenu(wrapper, 'Rechner');
+      expect(wrapper.findAll('.ctx-item').map((i) => i.get('.ctx-label').text())).toEqual([
+        'Öffnen',
+        'Icon ändern',
+        'Readme erstellen',
+        'Push',
+        'Pull',
+        'Im Dock behalten',
+        'Löschen',
+      ]);
+
+      // Der Editor hat keine — dort wird nichts geschoben (Veröffentlichen: c0083).
+      await openIconMenu(wrapper, 'Editor');
+      const labels = wrapper.findAll('.ctx-item').map((i) => i.get('.ctx-label').text());
+      expect(labels).not.toContain('Push');
+      expect(labels).not.toContain('Pull');
+    });
+
+    it('sieht beim Aufklappen des Menüs bei der Gegenstelle nach — und sonst nie', async () => {
+      const host = syncHost({ remoteStatus: vi.fn(async () => status({ ahead: 2, fetchedAt: 1 })) });
+      setHost(host);
+      const { wrapper } = await mountView();
+
+      // Beim Zeichnen des Desktops wird nicht geholt: kein Netz im Hintergrund.
+      expect(host.remoteStatus).not.toHaveBeenCalled();
+
+      await openIconMenu(wrapper, 'Rechner');
+      expect(host.remoteStatus).toHaveBeenCalledWith('/apps', 'rechner-1', true);
+
+      // Und für die App ohne Gegenstelle wird auch beim Aufklappen nicht gefragt.
+      await openIconMenu(wrapper, 'Editor');
+      expect(host.remoteStatus).toHaveBeenCalledTimes(1);
+    });
+
+    it('zeigt an der Kachel den Stand des letzten Holens', async () => {
+      setHost(syncHost({ remoteStatus: vi.fn(async () => status({ ahead: 2, behind: 3, fetchedAt: 1 })) }));
+      const { wrapper } = await mountView();
+
+      // Vor dem ersten Nachsehen steht dort nur, DASS es eine Gegenstelle gibt.
+      const badge = tileWrap(wrapper, 'Rechner').get('.tile-remote');
+      expect(badge.text()).toBe('⇅');
+      expect(badge.attributes('title')).toMatch(/noch nicht/i);
+      expect(tileWrap(wrapper, 'Editor').find('.tile-remote').exists()).toBe(false);
+
+      await openIconMenu(wrapper, 'Rechner');
+      const gezählt = tileWrap(wrapper, 'Rechner').get('.tile-remote');
+      expect(gezählt.text()).toBe('↑2↓3');
+      expect(gezählt.attributes('title')).toMatch(/Stand:/);
+    });
+
+    it('schiebt über das Menü und meldet es', async () => {
+      const host = syncHost();
+      setHost(host);
+      const { wrapper } = await mountView();
+
+      await openIconMenu(wrapper, 'Rechner');
+      await pickMenu(wrapper, 'Push');
+
+      expect(host.pushApp).toHaveBeenCalledWith('/apps', 'rechner-1');
+      expect(wrapper.findComponent(ContextMenu).exists()).toBe(false);
+      expect(useNotificationsStore().toasts[0].kind).toBe('success');
+      expect(toastText()).toContain('Rechner');
+    });
+
+    it('meldet die Absage, wenn die Gegenstelle weiter ist — und schiebt nicht mit Gewalt', async () => {
+      const host = syncHost({
+        pushApp: vi.fn(async () => ({
+          ok: false,
+          status: status({ ahead: 1, behind: 2 }),
+          error: 'Die Gegenstelle ist weiter als dieser Stand — erst ziehen (Pull), dann schieben.',
+        })),
+      });
+      setHost(host);
+      const { wrapper } = await mountView();
+
+      await openIconMenu(wrapper, 'Rechner');
+      await pickMenu(wrapper, 'Push');
+
+      const toasts = useNotificationsStore().toasts;
+      expect(toasts[0].kind).toBe('error');
+      expect(toasts[0].text).toMatch(/erst ziehen/i);
+      // Die Zählung der Absage steht danach an der Kachel.
+      expect(tileWrap(wrapper, 'Rechner').get('.tile-remote').text()).toBe('↑1↓2');
+    });
+
+    it('zieht über das Menü und lädt das offene Fenster auf den neuen Stand', async () => {
+      const host = syncHost({ loadApp: vi.fn(async () => rechnerData) });
+      setHost(host);
+      const { wrapper } = await mountView();
+
+      // Das Fenster steht offen und zeigt den alten Stand.
+      await tileWrap(wrapper, 'Rechner').get('.tile').trigger('click');
+      await flushPromises();
+      const geladen = (host.loadApp as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      await openIconMenu(wrapper, 'Rechner');
+      await pickMenu(wrapper, 'Pull');
+
+      expect(host.pullApp).toHaveBeenCalledWith('/apps', 'rechner-1');
+      expect((host.loadApp as ReturnType<typeof vi.fn>).mock.calls.length).toBe(geladen + 1);
+      expect(useNotificationsStore().toasts[0].kind).toBe('success');
+    });
+
+    it('zieht NICHT, solange ein Agent für diese App arbeitet', async () => {
+      const host = syncHost();
+      setHost(host);
+      const { wrapper } = await mountView();
+      useAgentsStore().jobs = [{
+        jobId: 'job-1',
+        appKey: 'rechner-1',
+        state: 'running' as const,
+        instanceId: 'win-1',
+        appId: 'rechner-1',
+        label: 'Rechner',
+        prompt: 'Mach was',
+        attachments: [],
+        elements: [],
+        cancelled: false,
+      }];
+      await flushPromises();
+
+      await openIconMenu(wrapper, 'Rechner');
+      await pickMenu(wrapper, 'Pull');
+
+      expect(host.pullApp).not.toHaveBeenCalled();
+      const toasts = useNotificationsStore().toasts;
+      expect(toasts[0].kind).toBe('error');
+      expect(toasts[0].text).toMatch(/Agent/);
+
+      // Geschoben werden darf trotzdem: Das rührt den Ordner nicht an.
+      await openIconMenu(wrapper, 'Rechner');
+      await pickMenu(wrapper, 'Push');
+      expect(host.pushApp).toHaveBeenCalled();
+    });
+
+    it('meldet eine verweigerte Zusammenführung, ohne etwas zu laden (c0084)', async () => {
+      const host = syncHost({
+        loadApp: vi.fn(async () => rechnerData),
+        pullApp: vi.fn(async () => ({
+          ok: false,
+          status: status({ ahead: 1, behind: 2 }),
+          error: 'Beide Seiten sind weitergegangen — hier UND auf der Gegenstelle.',
+        })),
+      });
+      setHost(host);
+      const { wrapper } = await mountView();
+      await tileWrap(wrapper, 'Rechner').get('.tile').trigger('click');
+      await flushPromises();
+      const geladen = (host.loadApp as ReturnType<typeof vi.fn>).mock.calls.length;
+
+      await openIconMenu(wrapper, 'Rechner');
+      await pickMenu(wrapper, 'Pull');
+
+      expect(useNotificationsStore().toasts[0].kind).toBe('error');
+      expect(toastText()).toMatch(/Beide Seiten/);
+      expect((host.loadApp as ReturnType<typeof vi.fn>).mock.calls.length).toBe(geladen);
+    });
+  });
+
   describe('Icon einer App', () => {
     /** Öffnet den Icon-Dialog über das Kontextmenü der genannten App. */
     async function openIconDialog(wrapper: VueWrapper) {

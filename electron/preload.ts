@@ -17,6 +17,8 @@ import type {
   ImportChoice,
   ImportResult,
   ReadmeResult,
+  RemoteResult,
+  RemoteStatus,
   SaveResult,
   Settings,
   ShellFsRequest,
@@ -88,6 +90,16 @@ contextBridge.exposeInMainWorld('morphos', {
     ipcRenderer.invoke('morphos:importApp', folder, url),
   resolveImport: (token: string, choice: ImportChoice): Promise<ImportResult> =>
     ipcRenderer.invoke('morphos:resolveImport', token, choice),
+
+  // Abgleich mit der Gegenstelle (c0082): nachsehen, schieben, vorspulen.
+  // Geholt wird nur auf Geheiß — es gibt keinen Kanal, der das im Hintergrund
+  // täte.
+  remoteStatus: (folder: string, id: string, fetch?: boolean): Promise<RemoteStatus> =>
+    ipcRenderer.invoke('morphos:remoteStatus', folder, id, fetch === true),
+  pushApp: (folder: string, id: string): Promise<RemoteResult> =>
+    ipcRenderer.invoke('morphos:pushApp', folder, id),
+  pullApp: (folder: string, id: string): Promise<RemoteResult> =>
+    ipcRenderer.invoke('morphos:pullApp', folder, id),
 
   listVersions: (folder: string, id: string): Promise<VersionInfo[]> =>
     ipcRenderer.invoke('morphos:listVersions', folder, id),

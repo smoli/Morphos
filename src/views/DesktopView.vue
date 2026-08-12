@@ -32,6 +32,7 @@ import { dockBackgroundCss, dockBlurCss } from '@/core/transparency';
 import { dockEntries, dockRevealed, type DockEntry } from '@/core/dock';
 import { dockInsets, insetVars, workArea } from '@/core/workarea';
 import type { MenuItem } from '@/core/menu';
+import { remoteBadge, syncState, type RemoteBadge } from '@/core/remote';
 import type { DesktopWindow } from '@/stores/desktop';
 import {
   arrangeIcons,
@@ -378,6 +379,57 @@ async function createReadme(id: string, name: string): Promise<void> {
   else notifications.error(res.error ?? 'Das Readme konnte nicht geschrieben werden.');
 }
 
+// ---- Abgleich mit der Gegenstelle (c0082) ----
+
+/**
+ * Schiebt die neuen Versionen einer App zur Gegenstelle. Was dabei nicht geht —
+ * die Gegenstelle ist weiter, kein Zugang, kein Netz —, sagt eine Meldung; das
+ * Repository bleibt in jedem Fall, wie es war.
+ */
+async function pushApp(app: AppSummary): Promise<void> {
+  const res = await workspace.pushApp(app.id);
+  if (res.ok) notifications.success(`„${app.name}“ steht jetzt so auf der Gegenstelle.`);
+  else notifications.error(`„${app.name}“: ${res.error ?? 'Das Schieben ist nicht gelungen.'}`);
+}
+
+/**
+ * Holt den Stand der Gegenstelle und spult die App darauf vor. Zwei Dinge
+ * gehören dazu:
+ *
+ * - Arbeitet gerade ein Agent für diese App, wird NICHT gezogen: Er schreibt in
+ *   denselben Ordner und committet am Ende — ein Vorspulen mittendrin brächte
+ *   beide durcheinander. (Die Warteschlange steht hier in der Schale, darum
+ *   fragt die Schale und nicht der Hauptprozess.)
+ * - Danach steht etwas anderes auf der Platte, als das offene Fenster zeigt:
+ *   Es lädt den neuen Stand nach — wie nach einem Lauf ohne Fenster
+ *   (stores/agents afterRun).
+ */
+async function pullApp(app: AppSummary): Promise<void> {
+  if (agents.isBusy(app.id)) {
+    notifications.error(`Für „${app.name}“ arbeitet gerade ein Agent — erst danach ziehen.`);
+    return;
+  }
+  const res = await workspace.pullApp(app.id);
+  if (!res.ok) {
+    notifications.error(`„${app.name}“: ${res.error ?? 'Das Ziehen ist nicht gelungen.'}`);
+    return;
+  }
+  notifications.success(`„${app.name}“ ist auf dem Stand der Gegenstelle.`);
+  await reloadOpenWindows(app.id);
+}
+
+/** Lädt die offenen Fenster einer App neu — auf der Platte steht ein neuer Stand. */
+async function reloadOpenWindows(appId: string): Promise<void> {
+  const folder = workspace.folder;
+  if (!folder) return;
+  for (const w of desktop.windows.filter((win) => win.appId === appId)) {
+    const store = useAppWindow(w.instanceId);
+    if (await store.open(folder, appId)) {
+      desktop.setAppMeta(w.instanceId, appId, store.name, store.icon);
+    }
+  }
+}
+
 async function removeApp(id: string, name: string): Promise<void> {
   if (!confirm(`App „${name}“ wirklich löschen?`)) return;
   const open = desktop.windows.find((w) => w.appId === id);
@@ -576,6 +628,28 @@ async function applyIcon(icon: string | null): Promise<void> {
   if (await setAppIcon(id, icon)) iconAppId.value = null;
 }
 
+// ---- Das Zeichen der Gegenstelle an der Kachel (c0082) ----
+
+/**
+ * Was an der Kachel steht: `⇅`, solange nicht nachgesehen wurde, sonst die
+ * Zählung des LETZTEN Holens (`↑2`, `↓3`, `↑2↓3`, `✓`). Nachgesehen wird beim
+ * Aufklappen des Kachelmenüs und vor jedem Schieben und Ziehen — nie von
+ * selbst. Eine App ohne Gegenstelle trägt gar nichts.
+ */
+function tileBadge(app: AppSummary): RemoteBadge | null {
+  if (!app.hasRemote) return null;
+  return remoteBadge(workspace.remoteOf(app.id) ?? { hasRemote: true });
+}
+
+/** Der Tooltip dazu, um den Zeitpunkt des letzten Holens ergänzt. */
+function tileBadgeTitle(app: AppSummary): string {
+  const badge = tileBadge(app);
+  if (!badge) return '';
+  const fetchedAt = workspace.remoteOf(app.id)?.fetchedAt;
+  if (!fetchedAt) return badge.title;
+  return `${badge.title} (Stand: ${new Date(fetchedAt).toLocaleTimeString()})`;
+}
+
 // ---- Kontextmenü: die Aktionen einer App (siehe components/ContextMenu) ----
 
 // Was gerade aufgeklappt ist: die Stelle, die Einträge und die gemeinte App.
@@ -592,8 +666,21 @@ function dockItem(appId: string): MenuItem {
     : { id: 'dock', label: 'Im Dock behalten', icon: '📌' };
 }
 
-/** Rechtsklick auf eine Kachel: alles, was sich mit dieser App tun lässt. */
+/**
+ * Rechtsklick auf eine Kachel: alles, was sich mit dieser App tun lässt. Eine
+ * App mit Gegenstelle bekommt zusätzlich „Push" und „Pull" (c0082) — und beim
+ * Aufklappen wird dort nachgesehen, wie sie zur Gegenstelle steht. Das ist eine
+ * der wenigen Stellen, an denen Morphos von sich aus ans Netz geht; im
+ * Hintergrund tut es das nie. Eine App ohne Gegenstelle hat hier nichts stehen
+ * — sie zu veröffentlichen ist eine eigene Sache (c0083).
+ */
 function openIconMenu(e: MouseEvent, app: AppSummary): void {
+  const sync: MenuItem[] = app.hasRemote
+    ? [
+        { id: 'push', label: 'Push', icon: '↑', separator: true },
+        { id: 'pull', label: 'Pull', icon: '↓' },
+      ]
+    : [];
   menu.value = {
     x: e.clientX,
     y: e.clientY,
@@ -602,10 +689,12 @@ function openIconMenu(e: MouseEvent, app: AppSummary): void {
       { id: 'open', label: 'Öffnen', icon: '↗' },
       { id: 'icon', label: 'Icon ändern', icon: '⚙' },
       { id: 'readme', label: 'Readme erstellen', icon: '📄' },
-      dockItem(app.id),
+      ...sync,
+      { ...dockItem(app.id), separator: sync.length > 0 },
       { id: 'delete', label: 'Löschen', icon: '🗑', danger: true, separator: true },
     ],
   };
+  if (app.hasRemote) void workspace.refreshRemote(app.id);
 }
 
 /**
@@ -638,6 +727,12 @@ function onMenuPick(id: string): void {
       break;
     case 'readme':
       if (app) void createReadme(app.id, app.name);
+      break;
+    case 'push':
+      if (app) void pushApp(app);
+      break;
+    case 'pull':
+      if (app) void pullApp(app);
       break;
     case 'dock':
     case 'undock':
@@ -697,6 +792,13 @@ function onMenuPick(id: string): void {
               <span class="name">{{ app.name }}</span>
               <span v-if="hoverId === app.id" class="meta">{{ app.versions }} Version(en)</span>
             </button>
+            <!-- Der Stand gegenüber der Gegenstelle, vom letzten Holen (c0082). -->
+            <span
+              v-if="tileBadge(app)"
+              class="tile-remote"
+              :class="`state-${syncState(workspace.remoteOf(app.id))}`"
+              :title="tileBadgeTitle(app)"
+            >{{ tileBadge(app)!.text }}</span>
             <BusyDot v-if="agents.isBusy(app.id)" class="tile-busy" />
           </div>
           <p v-if="!workspace.loading && workspace.apps.length === 0" class="hint" :style="{ top: hintTop }">
@@ -999,6 +1101,32 @@ function onMenuPick(id: string): void {
   color: var(--muted);
   text-align: center;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+/*
+ * Der Stand gegenüber der Gegenstelle (c0082) — rechts oben an der Kachel,
+ * gegenüber der Arbeitsanzeige. Er ist Auskunft, kein Knopf: Geschoben und
+ * gezogen wird über das Kontextmenü.
+ */
+.tile-remote {
+  position: absolute;
+  top: 8px;
+  right: 6px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: rgba(10, 12, 16, 0.6);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  pointer-events: auto;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+.tile-remote.state-ahead,
+.tile-remote.state-behind {
+  color: var(--accent);
+}
+.tile-remote.state-diverged {
+  color: #f0a35e;
 }
 /* Arbeitsanzeige der Kachel — links oben, neben der Glyphe. */
 .tile-busy {

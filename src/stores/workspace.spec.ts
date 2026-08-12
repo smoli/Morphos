@@ -459,6 +459,123 @@ describe('useWorkspaceStore', () => {
     });
   });
 
+  describe('Abgleich mit der Gegenstelle (c0082)', () => {
+    const synced = { hasRemote: true, url: 'https://example.org/a.git', upstream: 'origin/main', ahead: 0, behind: 0 };
+
+    it('sieht auf Geheiß bei der Gegenstelle nach und merkt sich den Stand', async () => {
+      const host = makeHost({ remoteStatus: vi.fn(async () => ({ ...synced, ahead: 2 })) });
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      const status = await ws.refreshRemote('a-1');
+
+      expect(status).toMatchObject({ ahead: 2 });
+      expect(host.remoteStatus).toHaveBeenCalledWith('/apps', 'a-1', true);
+      expect(ws.remoteOf('a-1')).toMatchObject({ ahead: 2 });
+      expect(ws.remoteOf('b-2')).toBe(null);
+    });
+
+    it('kann auch ohne Holen nachsehen (kein Netzverkehr)', async () => {
+      const host = makeHost({ remoteStatus: vi.fn(async () => synced) });
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      await ws.refreshRemote('a-1', false);
+      expect(host.remoteStatus).toHaveBeenCalledWith('/apps', 'a-1', false);
+    });
+
+    it('schiebt und übernimmt den zurückgemeldeten Stand', async () => {
+      const host = makeHost({ pushApp: vi.fn(async () => ({ ok: true, status: synced })) });
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(await ws.pushApp('a-1')).toMatchObject({ ok: true });
+      expect(host.pushApp).toHaveBeenCalledWith('/apps', 'a-1');
+      expect(ws.remoteOf('a-1')).toMatchObject({ ahead: 0, behind: 0 });
+      // Am Ordner hat sich nichts geändert — kein erneutes Einlesen.
+      expect(host.listApps).toHaveBeenCalledTimes(1);
+    });
+
+    it('reicht die Absage des Hauptprozesses durch, samt Stand', async () => {
+      const abgelehnt = { ...synced, ahead: 1, behind: 2 };
+      setHost(makeHost({
+        pushApp: vi.fn(async () => ({ ok: false, status: abgelehnt, error: 'erst ziehen (Pull)' })),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect((await ws.pushApp('a-1')).error).toMatch(/ziehen/);
+      expect(ws.remoteOf('a-1')).toMatchObject({ ahead: 1, behind: 2 });
+    });
+
+    it('liest nach einem geglückten Ziehen das Verzeichnis neu ein', async () => {
+      const host = makeHost({ pullApp: vi.fn(async () => ({ ok: true, changed: true, status: synced })) });
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(await ws.pullApp('a-1')).toMatchObject({ ok: true, changed: true });
+      expect(host.listApps).toHaveBeenCalledTimes(2);
+    });
+
+    it('liest nicht neu ein, wenn nichts zu ziehen war', async () => {
+      const host = makeHost({
+        pullApp: vi.fn(async () => ({ ok: false, status: synced, error: 'Auf der Gegenstelle steht nichts Neues.' })),
+      });
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      await ws.pullApp('a-1');
+      expect(host.listApps).toHaveBeenCalledTimes(1);
+    });
+
+    it('vergisst den Stand beim Wechsel des Verzeichnisses und beim Löschen', async () => {
+      setHost(makeHost({ remoteStatus: vi.fn(async () => synced) }));
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+      await ws.refreshRemote('a-1');
+      await ws.refreshRemote('b-2');
+
+      await ws.removeApp('a-1');
+      expect(ws.remoteOf('a-1')).toBe(null);
+      expect(ws.remoteOf('b-2')).not.toBe(null);
+
+      await ws.openFolder('/andere');
+      expect(ws.remoteOf('b-2')).toBe(null);
+    });
+
+    it('fängt einen geworfenen Fehler ab', async () => {
+      setHost(makeHost({
+        remoteStatus: vi.fn(async () => { throw new Error('Brücke weg'); }),
+        pushApp: vi.fn(async () => { throw new Error('Brücke weg'); }),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(await ws.refreshRemote('a-1')).toMatchObject({ error: 'Brücke weg' });
+      expect(await ws.pushApp('a-1')).toEqual({ ok: false, error: 'Brücke weg' });
+    });
+
+    it('verlangt ein offenes Arbeitsverzeichnis und die Anbindung', async () => {
+      setHost(makeHost({ remoteStatus: vi.fn(async () => synced) }));
+      const ohneOrdner = useWorkspaceStore();
+      expect(await ohneOrdner.refreshRemote('a-1')).toBe(null);
+      expect((await ohneOrdner.pushApp('a-1')).ok).toBe(false);
+
+      setActivePinia(createPinia());
+      setHost(makeHost());
+      const ohneBrücke = useWorkspaceStore();
+      await ohneBrücke.openFolder('/apps');
+      expect(await ohneBrücke.refreshRemote('a-1')).toBe(null);
+      expect((await ohneBrücke.pushApp('a-1')).error).toBeTruthy();
+      expect((await ohneBrücke.pullApp('a-1')).error).toBeTruthy();
+    });
+  });
+
   describe('Arbeitsverzeichnis öffnen (c0075)', () => {
     it('reicht den Ordner zum Dateimanager des Systems weiter', async () => {
       const host = makeHost({ revealFolder: vi.fn(async () => ({ ok: true })) });

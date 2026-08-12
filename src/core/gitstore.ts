@@ -2,7 +2,8 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { COMMON_PLACES, findOnPath } from './which';
-import type { VersionInfo } from '@/types';
+import { hasOriginSection, parseAheadBehind, upstreamBranchName } from './remote';
+import type { AheadBehind, VersionInfo } from '@/types';
 
 /**
  * Git-Versionierung je App: Jeder App-Ordner ist ein eigenes Repository.
@@ -111,6 +112,121 @@ export async function cloneRepo(url: string, targetDir: string): Promise<void> {
   fs.mkdirSync(parent, { recursive: true });
   const args = [...ghCredentialArgs(url, findGh()), 'clone', '--quiet', '--', url, targetDir];
   await runGit(parent, args, NON_INTERACTIVE);
+}
+
+// ---- Die Gegenstelle: nachsehen, schieben, vorspulen (c0082) ----
+
+/**
+ * Hat diese App eine Gegenstelle namens `origin`? Gelesen wird ihre
+ * `.git/config` — kein git-Prozess, kein Netz: Die Frage stellt sich für JEDE
+ * Kachel bei jedem Einlesen des Verzeichnisses. Was tatsächlich geschoben wird,
+ * fragt danach ohnehin git selbst (siehe remoteUrl).
+ */
+export function hasRemote(dir: string): boolean {
+  try {
+    return hasOriginSection(fs.readFileSync(path.join(dir, '.git', 'config'), 'utf8'));
+  } catch {
+    return false;
+  }
+}
+
+/** Die Adresse von `origin` — `null`, wenn es keine Gegenstelle gibt. */
+export async function remoteUrl(dir: string): Promise<string | null> {
+  try {
+    const out = await runGit(dir, ['remote', 'get-url', 'origin']);
+    return out.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Der eigene Zweig und der, den er auf `origin` verfolgt. */
+export interface Upstream {
+  /** Der Zweig hier, z. B. „main“. */
+  branch: string;
+  /** Der verfolgte Zweig auf der Gegenstelle, z. B. „main“. */
+  remoteBranch: string;
+  /** Beides zusammen, wie der Anwender es kennt: „origin/main“. */
+  name: string;
+}
+
+/**
+ * Welchen Zweig der aktuelle Zweig auf `origin` verfolgt — `null`, wenn keinen
+ * (oder einen auf einer anderen Gegenstelle: Morphos gleicht allein mit
+ * `origin` ab). Gefragt wird die Konfiguration des Zweiges; sie sagt beides
+ * genau, auch wenn die Namen sich unterscheiden.
+ *
+ * Umgeschaltet wird nie: Abgeglichen wird der Zweig, auf dem die App steht —
+ * beim Klon ist das der voreingestellte Zweig der Gegenstelle.
+ */
+export async function getUpstream(dir: string): Promise<Upstream | null> {
+  try {
+    const branch = (await runGit(dir, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim();
+    if (!branch || branch === 'HEAD') return null;
+    const remote = (await runGit(dir, ['config', '--get', `branch.${branch}.remote`])).trim();
+    if (remote !== 'origin') return null;
+    const remoteBranch = upstreamBranchName(await runGit(dir, ['config', '--get', `branch.${branch}.merge`]));
+    if (!remoteBranch) return null;
+    return { branch, remoteBranch, name: `origin/${remoteBranch}` };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Holt den Stand von `origin` — ohne im Arbeitsverzeichnis etwas anzurühren.
+ * Nur danach ist die Zählung frisch. Der Zugang läuft wie beim Klonen über das
+ * System-Git und, für http(s), zusätzlich über die GitHub-CLI (siehe
+ * ghCredentialArgs); gefragt wird nie (NON_INTERACTIVE).
+ */
+export async function fetchRemote(dir: string): Promise<void> {
+  const url = await remoteUrl(dir);
+  if (!url) throw new Error('Diese App hat keine Gegenstelle (origin).');
+  await runGit(dir, [...ghCredentialArgs(url, findGh()), 'fetch', '--quiet', 'origin'], NON_INTERACTIVE);
+}
+
+/**
+ * Wie viele Versionen nur hier liegen und wie viele nur auf der Gegenstelle —
+ * gezählt gegen den zuletzt geholten Stand. `null`, wenn es nichts zu zählen
+ * gibt (kein verfolgter Zweig, noch nie geholt).
+ */
+export async function aheadBehind(dir: string): Promise<AheadBehind | null> {
+  try {
+    return parseAheadBehind(await runGit(dir, ['rev-list', '--left-right', '--count', 'HEAD...@{u}']));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Schiebt den eigenen Zweig zur Gegenstelle — schlicht, nie mit `--force`: Was
+ * git nicht im Vorlauf annimmt, wird nicht geschoben (die Absage kommt dann als
+ * Fehler zurück, siehe core/remote nonFastForward).
+ *
+ * Das Ziel steht ausgeschrieben (`HEAD:refs/heads/<zweig>`): So geht genau
+ * dieser eine Zweig auf die Reise, unabhängig von `push.default`, und der Name
+ * kann git nicht als Option unterkommen.
+ */
+export async function pushRemote(dir: string, remoteBranch: string): Promise<void> {
+  const branch = upstreamBranchName(remoteBranch);
+  if (!branch) throw new Error(`Ungültiger Zweig: ${remoteBranch}`);
+  const url = await remoteUrl(dir);
+  if (!url) throw new Error('Diese App hat keine Gegenstelle (origin).');
+  await runGit(
+    dir,
+    [...ghCredentialArgs(url, findGh()), 'push', '--quiet', 'origin', `HEAD:refs/heads/${branch}`],
+    NON_INTERACTIVE,
+  );
+}
+
+/**
+ * Spult den eigenen Zweig auf den zuletzt geholten Stand der Gegenstelle vor —
+ * ausschließlich im Vorlauf (`--ff-only`). Gibt es hier eigene Versionen,
+ * scheitert das und im Ordner bleibt alles, wie es war; zusammengeführt wird
+ * nichts (c0084).
+ */
+export async function pullFastForward(dir: string): Promise<void> {
+  await runGit(dir, ['merge', '--ff-only', '--quiet', '@{u}']);
 }
 
 /** Initialisiert das Repository im Ordner, falls noch keines existiert. */

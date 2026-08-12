@@ -15,7 +15,21 @@ import { bundle, ENTRY_FILE } from '../src/core/bundle';
 import { BUILTIN_LIBS, extractLibs, isBuiltinLib, splitLibs } from '../src/core/libs';
 import { resolveFramework } from '../src/core/framework';
 import { sanitizeRefs } from '../src/core/pick';
-import { commitAll, countVersions, ensureRepo, listVersions, restoreTree } from '../src/core/gitstore';
+import {
+  aheadBehind,
+  commitAll,
+  countVersions,
+  ensureRepo,
+  fetchRemote,
+  getUpstream,
+  hasRemote,
+  listVersions,
+  pullFastForward,
+  pushRemote,
+  remoteUrl,
+  restoreTree,
+} from '../src/core/gitstore';
+import { pullProblem, pushProblem, syncErrorMessage } from '../src/core/remote';
 import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeAppState, writeChat } from '../src/core/appstore';
 import { isSafeAppId } from '../src/core/app';
 import { IMPORT_DIR, resolveImport, startImport } from '../src/core/appimport';
@@ -57,6 +71,8 @@ import type {
   ImportChoice,
   ImportResult,
   ReadmeResult,
+  RemoteResult,
+  RemoteStatus,
   SaveResult,
   Settings,
   ShellFsRequest,
@@ -774,6 +790,9 @@ ipcMain.handle('morphos:listApps', async (_e, folder: string): Promise<AppSummar
       createdAt: meta.createdAt ?? 0,
       updatedAt: meta.updatedAt ?? 0,
       versions,
+      // Gibt es hier etwas abzugleichen (c0082)? Gelesen wird die .git/config —
+      // kein Netzverkehr, kein Prozess je Kachel.
+      hasRemote: hasRemote(dir),
     });
   }
   summaries.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -902,6 +921,127 @@ ipcMain.handle('morphos:resolveImport', async (_e, token: string, choice: Import
   }
   try {
     return await resolveImport(String(token ?? ''), choice);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+/**
+ * Abgleich mit der Gegenstelle (c0082): nachsehen, schieben, vorspulen.
+ *
+ * Alles läuft im eigenen Ordner der App und über deren VORHANDENES `origin` —
+ * eine Adresse aus dem Renderer oder gar aus App-Inhalten kommt hier nirgends
+ * vor. Wie bei importApp muss das Arbeitsverzeichnis ein bekanntes sein und die
+ * Id durch `appDir` (Defense in depth).
+ *
+ * Geholt wird ausschließlich auf Geheiß: beim Aufklappen des Menüs und vor
+ * jedem Schieben und Ziehen. Kein Hintergrund-Fetch — sonst klopfte Morphos für
+ * jede App auf dem Schreibtisch unaufgefordert an einer Gegenstelle an und
+ * fragte womöglich nach Zugangsdaten.
+ */
+async function readRemoteStatus(dir: string, fetch: boolean): Promise<RemoteStatus> {
+  const url = await remoteUrl(dir);
+  if (!url) return { hasRemote: false };
+
+  const status: RemoteStatus = { hasRemote: true, url };
+  if (fetch) {
+    try {
+      await fetchRemote(dir);
+      status.fetchedAt = Date.now();
+    } catch (err) {
+      // Der Zählung von vorhin ist damit nichts geschehen — sie kommt mit.
+      status.error = syncErrorMessage(err instanceof Error ? err.message : String(err), url, 'fetch');
+    }
+  }
+
+  const upstream = await getUpstream(dir);
+  if (!upstream) {
+    status.error ??= 'Dieser Zweig verfolgt keinen Zweig auf origin — Morphos gleicht nur den geklonten Zweig ab.';
+    return status;
+  }
+  status.upstream = upstream.name;
+
+  const counts = await aheadBehind(dir);
+  if (counts) {
+    status.ahead = counts.ahead;
+    status.behind = counts.behind;
+  }
+  return status;
+}
+
+ipcMain.handle('morphos:remoteStatus', async (_e, folder: string, id: string, fetch: boolean): Promise<RemoteStatus> => {
+  const problem = knownWorkspaceError(folder);
+  if (problem) return { hasRemote: false, error: problem };
+  try {
+    return await readRemoteStatus(appDir(folder, id), fetch === true);
+  } catch (err) {
+    return { hasRemote: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+/**
+ * Schiebt die neuen Versionen einer App zur Gegenstelle. Zuerst wird geholt:
+ * Nur eine frische Zählung sagt verlässlich, ob dieser Stand im Vorlauf liegt.
+ * Ist die Gegenstelle weiter, wird NICHT geschoben (und nie mit `--force`) —
+ * zurück kommt der Hinweis, erst zu ziehen.
+ */
+ipcMain.handle('morphos:pushApp', async (_e, folder: string, id: string): Promise<RemoteResult> => {
+  const problem = knownWorkspaceError(folder);
+  if (problem) return { ok: false, error: problem };
+  try {
+    const dir = appDir(folder, id);
+    const status = await readRemoteStatus(dir, true);
+    if (!status.hasRemote) return { ok: false, status, error: 'Diese App hat keine Gegenstelle (origin).' };
+    if (status.error) return { ok: false, status, error: status.error };
+
+    const refusal = pushProblem(status);
+    if (refusal) return { ok: false, status, error: refusal };
+
+    const upstream = await getUpstream(dir);
+    if (!upstream) return { ok: false, status, error: 'Dieser Zweig verfolgt keinen Zweig auf origin.' };
+    try {
+      await pushRemote(dir, upstream.remoteBranch);
+    } catch (err) {
+      return {
+        ok: false,
+        status,
+        error: syncErrorMessage(err instanceof Error ? err.message : String(err), status.url ?? '', 'push'),
+      };
+    }
+    return { ok: true, status: await readRemoteStatus(dir, false) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+/**
+ * Spult eine App auf den Stand ihrer Gegenstelle vor. Sind beide Seiten
+ * weitergegangen, geschieht NICHTS: Vollständige Schnappschüsse lassen sich
+ * nicht zusammenführen (Auflösung: c0084). Dass gerade kein Agent für diese App
+ * arbeitet, prüft die Schale — dort steht die Warteschlange.
+ */
+ipcMain.handle('morphos:pullApp', async (_e, folder: string, id: string): Promise<RemoteResult> => {
+  const problem = knownWorkspaceError(folder);
+  if (problem) return { ok: false, error: problem };
+  try {
+    const dir = appDir(folder, id);
+    const status = await readRemoteStatus(dir, true);
+    if (!status.hasRemote) return { ok: false, status, error: 'Diese App hat keine Gegenstelle (origin).' };
+    if (status.error) return { ok: false, status, error: status.error };
+
+    const refusal = pullProblem(status);
+    if (refusal) return { ok: false, status, error: refusal };
+
+    try {
+      await pullFastForward(dir);
+    } catch (err) {
+      return {
+        ok: false,
+        status,
+        error: syncErrorMessage(err instanceof Error ? err.message : String(err), status.url ?? '', 'pull'),
+      };
+    }
+    return { ok: true, changed: true, status: await readRemoteStatus(dir, false) };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }

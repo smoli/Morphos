@@ -151,6 +151,12 @@ export interface AppData extends AppMeta {
 /** Kurzfassung einer App für die Desktop-Kacheln. */
 export interface AppSummary extends AppMeta {
   versions: number;
+  /**
+   * Hat diese App eine Gegenstelle (`origin`)? Nur dann lässt sie sich
+   * abgleichen (c0082). Festgestellt wird das an ihrer `.git/config`, ohne
+   * Netzverkehr; fehlt die Angabe, gilt „keine“.
+   */
+  hasRemote?: boolean;
 }
 
 /** App-übergreifende Einstellungen (im userData-Verzeichnis abgelegt). */
@@ -498,6 +504,48 @@ export interface ImportResult {
   error?: string;
 }
 
+/** Die Zählung zwischen eigenem Stand und Gegenstelle (siehe core/remote). */
+export interface AheadBehind {
+  /** Versionen, die es nur hier gibt. */
+  ahead: number;
+  /** Versionen, die es nur auf der Gegenstelle gibt. */
+  behind: number;
+}
+
+/**
+ * Der Stand einer App gegenüber ihrer Gegenstelle (c0082) — so, wie er beim
+ * LETZTEN Holen aussah. Geholt wird allein auf Geheiß (Menü, Push, Pull), nie
+ * im Hintergrund; `fetchedAt` sagt, wann das war.
+ */
+export interface RemoteStatus {
+  /** Gibt es überhaupt ein `origin`? Ohne das bleibt alles Weitere leer. */
+  hasRemote: boolean;
+  /** Die Adresse von `origin` (nur zur Anzeige). */
+  url?: string;
+  /** Der verfolgte Zweig, wie der Anwender ihn kennt: „origin/main“. */
+  upstream?: string;
+  /** Eigene Versionen, die die Gegenstelle nicht hat (fehlt = nicht gezählt). */
+  ahead?: number;
+  /** Versionen der Gegenstelle, die hier fehlen (fehlt = nicht gezählt). */
+  behind?: number;
+  /** Wann zuletzt geholt wurde, in Millisekunden (fehlt = noch nie). */
+  fetchedAt?: number;
+  /** Was schiefging — die Zählung kann trotzdem dastehen (vom letzten Mal). */
+  error?: string;
+}
+
+/**
+ * Ergebnis eines Abgleichs (Status, Push, Pull): der neue Stand — und bei einem
+ * Fehlschlag der Grund. Am Repository hat sich dann NICHTS geändert.
+ */
+export interface RemoteResult {
+  ok: boolean;
+  status?: RemoteStatus;
+  /** Der Arbeitsstand auf der Platte ist ein anderer als vorher (nach einem Pull). */
+  changed?: boolean;
+  error?: string;
+}
+
 /**
  * Die vom Electron-Hauptprozess bereitgestellte Brücke. Im Renderer als
  * `window.morphos`; in Tests durch eine Attrappe ersetzbar.
@@ -608,6 +656,29 @@ export interface MorphosHost {
    * Nach der Antwort ist der wartende Klon in jedem Fall aufgeräumt.
    */
   resolveImport?(token: string, choice: ImportChoice): Promise<ImportResult>;
+
+  /**
+   * Der Stand einer App gegenüber ihrer Gegenstelle (c0082). Mit `fetch` wird
+   * dafür zuerst von `origin` geholt — das ist der einzige Weg zu einer
+   * frischen Zählung und geschieht nur auf Geheiß (Menü, Push, Pull), nie im
+   * Hintergrund. Ohne `fetch` kommt zurück, was die vorhandenen
+   * Remote-Tracking-Zweige hergeben. Optional: im Renderer-Test fehlt die
+   * Anbindung, dann gibt es keinen Abgleich.
+   */
+  remoteStatus?(folder: string, id: string, fetch?: boolean): Promise<RemoteStatus>;
+
+  /**
+   * Schiebt die neuen Versionen einer App zu ihrer Gegenstelle. Ist die dort
+   * weiter, wird NICHT geschoben (und niemals mit Gewalt) — dann kommt der
+   * Hinweis, erst zu ziehen.
+   */
+  pushApp?(folder: string, id: string): Promise<RemoteResult>;
+
+  /**
+   * Spult eine App auf den Stand ihrer Gegenstelle vor. Sind beide Seiten
+   * weitergegangen, geschieht nichts und der Grund kommt zurück (c0084).
+   */
+  pullApp?(folder: string, id: string): Promise<RemoteResult>;
 
   /** Liefert die Git-Versionshistorie einer App, neueste zuerst. */
   listVersions(folder: string, id: string): Promise<VersionInfo[]>;
