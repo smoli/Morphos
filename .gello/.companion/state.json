@@ -10,13 +10,13 @@
       "cardId": "c0081",
       "phase": "running",
       "activity": {
-        "name": "Bash",
-        "arg": "ls .gello/cards .gello/epics/*/ 2>/dev/null | grep -oE \"^[ci][0-9]{4}\" | sort -u | tail -8; echo \"=== highest ===\"; find .gello -name \"[ci][0-9][0-9][0-9][0-9]*.md\" | grep -oE \"[ci][0-9]{4}\" | sort -u | tail -5; echo \"=== board.yaml ===\"; cat .gello/board.yaml"
+        "name": "Write",
+        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/cards/c0085-force-chromium-audio-buffer-size.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T23:26:31",
+  "updated": "2026-08-12T23:27:04",
   "pickupDelay": 10,
   "owned": [
     "c0029",
