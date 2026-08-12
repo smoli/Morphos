@@ -1,11 +1,12 @@
 ---
 id: c0074
 title: Retrieve an app from a git repo
-status: in-progress
+status: review
 created: 2026-08-12
 updated: 2026-08-12
-status-changed: 2026-08-12T20:31:41
+status-changed: 2026-08-12T20:47:52
 epic: e11
+commit: 30988c3
 ---
 
 ## What
@@ -111,3 +112,5 @@ and pulling/pushing updates via the kept `origin`.
 - 2026-08-12 status → backlog (app)
 - 2026-08-12 status → ready (app)
 - 2026-08-12 status → in-progress (agent)
+- 2026-08-12 status → review (agent)
+- 2026-08-12 implemented in 30988c3 (agent)
