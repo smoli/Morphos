@@ -3,7 +3,7 @@
   "ready": [],
   "waiting": [],
   "runs": [],
-  "updated": "2026-08-10T06:50:34",
+  "updated": "2026-08-10T07:02:52",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -51,7 +51,8 @@
     "c0064",
     "c0070",
     "c0071",
-    "i0006"
+    "i0006",
+    "c0072"
   ],
   "afk": false,
   "firstSeen": {}

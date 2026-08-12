@@ -1,12 +1,14 @@
 ---
 id: c0072
 title: Add new settings for tiled mode
-status: in-progress
+status: review
 created: 2026-08-10
 updated: 2026-08-10
-status-changed: 2026-08-10T06:51:16
+status-changed: 2026-08-10T07:02:40
 commit: 569df35
 epic: e09
+usage-tokens: 46212
+usage-cost: 7.482957
 ---
 
 # Add new settings for tiled mode
@@ -70,3 +72,4 @@ Size of the window gap
   `tileGap` statt Konstante im Desktop-Store, Fühler am oberen Rand im
   WindowFrame, Block „Die Kacheln“ in den Einstellungen, README nachgezogen
   (1360 Tests grün, typecheck + build sauber)
+- 2026-08-10 status → review (agent)
