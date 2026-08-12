@@ -1,13 +1,12 @@
 ---
 id: c0085
 title: "Test --audio-buffer-size on Windows, then set it in main.ts"
-status: ready
+status: in-progress
 tags: [audio, latency, performance]
 depends: [c0081]
 created: 2026-08-12
-status-changed: 2026-08-12T23:52:58
+status-changed: 2026-08-12T23:56:02
 epic: e12
-order: 10
 updated: 2026-08-12
 ---
 
@@ -56,3 +55,4 @@ moves the Windows floor is **untested** — that is the whole point of this card
 ## Log
 
 - 2026-08-12 status → ready (app)
+- 2026-08-12 status → in-progress (agent)

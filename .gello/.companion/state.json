@@ -4,16 +4,16 @@
   "waiting": [],
   "runs": [
     {
-      "cardId": "c0082",
+      "cardId": "c0085",
       "phase": "running",
       "activity": {
         "name": "Read",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/package.json"
+        "arg": "C:\\ILC\\Morphos\\.gello\\epics\\e12-tauri\\c0079-turn-into-tauri-app.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T23:48:38",
+  "updated": "2026-08-12T23:56:33",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -72,7 +72,8 @@
     "c0078",
     "c0080",
     "c0081",
-    "c0082"
+    "c0082",
+    "c0085"
   ],
   "afk": true,
   "firstSeen": {}
