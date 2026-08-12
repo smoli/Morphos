@@ -1,10 +1,10 @@
 ---
 id: c0082
 title: Push /pull new app version to remote
-status: in-progress
+status: review
 created: 2026-08-12
 updated: 2026-08-12
-status-changed: 2026-08-12T23:32:10
+status-changed: 2026-08-12T23:47:55
 epic: e11
 ---
 
@@ -93,8 +93,43 @@ existing `knownWorkspaceError` + `appDir`/`safeId` guards, like `importApp`. The
 "generating?" check reuses the agent/queue state; the reload reuses the desktop's
 `loadApp` path.
 
+### So gebaut (2026-08-12)
+
+- **`core/remote`** (neu, rein): `parseAheadBehind`, `syncState`
+  (`unknown|synced|ahead|behind|diverged`), `remoteBadge`, `pushProblem` /
+  `pullProblem` (die Vorlauf-Regel), `nonFastForward`, `upstreamBranchName`,
+  `hasOriginSection` — und die Zugangsmeldung `accessProblem`, die sich
+  `appimport.cloneErrorMessage` (i0007) und der Abgleich jetzt teilen.
+- **`core/gitstore`**: `hasRemote` (liest `.git/config` — kein Prozess je Kachel,
+  kein Netz), `remoteUrl`, `getUpstream` (über `branch.<z>.remote`/`.merge`, nur
+  `origin`), `fetchRemote`, `aheadBehind`, `pushRemote` (Ziel ausgeschrieben als
+  `HEAD:refs/heads/<zweig>`, nie `--force`), `pullFastForward`.
+- **Hauptprozess**: `morphos:remoteStatus` / `:pushApp` / `:pullApp`; `listApps`
+  liefert je App `hasRemote`. Push und Pull holen IMMER zuerst — nur eine frische
+  Zählung entscheidet über den Vorlauf.
+- **Schale**: `workspace.remoteStatuses` (nur für die Sitzung, wird beim Wechsel
+  des Verzeichnisses und beim Löschen vergessen), Kachelmenü mit „Push"/„Pull",
+  Zeichen `.tile-remote` rechts oben an der Kachel.
+
+Antworten auf die offenen Fragen:
+
+- **Zeichen an der Kachel**: `⇅` = Gegenstelle vorhanden, noch nicht
+  nachgesehen; danach `↑2` / `↓3` / `↑2↓3` / `✓`; `⚠` nur, wenn gar nicht
+  gezählt werden konnte. Der Tooltip nennt den Zeitpunkt des letzten Holens.
+- **Remote-URL**: bleibt vorerst unsichtbar (nur in `RemoteStatus.url` für die
+  Fehlermeldungen) — sie sichtbar zu machen gehört zu c0083.
+- **Neu laden nach dem Ziehen**: über den vorhandenen `loadApp`-Weg
+  (`useAppWindow(...).open`), wie `stores/agents afterRun` es nach einem Lauf
+  ohne Fenster tut. Ein laufender Dateidialog der App wird dabei nicht eigens
+  behandelt — er gehört dem iframe, das neu geladen wird.
+
+**Nicht abgedeckt**: Ein Klon eines LEEREN Repositories hat keinen verfolgten
+Zweig; der Stand meldet das („verfolgt keinen Zweig auf origin"), statt einen
+ersten Push zu bauen — das ist c0083.
+
 ## Log
 
 - 2026-08-12 status → discuss (app)
 - 2026-08-12 status → ready (app)
 - 2026-08-12 status → in-progress (agent)
+- 2026-08-12 status → review (agent)

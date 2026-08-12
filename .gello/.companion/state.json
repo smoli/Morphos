@@ -7,13 +7,13 @@
       "cardId": "c0082",
       "phase": "running",
       "activity": {
-        "name": "Read",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e11-app-distribution/c0082-push-pull-new-app-version-to-remote.md"
+        "name": "Bash",
+        "arg": "git add -A src electron .gello/epics/e11-app-distribution/c0082-push-pull-new-app-version-to-remote.md && git status --porcelain"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T23:47:28",
+  "updated": "2026-08-12T23:47:59",
   "pickupDelay": 10,
   "owned": [
     "c0029",
