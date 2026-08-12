@@ -367,12 +367,14 @@ function openSystem(systemId: string): void {
 }
 /**
  * Schreibt die Titelseite einer App in ihren Ordner (c0077) — Icon, Name, ein
- * Satz aus ihrem Konzept, ihre Dokumente, der Morphos-Stand. Ein vorhandenes
- * Readme wird neu geschrieben.
+ * Satz aus ihrem Konzept, ihre Dokumente, der Morphos-Stand. Nur, wenn noch
+ * keine dasteht: Ein vorhandenes Readme bleibt unangetastet, das sagt ein
+ * Hinweis (c0080).
  */
 async function createReadme(id: string, name: string): Promise<void> {
   const res = await workspace.createReadme(id);
-  if (res.ok) notifications.success(`Readme für „${name}“ geschrieben.`);
+  if (res.existed) notifications.info(`„${name}“ hat schon ein Readme — es bleibt, wie es ist.`);
+  else if (res.ok) notifications.success(`Readme für „${name}“ geschrieben.`);
   else notifications.error(res.error ?? 'Das Readme konnte nicht geschrieben werden.');
 }
 

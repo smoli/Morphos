@@ -419,6 +419,14 @@ describe('useWorkspaceStore', () => {
       expect(host.createReadme).toHaveBeenCalledWith('/apps', 'rechner-1');
     });
 
+    it('reicht durch, dass schon ein Readme dasteht (c0080)', async () => {
+      setHost(makeHost({ createReadme: vi.fn(async () => ({ ok: true, existed: true })) }));
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(await ws.createReadme('rechner-1')).toEqual({ ok: true, existed: true });
+    });
+
     it('meldet einen Fehler des Hauptprozesses weiter', async () => {
       setHost(makeHost({ createReadme: vi.fn(async () => ({ ok: false, error: 'Kein Manifest.' })) }));
       const ws = useWorkspaceStore();

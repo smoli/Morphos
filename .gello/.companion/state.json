@@ -8,12 +8,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "grep -rn \"writeReadme\\|readme\" electron/main.ts electron/preload.ts src/stores/workspace.ts src/types/index.ts | head -60"
+        "arg": "git add .gello/.companion/state.json .gello/epics electron src && git commit -F - <<'EOF'\nc0080: Readme nur anlegen, nie überschreiben\n\nDie Aktion „Readme erstellen“ schrieb `README.md` bei jedem Aufruf neu — wer die\nTitelseite von Hand nachgebessert hatte, verlor seine Arbeit still. Jetzt wird\nnur geschrieben, wenn noch keine dasteht; ein vorhandenes Readme gehört seinem\nVerfasser.\n\n- core/readme: `writeReadme` prüft als Erstes, ob `README.md` schon existiert,\n  und kehrt dann sofort um — vor Manifest und Icon-Aufräumen, damit auch die\n  Bilddatei daneben unangetastet bleibt. Rückgabe ist `{ created, text }`.\n- main.ts: committet nur bei `created` (Nachricht immer „Readme erstellt“),\n  sonst kommt `{ ok: true, existed: true }` zurück — neuer Typ `ReadmeResult`,\n  durch Preload und Store durchgereicht.\n- DesktopView: meldet ein vorhandenes Readme als Hinweis-Toast statt als Erfolg.\n- Tests: vorhandenes Readme bleibt byte-für-byte stehen, das Bild-Icon bleibt\n  liegen; das Aufräumen alter Icons wird beim echten Schreiben weiter geprüft.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nEOF"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T22:47:36",
+  "updated": "2026-08-12T22:52:02",
   "pickupDelay": 10,
   "owned": [
     "c0029",

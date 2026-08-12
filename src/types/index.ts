@@ -439,6 +439,14 @@ export interface SaveResult {
   error?: string;
 }
 
+/**
+ * Ergebnis des Readme-Schreibens (c0080): `existed`, wenn schon eines dastand
+ * — dann wurde nichts geschrieben und nichts committet.
+ */
+export interface ReadmeResult extends SaveResult {
+  existed?: boolean;
+}
+
 /** Ergebnis einer Icon-Änderung: das nun wirksame Icon (bei Erfolg). */
 export interface IconResult {
   ok: boolean;
@@ -579,10 +587,11 @@ export interface MorphosHost {
    * Schreibt die Titelseite einer App (README.md) in ihren Ordner und
    * übernimmt sie als Commit — Icon, Name, ein Satz aus ihrem Konzept, die
    * Verweise auf ihre Dokumente und der Morphos-Stand (siehe core/readme).
-   * Ein vorhandenes Readme wird neu geschrieben. Optional: im Renderer-Test
-   * fehlt die Anbindung, dann lässt sich keines schreiben.
+   * Steht schon ein Readme da, bleibt es unangetastet — zurück kommt dann
+   * `existed` (c0080). Optional: im Renderer-Test fehlt die Anbindung, dann
+   * lässt sich keines schreiben.
    */
-  createReadme?(folder: string, id: string): Promise<SaveResult>;
+  createReadme?(folder: string, id: string): Promise<ReadmeResult>;
 
   /**
    * Holt eine App aus einem Git-Repository in das Arbeitsverzeichnis: klonen

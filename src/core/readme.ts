@@ -64,6 +64,14 @@ export interface IconAsset {
   data: Buffer;
 }
 
+/** Was beim Schreiben herauskam (c0080). */
+export interface ReadmeWrite {
+  /** Wurde geschrieben — falsch, wenn schon eines dastand. */
+  created: boolean;
+  /** Der Text: der eben geschriebene oder der, der dastand. */
+  text: string;
+}
+
 /** Woraus das Readme gebaut wird — alles schon aufbereitet. */
 export interface ReadmeInput extends MorphosBuild {
   name: string;
@@ -213,9 +221,16 @@ export function buildReadme(input: ReadmeInput): string {
  * Schreibt die Titelseite in den App-Ordner: `README.md` und — bei einem
  * Bild-Icon — die Bilddatei daneben; ein Bild-Icon von früher, das nicht mehr
  * gilt, verschwindet. Committet NICHT (das tut der Aufrufer, siehe main.ts).
- * Liefert den geschriebenen Text zurück.
+ *
+ * Geschrieben wird NUR, wenn noch kein Readme dasteht (c0080): Was jemand von
+ * Hand hineingeschrieben hat, gehört ihm — eine zweite „Readme erstellen“ darf
+ * es nicht stillschweigend gegen die Vorlage tauschen. Steht schon eines da,
+ * bleibt der Ordner unangetastet (auch die Bilddatei) und `created` ist falsch.
  */
-export function writeReadme(dir: string, morphos: MorphosBuild): string {
+export function writeReadme(dir: string, morphos: MorphosBuild): ReadmeWrite {
+  const file = path.join(dir, README_FILE);
+  if (fs.existsSync(file)) return { created: false, text: fs.readFileSync(file, 'utf8') };
+
   const meta = readManifest(dir);
   if (!meta) throw new Error('Diese App hat kein Manifest (app.json).');
 
@@ -235,6 +250,6 @@ export function writeReadme(dir: string, morphos: MorphosBuild): string {
     hasUserdoc: docs.userdoc.trim() !== '',
     ...morphos,
   });
-  fs.writeFileSync(path.join(dir, README_FILE), text, 'utf8');
-  return text;
+  fs.writeFileSync(file, text, 'utf8');
+  return { created: true, text };
 }

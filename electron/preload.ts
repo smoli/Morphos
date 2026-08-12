@@ -16,6 +16,7 @@ import type {
   IconResult,
   ImportChoice,
   ImportResult,
+  ReadmeResult,
   SaveResult,
   Settings,
   ShellFsRequest,
@@ -76,8 +77,9 @@ contextBridge.exposeInMainWorld('morphos', {
     ipcRenderer.invoke('morphos:setAppIcon', folder, id, icon),
 
   // Titelseite der App (README.md) schreiben und committen — sie reist mit,
-  // wenn der App-Ordner auf eine Gegenstelle geschoben wird.
-  createReadme: (folder: string, id: string): Promise<SaveResult> =>
+  // wenn der App-Ordner auf eine Gegenstelle geschoben wird. Nur, wenn noch
+  // keine dasteht: ein vorhandenes Readme bleibt, wie es ist (c0080).
+  createReadme: (folder: string, id: string): Promise<ReadmeResult> =>
     ipcRenderer.invoke('morphos:createReadme', folder, id),
 
   // App aus einem Git-Repository holen: klonen, prüfen, einordnen. Bei belegter

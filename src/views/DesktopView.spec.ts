@@ -540,6 +540,20 @@ describe('DesktopView', () => {
       expect(toasts[0].kind).toBe('success');
     });
 
+    it('meldet ein schon vorhandenes Readme, statt es zu ersetzen (c0080)', async () => {
+      const host = makeHost({ createReadme: vi.fn(async () => ({ ok: true, existed: true })) });
+      setHost(host);
+      const { wrapper } = await mountView();
+
+      await openIconMenu(wrapper, 'Rechner');
+      await pickMenu(wrapper, 'Readme erstellen');
+
+      const toasts = useNotificationsStore().toasts;
+      expect(toasts[0].kind).toBe('info');
+      expect(toasts[0].text).toContain('Rechner');
+      expect(toasts[0].text).toMatch(/schon ein Readme/i);
+    });
+
     it('meldet, wenn das Readme nicht geschrieben werden konnte (c0077)', async () => {
       setHost(makeHost({
         createReadme: vi.fn(async () => ({ ok: false, error: 'Diese App hat kein Manifest (app.json).' })),

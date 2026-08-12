@@ -200,8 +200,9 @@ describe('readme (auf der Platte)', () => {
   it('schreibt das Readme aus Manifest und Konzept', () => {
     makeApp('🧮', { concept: '# Rechner\n\nEin Taschenrechner für den Alltag.' });
 
-    const text = writeReadme(dir, MORPHOS);
+    const { created, text } = writeReadme(dir, MORPHOS);
 
+    expect(created).toBe(true);
     expect(fs.readFileSync(path.join(dir, README_FILE), 'utf8')).toBe(text);
     expect(text).toContain('🧮<br>Rechner');
     expect(text).toContain('Ein Taschenrechner für den Alltag.');
@@ -212,37 +213,61 @@ describe('readme (auf der Platte)', () => {
   it('legt ein Bild-Icon als Datei daneben', () => {
     makeApp(IMAGE_ICON);
 
-    const text = writeReadme(dir, MORPHOS);
+    const { text } = writeReadme(dir, MORPHOS);
 
     expect(fs.readFileSync(path.join(dir, 'icon.png')).equals(PIXEL)).toBe(true);
     expect(text).toContain('src="icon.png"');
   });
 
-  it('räumt ein Bild-Icon weg, das nicht mehr gilt', () => {
+  it('räumt beim Schreiben ein Bild-Icon weg, das nicht mehr gilt', () => {
     makeApp(IMAGE_ICON);
     writeReadme(dir, MORPHOS);
-    fs.writeFileSync(path.join(dir, 'app.json'), JSON.stringify({ id: 'rechner-ab12c', name: 'Rechner', icon: '🧮' }), 'utf8');
+    fs.rmSync(path.join(dir, README_FILE));
+    fs.writeFileSync(
+      path.join(dir, 'app.json'),
+      JSON.stringify({ id: 'rechner-ab12c', name: 'Rechner', icon: '🧮' }),
+      'utf8',
+    );
 
     writeReadme(dir, MORPHOS);
 
     expect(fs.existsSync(path.join(dir, 'icon.png'))).toBe(false);
   });
 
-  it('schreibt beim zweiten Mal einfach neu', () => {
+  it('rührt ein vorhandenes Readme nicht an (c0080)', () => {
     makeApp('🧮', { concept: 'Erster Stand.' });
-    writeReadme(dir, MORPHOS);
+    const eigenes = '# Von Hand\n\nDas hier ist meins.\n';
+    fs.writeFileSync(path.join(dir, README_FILE), eigenes, 'utf8');
     fs.writeFileSync(path.join(dir, 'concept.md'), 'Zweiter Stand.', 'utf8');
 
-    const text = writeReadme(dir, MORPHOS);
+    const { created, text } = writeReadme(dir, MORPHOS);
 
-    expect(text).toContain('Zweiter Stand.');
-    expect(text).not.toContain('Erster Stand.');
+    expect(created).toBe(false);
+    expect(text).toBe(eigenes);
+    expect(fs.readFileSync(path.join(dir, README_FILE), 'utf8')).toBe(eigenes);
     expect(fs.readdirSync(dir).filter((f) => f.toLowerCase().startsWith('readme'))).toEqual([README_FILE]);
+  });
+
+  it('fasst bei vorhandenem Readme auch das Icon nicht an (c0080)', () => {
+    makeApp(IMAGE_ICON);
+    writeReadme(dir, MORPHOS);
+    // Das Icon wechselt zu einem Emoji: Ohne Readme flöge icon.png weg — mit
+    // einem dastehenden Readme bleibt der Ordner, wie er ist.
+    fs.writeFileSync(
+      path.join(dir, 'app.json'),
+      JSON.stringify({ id: 'rechner-ab12c', name: 'Rechner', icon: '🧮' }),
+      'utf8',
+    );
+
+    const { created } = writeReadme(dir, MORPHOS);
+
+    expect(created).toBe(false);
+    expect(fs.readFileSync(path.join(dir, 'icon.png')).equals(PIXEL)).toBe(true);
   });
 
   it('bleibt stehen, wenn die App neu generiert wird', () => {
     makeApp('🧮', { concept: 'Ein Taschenrechner.' });
-    const text = writeReadme(dir, MORPHOS);
+    const { text } = writeReadme(dir, MORPHOS);
 
     // Eine Generierung schreibt Manifest, Quellen, Artefakt und die Dokumente —
     // das Readme gehört der Schale und wird dabei nicht angefasst.

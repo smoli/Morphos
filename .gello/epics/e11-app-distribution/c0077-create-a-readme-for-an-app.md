@@ -182,3 +182,5 @@ Checked: alle acht Akzeptanzkriterien gegen den Code, der Diff von `e31d059`,
 - 2026-08-12 status → in-progress (agent)
 - 2026-08-12 status → review (agent)
 - 2026-08-12 status → done (app)
+- 2026-08-12 „Running it again **rewrites** the file (idempotent)“ ist durch
+  c0080 abgelöst: Das Schreiben ist create-only, ein vorhandenes Readme bleibt.

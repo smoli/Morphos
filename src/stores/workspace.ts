@@ -9,6 +9,7 @@ import type {
   ImportResult,
   PermDecision,
   PermMode,
+  ReadmeResult,
   SaveResult,
   SessionWindow,
   UiMode,
@@ -618,9 +619,10 @@ export const useWorkspaceStore = defineStore('workspace', {
      * Schreibt die Titelseite einer App in ihren Ordner (c0077) — sie reist
      * mit, wenn der Ordner auf eine Gegenstelle geschoben wird. Geschrieben
      * wird im Hauptprozess aus dem, was dort schon liegt; die App muss dafür
-     * nicht offen sein, und die Kachelliste ändert sich nicht.
+     * nicht offen sein, und die Kachelliste ändert sich nicht. Steht schon ein
+     * Readme da, bleibt es unangetastet — dann kommt `existed` zurück (c0080).
      */
-    async createReadme(id: string): Promise<SaveResult> {
+    async createReadme(id: string): Promise<ReadmeResult> {
       if (!this.folder) return { ok: false, error: 'Kein Arbeitsverzeichnis geöffnet.' };
       const host = getHost();
       if (!host.createReadme) return { ok: false, error: 'Ein Readme lässt sich hier nicht schreiben.' };
