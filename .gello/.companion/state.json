@@ -12,12 +12,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "grep -rn \"cloneRepo\\|NON_INTERACTIVE\" src electron --include=\"*.ts\" | grep -v \"^src/core/gitstore.ts\" | head -20; echo \"=== board: gh/PATH cards ===\"; grep -rln \"PATH\\|gh auth\\|Zugang\" .gello/cards .gello/epics --include=\"[ci][0-9]*.md\" | head"
+        "arg": "git add -A src .gello && git status --short"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T20:54:40",
+  "updated": "2026-08-12T21:02:06",
   "pickupDelay": 10,
   "owned": [
     "c0029",
