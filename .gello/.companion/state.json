@@ -1,19 +1,21 @@
 {
   "status": "running",
   "ready": [],
-  "waiting": [],
+  "waiting": [
+    "c0081"
+  ],
   "runs": [
     {
       "cardId": "c0081",
       "phase": "running",
       "activity": {
-        "name": "Bash",
-        "arg": "git add src/core/audiolatency.ts src/core/audiolatency.spec.ts tools tsconfig.json .gello/epics/e12-tauri/c0081-investigate-keypress-to-sound-latency.md .gello/.companion/state.json && git commit -q -F - <<'MSG' && git log --oneline -1\nc0081: Messwerkzeug und Auswertung für Tastendruck→Ton-Latenz\n\nDie Latenz war bisher ein Bauchgefühl. Jetzt gibt es eine Zahl und ein\nModell dahinter: input + dispatch + render + device, wobei render+device\nder Plattformboden ist, unter den kein App-Code kommt.\n\nGemessen wird in tools/audio-latency (eine einzelne HTML-Datei ohne Bau,\ndamit sie auf einer fremden Windows-Maschine per Doppelklick läuft, plus\nein Selbstlauf in Electron). Gedeutet wird in src/core/audiolatency.ts —\ndort, wo Tests hinkommen.\n\nmacOS-Befund: outputLatency überwiegt in jedem Arm, der Trefferpfad der\nApp liegt unter 0,3 ms. latencyHint interactive bringt -11,7 ms,\nChromiums --audio-buffer-size=128 nochmals -8,6 ms. Windows fehlt noch.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nMSG"
+        "name": "mcp__gello__add_question",
+        "arg": "## Die Windows-Messung brauche ich von dir\n\nAlles außer den Windows-Zahlen steht (siehe **Notes** auf der Karte): Messwerkzeug,\nAuswertung mit Tests, macOS-Werte, und ein überraschender Fund — Chromiums\n`--audio-buffer-size=128` drückt den Boden auf macOS von 16,4 auf 7,8 ms und\nwirkt prozessweit, also für **alle** generierten Apps auf einmal.\n\nAuf diesem Rechner läuft kein Windows. Ein Lauf auf der Windows-Kiste beantwortet\ndie Karte — **Variante A genügt**, Dauer ~2 Minuten.\n\n### A — von Hand (die wichtigste; misst auch den echten Tastenweg)\n\n1. `tools/audio-latency/index.html` auf den Windows-Rechner kopieren und\n   **doppelklicken** (Edge reicht, kein Bau, kein Server).\n2. „Messung starten“, dann **eine beliebige Taste immer wieder drücken** —\n   4 Arme × 15 Treffer, das Feld zählt mit.\n3. Unten „JSON kopieren“ und **hier auf die Karte** einfügen.\n\n### B — optional, wenn das Repo auf Windows liegt\n\n```\nnpx electron tools/audio-latency/measure.mjs --hits=15 > win.json\nnpx electron tools/audio-latency/measure.mjs --hits=15 --audio-buffer-size=128 > win-128.json\n```\n\nDas prüft direkt, ob der `--audio-buffer-size`-Hebel unter Windows genauso zieht.\nWenn ja, ist die Karte mit einer Zeile in `electron/main.ts` erledigt statt mit\neinem nativen Audiopfad.\n\n### C — optional, eine Rückfrage zur Einordnung\n\nIst die klingende App **eine bestimmte** generierte App? Wenn du ihren Quelltext\n(oder nur den Tastatur-/Audio-Teil) hier einfügst, kann ich sagen, ob sie selbst\netwas Teures tut — oder ob sie sauber ist und es rein an der Plattform liegt.\n\n- [ ] A gemacht, JSON steht unten\n- [ ] A + B gemacht\n- [ ] Ich komme gerade nicht an den Windows-Rechner — trag ein, was du ohne die\n      Zahlen empfehlen würdest, und lass die Messung als eigene Karte offen\n"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T23:13:08",
+  "updated": "2026-08-12T23:13:28",
   "pickupDelay": 10,
   "owned": [
     "c0029",

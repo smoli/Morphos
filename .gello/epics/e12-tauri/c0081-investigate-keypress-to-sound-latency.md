@@ -7,7 +7,50 @@ tags: [audio, latency, performance]
 status-changed: 2026-08-12T23:00:21
 epic: e12
 updated: 2026-08-12
+awaiting: input
 ---
+
+```gelloquestion
+## Die Windows-Messung brauche ich von dir
+
+Alles außer den Windows-Zahlen steht (siehe **Notes** auf der Karte): Messwerkzeug,
+Auswertung mit Tests, macOS-Werte, und ein überraschender Fund — Chromiums
+`--audio-buffer-size=128` drückt den Boden auf macOS von 16,4 auf 7,8 ms und
+wirkt prozessweit, also für **alle** generierten Apps auf einmal.
+
+Auf diesem Rechner läuft kein Windows. Ein Lauf auf der Windows-Kiste beantwortet
+die Karte — **Variante A genügt**, Dauer ~2 Minuten.
+
+### A — von Hand (die wichtigste; misst auch den echten Tastenweg)
+
+1. `tools/audio-latency/index.html` auf den Windows-Rechner kopieren und
+   **doppelklicken** (Edge reicht, kein Bau, kein Server).
+2. „Messung starten“, dann **eine beliebige Taste immer wieder drücken** —
+   4 Arme × 15 Treffer, das Feld zählt mit.
+3. Unten „JSON kopieren“ und **hier auf die Karte** einfügen.
+
+### B — optional, wenn das Repo auf Windows liegt
+
+```
+npx electron tools/audio-latency/measure.mjs --hits=15 > win.json
+npx electron tools/audio-latency/measure.mjs --hits=15 --audio-buffer-size=128 > win-128.json
+```
+
+Das prüft direkt, ob der `--audio-buffer-size`-Hebel unter Windows genauso zieht.
+Wenn ja, ist die Karte mit einer Zeile in `electron/main.ts` erledigt statt mit
+einem nativen Audiopfad.
+
+### C — optional, eine Rückfrage zur Einordnung
+
+Ist die klingende App **eine bestimmte** generierte App? Wenn du ihren Quelltext
+(oder nur den Tastatur-/Audio-Teil) hier einfügst, kann ich sagen, ob sie selbst
+etwas Teures tut — oder ob sie sauber ist und es rein an der Plattform liegt.
+
+- [ ] A gemacht, JSON steht unten
+- [ ] A + B gemacht
+- [ ] Ich komme gerade nicht an den Windows-Rechner — trag ein, was du ohne die
+      Zahlen empfehlen würdest, und lass die Messung als eigene Karte offen
+```
 
 # Investigate keypress→sound latency (Windows)
 
