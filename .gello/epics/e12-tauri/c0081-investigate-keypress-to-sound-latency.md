@@ -189,7 +189,10 @@ a sidecar just as it can from Rust. **Latency is off the list of Tauri arguments
   has no Windows. Answered with variant A, hand-typed in Chrome 151; stored as
   `measurements/windows-chrome151-manual.json`. Variants B (Electron +
   `--audio-buffer-size`) and C (the app's own source) were not run — B is now
-  c0082, and C turned out not to be needed, see above.
+  c0085, and C turned out not to be needed, see above.
+- Follow-ups captured: **c0085** (test `--audio-buffer-size` on Windows, then set
+  it in `electron/main.ts`) and **c0086** (teach the generation prompt the
+  low-latency audio pattern). Both left in `inbox` for triage.
 
 ## Log
 
