@@ -7,8 +7,8 @@ updated: 2026-08-12
 status-changed: 2026-08-12T21:14:14
 epic: e11
 commit: 892d273
-usage-tokens: 42621
-usage-cost: 5.053956
+usage-tokens: 50820
+usage-cost: 5.947099
 ---
 
 # Add option to open Desktop host folder
@@ -75,6 +75,48 @@ Implemented (2026-08-12):
   individually (that would be a card of its own).
 - Verified against the real system as well: on this Mac `pickTerminal` resolves
   `/usr/bin/open` and `openTerminal` really opens Terminal.app in the folder.
+
+## Review
+
+### 2026-08-12T21:17:54 — pass
+
+Checked: alle Akzeptanzkriterien gegen den Code, der Diff von 892d273, `npm test`
+und `npm run typecheck` (ein Lint gibt es im Repo nicht — keine eslint-Konfiguration,
+kein `lint`-Skript in `package.json`).
+
+- Pfad-Anzeige: `WorkspaceFolderSection.vue` zeigt `workspace.folder` in
+  `.folder-path`, sonst „Kein Arbeitsverzeichnis geöffnet.“; der Bereich hängt
+  über `sections.ts` (`id: workspace`) in `SETTINGS_SECTIONS` und damit im
+  `SettingsPanel` — dessen Bestandstest zählt alle Bereiche mit.
+- Dateimanager: `ipcMain.handle('morphos:revealFolder')` in `electron/main.ts`
+  ruft `shell.openPath` und gibt dessen Textfehler als `{ok:false,error}` zurück.
+- Terminal: `core/terminal.terminalCandidates` — macOS `open -a Terminal <dir>`,
+  Windows `wt.exe -d <dir>` bzw. `cmd.exe /c start "" cmd.exe`, Linux die acht
+  üblichen ohne Ordner-Argument; `openTerminal` spawnt mit `cwd: dir`,
+  `detached` + `unref`, so dass das Fenster Morphos überlebt.
+- Bekannter Ordner: beide Kanäle gehen durch `knownWorkspaceError` —
+  `readSettings().recentFolders.includes(folder)` plus `fs.existsSync`, also die
+  Prüfung von `diskUsage` und zusätzlich die Existenz. Ein beliebiger Pfad aus
+  dem Renderer wird mit klarer Meldung abgelehnt.
+- Knöpfe/Meldung: `:disabled="!workspace.folder || !canReveal|!canTerminal || busy"`,
+  `canReveal/canTerminal` prüfen `typeof host.revealFolder === 'function'`;
+  `run()` schreibt `res.error` in `.error`. Vom Komponententest abgedeckt
+  (fehlende Anbindung, kein Ordner, Fehlermeldung des Hauptprozesses).
+- Tests: `src/core/terminal.spec.ts` (7) deckt die Plattformwahl inklusive
+  Windows-Rückfall ab, `src/core/which.spec.ts` (6) die PATH-Suche gegen ein
+  echtes tmp-Verzeichnis, `src/stores/workspace.spec.ts` die Store-Aktionen,
+  `WorkspaceFolderSection.spec.ts` (6) den Bereich. Kein `.only`, kein `.skip`,
+  keine abgeschwächte Zusicherung im Diff.
+- `npm test`: 1509 Tests in 83 Dateien grün. `npm run typecheck` (`vue-tsc
+  --noEmit`, deckt `electron/**` mit ab): fehlerfrei.
+- Diff bleibt im What: nur der neue Bereich, die zwei IPC-Kanäle, `core/terminal`,
+  `core/which` und die Umstellung von `gitstore.findGh` auf `findOnPath` — eine
+  Entdopplung derselben PATH-Suche. Anmerkung ohne Folgen: die Vorgabe-Plätze
+  wachsen dabei um `/bin` (`GH_PLACES` → `COMMON_PLACES`), die gitstore-Tests
+  bleiben grün.
+- Nicht geprüft, weil das Repo dafür keine Ebene hat: die IPC-Handler in
+  `electron/main.ts` (es gibt keine Tests im Hauptprozess) und der echte
+  `spawn` — die Karte verweist hier auf eine Handprobe auf diesem Mac.
 
 ## Log
 
