@@ -1,11 +1,11 @@
 ---
 id: c0077
 title: Create a readme for an app
-status: review
+status: done
 created: 2026-08-12
 commit: e31d059
 updated: 2026-08-12
-status-changed: 2026-08-12T21:36:42
+status-changed: 2026-08-12T22:31:38
 epic: e11
 usage-tokens: 64612
 usage-cost: 8.140769
@@ -181,3 +181,4 @@ Checked: alle acht Akzeptanzkriterien gegen den Code, der Diff von `e31d059`,
 - 2026-08-12 status → ready (app)
 - 2026-08-12 status → in-progress (agent)
 - 2026-08-12 status → review (agent)
+- 2026-08-12 status → done (app)
