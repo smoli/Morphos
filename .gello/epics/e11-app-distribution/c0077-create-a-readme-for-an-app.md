@@ -1,12 +1,11 @@
 ---
 id: c0077
 title: Create a readme for an app
-status: ready
+status: in-progress
 created: 2026-08-12
 updated: 2026-08-12
-status-changed: 2026-08-12T20:54:30
+status-changed: 2026-08-12T21:23:31
 epic: e11
-order: 30
 ---
 
 Add the option to create a Readme for the app.
@@ -35,3 +34,4 @@ Structure
 
 - 2026-08-12 status → discuss (app)
 - 2026-08-12 status → ready (app)
+- 2026-08-12 status → in-progress (agent)
