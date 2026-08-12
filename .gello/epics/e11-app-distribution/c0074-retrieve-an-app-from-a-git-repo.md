@@ -108,6 +108,68 @@ Implemented (2026-08-12):
 Left for the sibling cards: choosing a branch/tag (default branch only for now)
 and pulling/pushing updates via the kept `origin`.
 
+## Review
+
+### 2026-08-12T20:50:29 — pass
+
+Checked: alle acht Akzeptanzkriterien gegen den Code, den Diff von `30988c3`,
+`npm test`, `npm run typecheck`, `npm run build` (ein Linter existiert im Repo
+nicht — kein Lint-Skript, keine ESLint-/Biome-Konfiguration; daher nicht
+gelaufen).
+
+- Checks grün: `npm test` 1472 Tests in 80 Dateien, darunter `appimport.spec.ts`
+  (27), `ImportAppDialog.spec.ts` (11), die neuen `cloneRepo`-Tests in
+  `gitstore.spec.ts` und der c0074-Block in `DesktopView.spec.ts`;
+  `npm run typecheck` und `npm run build` ohne Befund. Kein `.only`, `.skip`
+  oder abgeschwächter Test im Diff — bestehende Tests wurden nur um die neuen
+  Dock-Plätze herum angepasst (`.dock-item:not(.new):not(.import)`).
+- Kriterium „Desktop-Aktion“: `DesktopView.vue:770` — fester Dock-Platz ⤓
+  („App aus Git laden…“) direkt hinter dem ＋, öffnet `ImportAppDialog` mit
+  Adressfeld. Geprüft in `DesktopView.spec.ts` („steht als eigener Platz neben
+  dem ＋ im Dock“).
+- Kriterium „echter Klon“: `gitstore.ts:62 cloneRepo` (`git clone --quiet --`),
+  Historie und `origin` verifiziert in `gitstore.spec.ts` und in
+  `appimport.spec.ts` („merkt sich die Gegenstelle als origin“, `listVersions`
+  auf dem Klon).
+- Kriterium „Validierung“: `appimport.ts manifestError` verlangt `app.json` mit
+  `isSafeAppId(id)` und nicht-leerem `name`; bei Fehlschlag `discardClone`.
+  Tests: Repo ohne `app.json`, Manifest mit `../entkommen`-Id — beide Male
+  bleibt das Arbeitsverzeichnis leer.
+- Kriterium „Id-Konflikt“: `startImport` legt bei belegter Id gar nichts ab,
+  sondern liefert `collision`; `resolveImport` setzt Kopie (neue Id via
+  `uniqueAppId`, `rewriteId` + eigener `commitAll`, Name bleibt), Ersetzen oder
+  Abbruch um. „Ersetzen“ bestätigt der Anwender zuvor
+  (`DesktopView.vue chooseImport`, `confirm`), Test mit `confirm → false` zeigt,
+  dass dann `resolveImport` gar nicht gerufen wird.
+- Kriterium „Liste aktualisiert“: `stores/workspace.ts importApp/resolveImport`
+  rufen bei `ok` `refresh()`; bei einer Rückfrage bewusst nicht (Test „liest bei
+  einer Rückfrage NICHT neu ein“). Alt-Format wird angenommen und migriert wie
+  gehabt beim Öffnen (Test „nimmt auch eine App im Alt-Format an“).
+- Kriterium „System-Credentials“: `runGit` erbt `process.env`, `cloneRepo`
+  ergänzt nur `GIT_TERMINAL_PROMPT=0` und `GIT_SSH_COMMAND=ssh -oBatchMode=yes`
+  — hinterlegte Helfer/Schlüssel wirken, ein Fehlschlag kommt als Meldung zurück
+  und der Klon wird weggeräumt (Test „meldet einen gescheiterten Klon und lässt
+  nichts zurück“).
+- Kriterium „im Arbeitsverzeichnis eingeschlossen“: Klonziel ist
+  `<workspace>/.morphos-import/clone-…`, die IPC prüft zusätzlich
+  `recentFolders.includes(folder)` (`main.ts:819`, wie `diskUsage:706`), die
+  Adresse kommt aus dem Dialog. `listApps` überspringt `IMPORT_DIR`.
+  Abbruch/Fehler lassen das Verzeichnis unverändert (Tests prüfen
+  `workspaceDirs()`).
+- Kriterium „Unit-Tests der reinen Teile“: `repoUrlError`, `manifestError`,
+  `uniqueAppId` und `isSafeAppId` sind je einzeln getestet; die Orchestrierung
+  liegt im Hauptprozess (`core/appimport`, nur von `electron/main.ts` benutzt).
+- Diff bleibt im Rahmen der What: nur Importpfad, der geteilte `isSafeAppId`
+  (ersetzt die identische Prüfung in `main.ts safeId`) und der Dock-Platz. Kein
+  Debug-Code.
+
+Zwei Beobachtungen ohne Kriteriumsbezug, für die Geschwisterkarten notiert:
+Ein wartender Klon bleibt im `pending`-Map liegen, wenn das Fenster bei offener
+Rückfrage geschlossen wird — weggeräumt wird er erst beim nächsten Start
+(`sweepStaleClones` schont laufende Prozess-Einträge). Und ein per Umgebung
+gesetztes `GIT_SSH_COMMAND` überschreibt `cloneRepo`; `core.sshCommand` aus der
+Git-Konfiguration wirkt weiterhin.
+
 ## Log
 
 - 2026-08-12 status → discuss (app)

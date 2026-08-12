@@ -7,13 +7,13 @@
       "cardId": "c0074",
       "phase": "running",
       "activity": {
-        "name": "Bash",
-        "arg": "npm test 2>&1 | tail -40"
+        "name": "Edit",
+        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e11-app-distribution/c0074-retrieve-an-app-from-a-git-repo.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T20:48:45",
+  "updated": "2026-08-12T20:50:58",
   "pickupDelay": 10,
   "owned": [
     "c0029",
