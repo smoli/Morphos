@@ -7,12 +7,10 @@ tags: [audio, latency, performance]
 status-changed: 2026-08-12T23:00:21
 epic: e12
 updated: 2026-08-12
-awaiting: input
 usage-tokens: 45935
 usage-cost: 3.037866
 ---
 
-```gelloquestion
 ## Die Windows-Messung brauche ich von dir
 
 Alles außer den Windows-Zahlen steht (siehe **Notes** auf der Karte): Messwerkzeug,
@@ -33,7 +31,293 @@ die Karte — **Variante A genügt**, Dauer ~2 Minuten.
 
 ### B — optional, wenn das Repo auf Windows liegt
 
-```
+{
+  "tool": "morphos-audio-latency",
+  "version": 1,
+  "platform": "Windows",
+  "shell": "Chrome 151.0.0.0",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+  "synthesizedKeys": false,
+  "arms": [
+    {
+      "label": "balanced (Vorgabe), vorab dekodiert",
+      "latencyHint": "balanced",
+      "sampleRate": 48000,
+      "baseLatency": 0.01,
+      "outputLatency": 0.04,
+      "hits": [
+        {
+          "eventLagMs": 2.100000001490116,
+          "dispatchMs": 0.19999999552965164
+        },
+        {
+          "eventLagMs": 1.3999999985098839,
+          "dispatchMs": 0.30000000447034836
+        },
+        {
+          "eventLagMs": 0.29999999701976776,
+          "dispatchMs": 0.20000000298023224
+        },
+        {
+          "eventLagMs": 0.6000000014901161,
+          "dispatchMs": 0.10000000149011612
+        },
+        {
+          "eventLagMs": 1.1000000014901161,
+          "dispatchMs": 0.19999999552965164
+        },
+        {
+          "eventLagMs": 0.5,
+          "dispatchMs": 0
+        },
+        {
+          "eventLagMs": 0.6000000014901161,
+          "dispatchMs": 0.20000000298023224
+        },
+        {
+          "eventLagMs": 0.6000000014901161,
+          "dispatchMs": 0.19999999552965164
+        },
+        {
+          "eventLagMs": 0.8999999985098839,
+          "dispatchMs": 0.10000000149011612
+        },
+        {
+          "eventLagMs": 0.6000000014901161,
+          "dispatchMs": 0.10000000149011612
+        },
+        {
+          "eventLagMs": 0.4000000059604645,
+          "dispatchMs": 0.09999999403953552
+        },
+        {
+          "eventLagMs": 0.7999999970197678,
+          "dispatchMs": 0.20000000298023224
+        },
+        {
+          "eventLagMs": 0.7000000029802322,
+          "dispatchMs": 0
+        },
+        {
+          "eventLagMs": 0.5,
+          "dispatchMs": 0.20000000298023224
+        },
+        {
+          "eventLagMs": 0.7000000029802322,
+          "dispatchMs": 0.19999999552965164
+        }
+      ]
+    },
+    {
+      "label": "interactive, vorab dekodiert",
+      "latencyHint": "interactive",
+      "sampleRate": 48000,
+      "baseLatency": 0.01,
+      "outputLatency": 0.04,
+      "hits": [
+        {
+          "eventLagMs": 0.3999999985098839,
+          "dispatchMs": 0.10000000149011612
+        },
+        {
+          "eventLagMs": 0.5,
+          "dispatchMs": 0.10000000149011612
+        },
+        {
+          "eventLagMs": 0.4000000059604645,
+          "dispatchMs": 0.09999999403953552
+        },
+        {
+          "eventLagMs": 0.6999999955296516,
+          "dispatchMs": 0.20000000298023224
+        },
+        {
+          "eventLagMs": 0.6000000014901161,
+          "dispatchMs": 0.10000000149011612
+        },
+        {
+          "eventLagMs": 0.3999999985098839,
+          "dispatchMs": 0.10000000149011612
+        },
+        {
+          "eventLagMs": 0.6999999955296516,
+          "dispatchMs": 0.20000000298023224
+        },
+        {
+          "eventLagMs": 0.7999999970197678,
+          "dispatchMs": 0
+        },
+        {
+          "eventLagMs": 0.29999999701976776,
+          "dispatchMs": 0.20000000298023224
+        },
+        {
+          "eventLagMs": 0.8000000044703484,
+          "dispatchMs": 0.09999999403953552
+        },
+        {
+          "eventLagMs": 1.1000000014901161,
+          "dispatchMs": 0.20000000298023224
+        },
+        {
+          "eventLagMs": 0.6000000014901161,
+          "dispatchMs": 0.19999999552965164
+        },
+        {
+          "eventLagMs": 0.8999999985098839,
+          "dispatchMs": 0.10000000149011612
+        },
+        {
+          "eventLagMs": 0.6000000014901161,
+          "dispatchMs": 0
+        },
+        {
+          "eventLagMs": 0.6000000014901161,
+          "dispatchMs": 0.30000000447034836
+        }
+      ]
+    },
+    {
+      "label": "interactive, je Treffer dekodiert",
+      "latencyHint": "interactive",
+      "sampleRate": 48000,
+      "baseLatency": 0.01,
+      "outputLatency": 0.04,
+      "hits": [
+        {
+          "eventLagMs": 0.8999999985098839,
+          "dispatchMs": 1.3000000044703484
+        },
+        {
+          "eventLagMs": 0.3999999985098839,
+          "dispatchMs": 0.8000000044703484
+        },
+        {
+          "eventLagMs": 2.1999999955296516,
+          "dispatchMs": 0.8000000044703484
+        },
+        {
+          "eventLagMs": 0.7000000029802322,
+          "dispatchMs": 0.6000000014901161
+        },
+        {
+          "eventLagMs": 0.30000000447034836,
+          "dispatchMs": 0.5
+        },
+        {
+          "eventLagMs": 0.5,
+          "dispatchMs": 0.7000000029802322
+        },
+        {
+          "eventLagMs": 0.5,
+          "dispatchMs": 0.6000000014901161
+        },
+        {
+          "eventLagMs": 0.30000000447034836,
+          "dispatchMs": 0.8999999985098839
+        },
+        {
+          "eventLagMs": 0.6000000014901161,
+          "dispatchMs": 0.3999999985098839
+        },
+        {
+          "eventLagMs": 0.4000000059604645,
+          "dispatchMs": 0.5
+        },
+        {
+          "eventLagMs": 0.3999999985098839,
+          "dispatchMs": 0.7000000029802322
+        },
+        {
+          "eventLagMs": 0.7999999970197678,
+          "dispatchMs": 1
+        },
+        {
+          "eventLagMs": 0.5,
+          "dispatchMs": 0.7999999970197678
+        },
+        {
+          "eventLagMs": 0.8999999985098839,
+          "dispatchMs": 0.8000000044703484
+        },
+        {
+          "eventLagMs": 0.8000000044703484,
+          "dispatchMs": 0.6999999955296516
+        }
+      ]
+    },
+    {
+      "label": "0,001 s (kleinster Wunsch), vorab dekodiert",
+      "latencyHint": "0.001",
+      "sampleRate": 48000,
+      "baseLatency": 0.01,
+      "outputLatency": 0.04,
+      "hits": [
+        {
+          "eventLagMs": 0.6000000014901161,
+          "dispatchMs": 0.10000000149011612
+        },
+        {
+          "eventLagMs": 0.4000000059604645,
+          "dispatchMs": 0.19999999552965164
+        },
+        {
+          "eventLagMs": 1.3999999985098839,
+          "dispatchMs": 0.20000000298023224
+        },
+        {
+          "eventLagMs": 0.30000000447034836,
+          "dispatchMs": 0.09999999403953552
+        },
+        {
+          "eventLagMs": 0.29999999701976776,
+          "dispatchMs": 0.10000000149011612
+        },
+        {
+          "eventLagMs": 0.7000000029802322,
+          "dispatchMs": 0.10000000149011612
+        },
+        {
+          "eventLagMs": 0.6000000014901161,
+          "dispatchMs": 0.10000000149011612
+        },
+        {
+          "eventLagMs": 0.5,
+          "dispatchMs": 0.19999999552965164
+        },
+        {
+          "eventLagMs": 0.8999999985098839,
+          "dispatchMs": 0
+        },
+        {
+          "eventLagMs": 0.6000000014901161,
+          "dispatchMs": 0.19999999552965164
+        },
+        {
+          "eventLagMs": 2.600000001490116,
+          "dispatchMs": 0.19999999552965164
+        },
+        {
+          "eventLagMs": 0.6000000014901161,
+          "dispatchMs": 0.10000000149011612
+        },
+        {
+          "eventLagMs": 1.6000000014901161,
+          "dispatchMs": 0.19999999552965164
+        },
+        {
+          "eventLagMs": 1.2000000029802322,
+          "dispatchMs": 0
+        },
+        {
+          "eventLagMs": 0.3999999985098839,
+          "dispatchMs": 0.19999999552965164
+        }
+      ]
+    }
+  ],
+  "loopback": null
+}
 npx electron tools/audio-latency/measure.mjs --hits=15 > win.json
 npx electron tools/audio-latency/measure.mjs --hits=15 --audio-buffer-size=128 > win-128.json
 ```
