@@ -7,8 +7,8 @@ tags: [audio, latency, performance]
 status-changed: 2026-08-12T23:29:01
 epic: e12
 updated: 2026-08-12
-usage-tokens: 69734
-usage-cost: 6.387494
+usage-tokens: 78472
+usage-cost: 7.643452
 ---
 
 # Investigate keypress→sound latency (Windows)
@@ -193,6 +193,47 @@ a sidecar just as it can from Rust. **Latency is off the list of Tauri arguments
 - Follow-ups captured: **c0085** (test `--audio-buffer-size` on Windows, then set
   it in `electron/main.ts`) and **c0086** (teach the generation prompt the
   low-latency audio pattern). Both left in `inbox` for triage.
+
+## Review
+
+### 2026-08-12T23:31:38 — pass
+
+Checked: all four acceptance criteria, the raw measurements against the card's
+tables, the two commits (`0946024`, `15af125`), `npm run test`, `npm run
+typecheck`, and a re-run of the harness on this machine.
+
+- Criterion 1 (measured figure, method noted) is met and **reproducible**: I
+  re-ran `npx electron tools/audio-latency/measure.mjs --hits=4` here and got
+  28,7 / 16,5 / 18,1 / 8,0 ms with buffers 480 / 256 / 256 / 128 — the same
+  picture as `measurements/macos-electron33-auto.json` (28,1 / 16,4 / 16,5 /
+  7,8). Every number in both tables on the card recomputes exactly from the
+  checked-in JSON (independent median calculation, not the repo's own code).
+  The Windows file's `userAgent` confirms Chrome 151 / hand-typed
+  (`synthesizedKeys: false`), as the caveat says.
+- Criterion 2 (dominant contributor) is met: `dominantOf` reports `device` for
+  all four arms in all three runs; app-side `input + dispatch` is ≤ 0,8 ms.
+- Criterion 3 (cheapest web lever, measured effect) is met: `npx vite-node -c
+  vitest.config.ts tools/audio-latency/report.ts …` on the Windows run prints
+  −0,1 ms for `interactive`, +0,4 ms for decode-per-hit, and the whole-run
+  verdict `native-audio` — the card's claims verbatim.
+- Criterion 4 (recommendation, feedback to c0079) is met: the recommendation is
+  ordered by cost, the follow-ups `c0085` and `c0086` exist as cards, and c0079
+  carries the feedback block ("strike latency from the list of Tauri
+  arguments").
+- Finding 5 spot-checked: `audio-buffer-size` really is a switch in the shipped
+  `Electron Framework` binary.
+- Checks green: `npm run test` 1584 passed / 86 files, `npm run typecheck`
+  clean. `src/core/audiolatency.spec.ts` alone is 33 tests, as claimed — no
+  `.only`, `.skip` or weakened assertion anywhere in the diff. There is no lint
+  script in this repo, so none was run.
+- Diff stays inside the What: a measuring tool, a tested interpretation module,
+  three raw runs, and the `tools/**/*.ts` line in `tsconfig.json` that the new
+  tool needs. No production code touched — correctly deferred to c0085/c0086.
+- Two things for the record, neither blocking: the invocation in `report.ts`'s
+  own header comment (line 6) omits `-c vitest.config.ts` and fails with
+  `require is not defined` — the README's version is the working one; and the
+  acoustic loopback check is present but unrun (`loopback: null` in all three
+  files), which the card's caveats already state.
 
 ## Log
 
