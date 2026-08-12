@@ -1,16 +1,19 @@
 {
   "status": "running",
-  "ready": [
-    "c0074"
-  ],
+  "ready": [],
   "waiting": [],
   "runs": [
     {
       "cardId": "c0074",
-      "phase": "running"
+      "phase": "running",
+      "activity": {
+        "name": "Bash",
+        "arg": "find electron src -type f \\( -name \"*.ts\" -o -name \"*.vue\" -o -name \"*.tsx\" \\) | head -100 && echo \"---\" && ls electron src"
+      },
+      "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T20:31:33",
+  "updated": "2026-08-12T20:31:50",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -64,7 +67,5 @@
     "c0074"
   ],
   "afk": false,
-  "firstSeen": {
-    "c0074": "2026-08-12T20:31:23"
-  }
+  "firstSeen": {}
 }
