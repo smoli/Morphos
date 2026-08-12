@@ -84,6 +84,23 @@ Open questions for the doc to resolve:
 - **Tauri v2 maturity** for the window features Morphos needs (frameless window,
   OS-correct traffic-light/caption layout, overlapping multi-window desktop).
 
+Measured feedback from **c0081** (2026-08-12) — the latency motivation is now
+settled with numbers, and it does **not** argue for Tauri:
+
+- Keypress→sound is **~51 ms on Windows** vs **7,8–16,4 ms on macOS**. The whole
+  gap is Chromium's audio output buffer (`outputLatency` 40 ms vs 5 ms); the
+  app's own hit path is ≤ 0,8 ms on both.
+- On Windows Chromium **ignores `latencyHint` entirely** (same 480-frame buffer
+  for `balanced`, `interactive` and an explicit 0.001 s).
+- WebView2 is the same Chromium with the same WASAPI backend, so **Tauri would
+  inherit the identical 50 ms**. Both shells can pass the one cheap lever
+  (`--audio-buffer-size`: Electron via `app.commandLine`, WebView2 via
+  `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`), and even a native audio path is
+  reachable from Electron via a native addon or sidecar.
+- **Conclusion for this doc: strike latency from the list of Tauri arguments.**
+  It should appear only as “explicitly not a reason”, with c0081 as the source.
+
 ## Log
 
 - 2026-08-12 status → discuss (app)
+- 2026-08-12 measured latency feedback from c0081 added (agent)

@@ -10,13 +10,13 @@
       "cardId": "c0081",
       "phase": "running",
       "activity": {
-        "name": "Edit",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e12-tauri/c0081-investigate-keypress-to-sound-latency.md"
+        "name": "Bash",
+        "arg": "npm test 2>&1 | tail -6; echo \"=== typecheck ===\"; npm run typecheck 2>&1 | tail -5"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T23:27:38",
+  "updated": "2026-08-12T23:27:55",
   "pickupDelay": 10,
   "owned": [
     "c0029",
