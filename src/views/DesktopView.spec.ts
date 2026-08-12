@@ -518,9 +518,39 @@ describe('DesktopView', () => {
       expect(wrapper.findAll('.ctx-item').map((i) => i.get('.ctx-label').text())).toEqual([
         'Öffnen',
         'Icon ändern',
+        'Readme erstellen',
         'Im Dock behalten',
         'Löschen',
       ]);
+    });
+
+    it('schreibt das Readme der App über das Menü und meldet es (c0077)', async () => {
+      const host = makeHost({ createReadme: vi.fn(async () => ({ ok: true })) });
+      setHost(host);
+      const { wrapper } = await mountView();
+
+      await openIconMenu(wrapper, 'Rechner');
+      await pickMenu(wrapper, 'Readme erstellen');
+
+      expect(host.createReadme).toHaveBeenCalledWith('/apps', 'rechner-1');
+      expect(wrapper.findComponent(ContextMenu).exists()).toBe(false);
+      const toasts = useNotificationsStore().toasts;
+      expect(toasts.map((t) => t.text).join()).toContain('Rechner');
+      expect(toasts[0].kind).toBe('success');
+    });
+
+    it('meldet, wenn das Readme nicht geschrieben werden konnte (c0077)', async () => {
+      setHost(makeHost({
+        createReadme: vi.fn(async () => ({ ok: false, error: 'Diese App hat kein Manifest (app.json).' })),
+      }));
+      const { wrapper } = await mountView();
+
+      await openIconMenu(wrapper, 'Rechner');
+      await pickMenu(wrapper, 'Readme erstellen');
+
+      const toasts = useNotificationsStore().toasts;
+      expect(toasts[0].kind).toBe('error');
+      expect(toasts[0].text).toContain('kein Manifest');
     });
 
     it('öffnet die App über „Öffnen“ und schließt dabei das Menü', async () => {

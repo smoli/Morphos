@@ -408,6 +408,49 @@ describe('useWorkspaceStore', () => {
     });
   });
 
+  describe('Readme einer App (c0077)', () => {
+    it('reicht Ordner und App-Id zum Hauptprozess weiter', async () => {
+      const host = makeHost({ createReadme: vi.fn(async () => ({ ok: true })) });
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(await ws.createReadme('rechner-1')).toEqual({ ok: true });
+      expect(host.createReadme).toHaveBeenCalledWith('/apps', 'rechner-1');
+    });
+
+    it('meldet einen Fehler des Hauptprozesses weiter', async () => {
+      setHost(makeHost({ createReadme: vi.fn(async () => ({ ok: false, error: 'Kein Manifest.' })) }));
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(await ws.createReadme('rechner-1')).toEqual({ ok: false, error: 'Kein Manifest.' });
+    });
+
+    it('fängt einen geworfenen Fehler ab', async () => {
+      setHost(makeHost({
+        createReadme: vi.fn(async () => {
+          throw new Error('Brücke weg');
+        }),
+      }));
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(await ws.createReadme('rechner-1')).toEqual({ ok: false, error: 'Brücke weg' });
+    });
+
+    it('verlangt ein offenes Arbeitsverzeichnis und die Anbindung', async () => {
+      setHost(makeHost({ createReadme: vi.fn(async () => ({ ok: true })) }));
+      const ws = useWorkspaceStore();
+      expect((await ws.createReadme('rechner-1')).ok).toBe(false);
+
+      setHost(makeHost());
+      const ohne = useWorkspaceStore();
+      await ohne.openFolder('/apps');
+      expect((await ohne.createReadme('rechner-1')).error).toBeTruthy();
+    });
+  });
+
   describe('Arbeitsverzeichnis öffnen (c0075)', () => {
     it('reicht den Ordner zum Dateimanager des Systems weiter', async () => {
       const host = makeHost({ revealFolder: vi.fn(async () => ({ ok: true })) });

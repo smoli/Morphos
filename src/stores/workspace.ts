@@ -615,6 +615,23 @@ export const useWorkspaceStore = defineStore('workspace', {
     },
 
     /**
+     * Schreibt die Titelseite einer App in ihren Ordner (c0077) — sie reist
+     * mit, wenn der Ordner auf eine Gegenstelle geschoben wird. Geschrieben
+     * wird im Hauptprozess aus dem, was dort schon liegt; die App muss dafür
+     * nicht offen sein, und die Kachelliste ändert sich nicht.
+     */
+    async createReadme(id: string): Promise<SaveResult> {
+      if (!this.folder) return { ok: false, error: 'Kein Arbeitsverzeichnis geöffnet.' };
+      const host = getHost();
+      if (!host.createReadme) return { ok: false, error: 'Ein Readme lässt sich hier nicht schreiben.' };
+      try {
+        return await host.createReadme(this.folder, id);
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
+    /**
      * Holt eine App aus einem Git-Repository in dieses Verzeichnis (c0074).
      * Gelingt es, steht die App sofort auf dem Desktop; ist ihre Id belegt,
      * kommt eine Rückfrage zurück (`collision`) — dann ist noch NICHTS

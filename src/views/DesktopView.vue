@@ -364,6 +364,17 @@ function newApp(): void {
 function openSystem(systemId: string): void {
   desktop.openSystem(systemId);
 }
+/**
+ * Schreibt die Titelseite einer App in ihren Ordner (c0077) — Icon, Name, ein
+ * Satz aus ihrem Konzept, ihre Dokumente, der Morphos-Stand. Ein vorhandenes
+ * Readme wird neu geschrieben.
+ */
+async function createReadme(id: string, name: string): Promise<void> {
+  const res = await workspace.createReadme(id);
+  if (res.ok) notifications.success(`Readme für „${name}“ geschrieben.`);
+  else notifications.error(res.error ?? 'Das Readme konnte nicht geschrieben werden.');
+}
+
 async function removeApp(id: string, name: string): Promise<void> {
   if (!confirm(`App „${name}“ wirklich löschen?`)) return;
   const open = desktop.windows.find((w) => w.appId === id);
@@ -587,6 +598,7 @@ function openIconMenu(e: MouseEvent, app: AppSummary): void {
     items: [
       { id: 'open', label: 'Öffnen', icon: '↗' },
       { id: 'icon', label: 'Icon ändern', icon: '⚙' },
+      { id: 'readme', label: 'Readme erstellen', icon: '📄' },
       dockItem(app.id),
       { id: 'delete', label: 'Löschen', icon: '🗑', danger: true, separator: true },
     ],
@@ -620,6 +632,9 @@ function onMenuPick(id: string): void {
       break;
     case 'icon':
       iconAppId.value = picked.appId;
+      break;
+    case 'readme':
+      if (app) void createReadme(app.id, app.name);
       break;
     case 'dock':
     case 'undock':

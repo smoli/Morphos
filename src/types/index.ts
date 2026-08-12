@@ -576,6 +576,15 @@ export interface MorphosHost {
   setAppIcon(folder: string, id: string, icon: string | null): Promise<IconResult>;
 
   /**
+   * Schreibt die Titelseite einer App (README.md) in ihren Ordner und
+   * übernimmt sie als Commit — Icon, Name, ein Satz aus ihrem Konzept, die
+   * Verweise auf ihre Dokumente und der Morphos-Stand (siehe core/readme).
+   * Ein vorhandenes Readme wird neu geschrieben. Optional: im Renderer-Test
+   * fehlt die Anbindung, dann lässt sich keines schreiben.
+   */
+  createReadme?(folder: string, id: string): Promise<SaveResult>;
+
+  /**
    * Holt eine App aus einem Git-Repository in das Arbeitsverzeichnis: klonen
    * (mit Historie und `origin`), als Morphos-App prüfen, einordnen. Ist die Id
    * schon belegt, kommt statt der App eine Rückfrage zurück (`collision`) —

@@ -20,6 +20,7 @@ import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeApp
 import { isSafeAppId } from '../src/core/app';
 import { IMPORT_DIR, resolveImport, startImport } from '../src/core/appimport';
 import { validateIcon } from '../src/core/icon';
+import { README_FILE, writeReadme } from '../src/core/readme';
 import { resolveWithin, runFs, runShellFs } from '../src/core/fsaccess';
 import { FILE_SCHEME, parseRange, resolveFileRequest } from '../src/core/filelink';
 import { streamMimeType } from '../src/core/preview';
@@ -831,6 +832,35 @@ ipcMain.handle('morphos:setAppIcon', async (_e, folder: string, id: string, icon
     await ensureRepo(dir);
     await commitAll(dir, value === null ? 'Icon zurückgesetzt' : 'Icon geändert');
     return { ok: true, icon: effective };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+/**
+ * Die Titelseite einer App schreiben (c0077): Icon, Name, ein Satz dazu, die
+ * Verweise auf ihre beiden Dokumente und der Morphos-Stand, den sie braucht.
+ * Der Inhalt entsteht in core/readme aus dem, was auf der Platte steht — die
+ * App muss dafür nicht offen sein.
+ *
+ * Geschrieben wird nur in ein BEKANNTES Arbeitsverzeichnis (wie diskUsage /
+ * importApp). Der Commit kommt gleich hinterher: Das Readme soll mit der App
+ * reisen, wenn sie auf eine Gegenstelle geschoben wird.
+ */
+ipcMain.handle('morphos:createReadme', async (_e, folder: string, id: string): Promise<SaveResult> => {
+  const problem = knownWorkspaceError(folder);
+  if (problem) return { ok: false, error: problem };
+  try {
+    const dir = appDir(folder, id);
+    const existed = fs.existsSync(path.join(dir, README_FILE));
+    writeReadme(dir, {
+      version: app.getVersion(),
+      // Beim Bauen gesetzt (siehe vite.config.ts); ohne Git bleibt er leer.
+      commit: typeof __MORPHOS_COMMIT__ === 'string' ? __MORPHOS_COMMIT__ : '',
+    });
+    await ensureRepo(dir);
+    await commitAll(dir, existed ? 'Readme aktualisiert' : 'Readme erstellt');
+    return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
