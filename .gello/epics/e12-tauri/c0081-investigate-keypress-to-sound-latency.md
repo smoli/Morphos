@@ -1,10 +1,10 @@
 ---
 id: c0081
 title: "Investigate keypress→sound latency (Windows)"
-status: in-progress
+status: review
 created: 2026-08-12
 tags: [audio, latency, performance]
-status-changed: 2026-08-12T23:00:21
+status-changed: 2026-08-12T23:29:01
 epic: e12
 updated: 2026-08-12
 usage-tokens: 45935
@@ -203,3 +203,4 @@ a sidecar just as it can from Rust. **Latency is off the list of Tauri arguments
 - 2026-08-12 question to the human: Windows run (agent)
 - 2026-08-12 Windows measured (Chrome 151, hand-typed) — floor 50 ms, latencyHint
   has no effect there; findings and recommendation written (agent)
+- 2026-08-12 status → review (agent)
