@@ -6,6 +6,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { AGENT_IDLE_TIMEOUT_MS, agentIdleTimeoutMessage, createAgentStream } from '../src/core/agent';
+import { BUFFER_SIZE_ENV, forcedBufferFrames } from '../src/core/audiolatency';
 import { clampMaxAgents, DEFAULT_MAX_AGENTS } from '../src/core/queue';
 import { buildPrompt, SYSTEM_PROMPT } from '../src/core/prompt';
 import { extractHtml } from '../src/core/html';
@@ -107,6 +108,22 @@ protocol.registerSchemesAsPrivileged([
     privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
   },
 ]);
+
+/**
+ * Kürzt den Weg vom Tastendruck zum Ton für JEDE erzeugte App (c0081, c0085).
+ * Chromium füllt seinen Audiopuffer sonst mit 480 Bildern vor; 128 sind ein
+ * einziges Renderquantum — gemessen 52,0 → 42,8 ms unter Windows und
+ * 16,4 → 7,8 ms unter macOS. Der Schalter gilt prozessweit und übersteuert den
+ * `latencyHint` der Seite, muss also VOR `whenReady` gesetzt sein.
+ *
+ * Der Preis sind häufigere Weckrufe des Audiothreads; wo das zu Aussetzern
+ * führt, schaltet `MORPHOS_AUDIO_BUFFER_SIZE=aus` den Schalter ab (siehe
+ * core/audiolatency).
+ */
+const audioBufferFrames = forcedBufferFrames(process.platform, process.env[BUFFER_SIZE_ENV]);
+if (audioBufferFrames !== null) {
+  app.commandLine.appendSwitch('audio-buffer-size', String(audioBufferFrames));
+}
 
 // ---- Persistenz: Einstellungen (userData) + Apps (frei gewähltes Verzeichnis) ----
 

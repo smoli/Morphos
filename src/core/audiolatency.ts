@@ -332,3 +332,51 @@ export function formatReport(report: LatencyReport): string {
   });
   return [head, ...rows].join('\n');
 }
+
+/**
+ * Der eine Hebel, den die Schale selbst hat: Chromiums `--audio-buffer-size`
+ * in Bildern. Er gilt für den ganzen Prozess und wirkt damit auf **jede**
+ * erzeugte App, ohne dass eine davon etwas dafür tun muss (c0085).
+ *
+ * Gemessen mit `tools/audio-latency/measure.mjs`, 15 Treffer je Arm:
+ *
+ * | Plattform | ohne Schalter | mit 128 Bildern |
+ * | --- | ---: | ---: |
+ * | Windows 11 (Electron 33) | 52,0 ms | **42,8 ms** |
+ * | macOS (Electron 33)      | 16,4 ms | **7,8 ms**  |
+ *
+ * Unter Windows kommt die Ersparnis allein aus `render` (10 → 2,7 ms); die
+ * 40 ms `device` sind der WASAPI-Puffer und bleiben, wo sie sind.
+ */
+export const FORCED_BUFFER_FRAMES = RENDER_QUANTUM;
+
+/** Darüber ist keine Angabe mehr gemeint, sondern ein Vertipper (≈170 ms). */
+export const MAX_BUFFER_FRAMES = 8192;
+
+/** Der Notausgang: `MORPHOS_AUDIO_BUFFER_SIZE=aus` schaltet den Schalter ab. */
+export const BUFFER_SIZE_ENV = 'MORPHOS_AUDIO_BUFFER_SIZE';
+
+/** Plattformen, auf denen der kleine Puffer gemessen ist — nur dort ungefragt. */
+const MEASURED_PLATFORMS: readonly string[] = ['win32', 'darwin'];
+
+/**
+ * Wie viele Bilder die Schale dem Audiopfad vorgibt — oder `null`, wenn sie
+ * sich heraushalten soll.
+ *
+ * Ein kleinerer Puffer heißt mehr Weckrufe für den Audiothread; auf einer
+ * schwachen Maschine kann das zu Aussetzern führen. Darum zwei Grenzen:
+ * ungefragt erzwungen wird nur auf den beiden Plattformen, auf denen der
+ * Gewinn **gemessen** ist, und `MORPHOS_AUDIO_BUFFER_SIZE` überstimmt die
+ * Vorgabe in beide Richtungen — `aus` schaltet ab, eine Zahl setzt sie neu.
+ * Was sich nicht als Zahl lesen lässt, wird übergangen: Ein Vertipper in der
+ * Umgebung soll nicht heimlich den Klang verstellen.
+ */
+export function forcedBufferFrames(platform: string, raw: string | undefined): number | null {
+  const wanted = (raw ?? '').trim().toLowerCase();
+  const fallback = MEASURED_PLATFORMS.includes(platform) ? FORCED_BUFFER_FRAMES : null;
+  if (wanted === '') return fallback;
+  if (wanted === '0' || wanted === 'aus' || wanted === 'off') return null;
+  const frames = Number(wanted);
+  if (!Number.isFinite(frames) || frames <= 0) return fallback;
+  return Math.min(MAX_BUFFER_FRAMES, Math.max(RENDER_QUANTUM, Math.round(frames)));
+}

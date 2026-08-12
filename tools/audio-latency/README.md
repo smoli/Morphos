@@ -44,6 +44,14 @@ und übersteuert den `latencyHint` der Seite):
 npx electron tools/audio-latency/measure.mjs --audio-buffer-size=128 > messung.json
 ```
 
+Jeder weitere Chromium-Schalter geht über `--switch=` (mehrfach erlaubt) — so
+wurden unter Windows die Wege neben dem gemeinsamen WASAPI-Modus gemessen:
+
+```bash
+npx electron tools/audio-latency/measure.mjs --switch=enable-exclusive-audio
+npx electron tools/audio-latency/measure.mjs --switch=enable-features=AllowIAudioClient3
+```
+
 **Schleifenmessung** (Knopf in `index.html`): spielt Klicks und hört sie über
 das Mikrofon wieder ein. Das ist der einzige wirklich hörbare Beleg, misst aber
 den vollen Umlauf (Ausgabe + Luft + Eingabe). Sauber ist daran die **Differenz**
@@ -66,5 +74,18 @@ Gemessene Läufe liegen in [`measurements/`](measurements):
 | Lauf | bester Arm | Boden |
 | --- | ---: | --- |
 | `windows-chrome151-manual.json` | **50,7 ms** | 480 Bilder, in jedem Arm gleich |
+| `windows-electron33-auto.json` | 52,0 ms | 480 Bilder, in jedem Arm gleich |
+| `windows-electron33-buffer128.json` | **42,8 ms** | 128 Bilder erzwungen; `device` bleibt 40 ms |
+| `windows-electron33-exclusive.json` | 133,4 ms | `--enable-exclusive-audio`: 3× schlechter |
+| `windows-electron33-exclusive-buffer128.json` | 130,8 ms | dito, auch mit kleinem Puffer |
+| `windows-electron33-iaudioclient3.json` | 52,0 ms | `AllowIAudioClient3`: bewegt nichts |
+| `windows-electron33-iaudioclient3-buffer128.json` | 43,5 ms | dito, kein Zusatz zum Puffer |
+| `windows-electron33-inprocess-buffer128.json` | 43,2 ms | Audiodienst im Prozess: bewegt nichts |
+| `windows-electron33-waveout-buffer128.json` | 130,8 ms | `--force-wave-audio`: 3× schlechter |
 | `macos-electron33-auto.json` | 7,8 ms | 480 / 256 / 128 Bilder je nach Hint |
 | `macos-electron33-buffer128.json` | 7,8 ms | 128 Bilder erzwungen |
+
+Die 128 Bilder setzt Morphos seit c0085 selbst — `electron/main.ts` hängt den
+Schalter an, `forcedBufferFrames()` in [`src/core/audiolatency.ts`](../../src/core/audiolatency.ts)
+entscheidet worüber. Wer eine Maschine hat, auf der der kleine Puffer knackst,
+setzt `MORPHOS_AUDIO_BUFFER_SIZE=aus`.

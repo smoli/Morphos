@@ -27,6 +27,15 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const bufferSize = process.argv.find((a) => a.startsWith('--audio-buffer-size='))?.split('=')[1];
 if (bufferSize) app.commandLine.appendSwitch('audio-buffer-size', bufferSize);
 
+// Jeder weitere Chromium-Schalter zum Ausprobieren, mehrfach erlaubt:
+// `--switch=enable-exclusive-audio`, `--switch=enable-features=AllowIAudioClient3`.
+// Damit lassen sich die Windows-Wege (WASAPI exclusive, IAudioClient3) messen,
+// ohne dieses Werkzeug für jeden Versuch anzufassen (c0085).
+for (const arg of process.argv.filter((a) => a.startsWith('--switch='))) {
+  const [name, ...rest] = arg.slice('--switch='.length).split('=');
+  if (name) app.commandLine.appendSwitch(name, rest.length ? rest.join('=') : undefined);
+}
+
 app.whenReady().then(() => {
   const win = new BrowserWindow({
     width: 980,
