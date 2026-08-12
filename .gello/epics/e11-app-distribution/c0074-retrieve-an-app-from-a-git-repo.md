@@ -1,10 +1,10 @@
 ---
 id: c0074
 title: Retrieve an app from a git repo
-status: review
+status: done
 created: 2026-08-12
 updated: 2026-08-12
-status-changed: 2026-08-12T20:47:52
+status-changed: 2026-08-12T22:25:16
 epic: e11
 commit: 30988c3
 usage-tokens: 70325
@@ -178,3 +178,4 @@ Git-Konfiguration wirkt weiterhin.
 - 2026-08-12 status → in-progress (agent)
 - 2026-08-12 status → review (agent)
 - 2026-08-12 implemented in 30988c3 (agent)
+- 2026-08-12 status → done (app)

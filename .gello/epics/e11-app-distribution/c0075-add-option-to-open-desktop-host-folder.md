@@ -1,10 +1,10 @@
 ---
 id: c0075
 title: Add option to open Desktop host folder
-status: review
+status: done
 created: 2026-08-12
 updated: 2026-08-12
-status-changed: 2026-08-12T21:14:14
+status-changed: 2026-08-12T22:25:20
 epic: e11
 commit: 892d273
 usage-tokens: 50820
@@ -126,3 +126,4 @@ kein `lint`-Skript in `package.json`).
 - 2026-08-12 status → in-progress (agent)
 - 2026-08-12 status → review (agent)
 - 2026-08-12 implemented in 892d273 (agent)
+- 2026-08-12 status → done (app)

@@ -1,10 +1,10 @@
 ---
 id: c0076
 title: make app search part of dock
-status: review
+status: done
 created: 2026-08-12
 updated: 2026-08-12
-status-changed: 2026-08-12T21:21:36
+status-changed: 2026-08-12T22:25:23
 epic: e09
 usage-tokens: 16115
 usage-cost: 2.600583
@@ -64,3 +64,4 @@ Akzeptanzkriterien hat die Karte nicht — geprüft wurde gegen das What
 - 2026-08-12 status → ready (app)
 - 2026-08-12 status → in-progress (agent)
 - 2026-08-12 status → review (agent)
+- 2026-08-12 status → done (app)
