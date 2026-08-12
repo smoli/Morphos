@@ -61,21 +61,26 @@ Decisions (interviewed 2026-08-12):
 - **Framework-agnostic** — the picker reads the DOM, so it works in vanilla and
   Preact apps alike.
 
-Open questions for planning:
+Open questions — decided while building (2026-08-12):
 
-- **Coverage of source tags:** `data-morphos-src` is straightforward for markup in
-  `src/index.html`. **Runtime-generated DOM** — `document.createElement` and
-  **htm/Preact** templates — has no build-time tag and relies on the descriptive
-  fallback. Tagging htm/JS templates (a source transform) is a harder extension —
-  v1 or later?
-- **Selector stability:** how robust the generated CSS path must be (id/class
-  heuristics vs `nth-child`).
-- **Highlight UX** inside the sandboxed app (an outline overlay the injected script
-  draws) — and keeping it out of the app's own screenshots.
-- Does a reference also flow into the **per-window chat context** like attachments,
-  or only the immediate next prompt?
-- **Size:** moderate (injected picker + bundler tagging + composer chips + prompt
-  context) — a candidate for /gello-plan, though buildable as one card.
+- **Coverage of source tags:** v1 tags only `src/index.html` (statically-authored
+  markup). Runtime-generated DOM — `document.createElement` and **htm/Preact**
+  templates — keeps the descriptive fallback; the prompt says so explicitly
+  („kein Quell-Tag … finde die Stelle über Selektor und Text“). A source
+  transform for htm/JS templates stays a later extension.
+- **Selector stability:** id first (`#id`, only if unique and a plain name — it
+  ends the path), otherwise `tag` + up to two „sane“ classes (hash-looking ones
+  dropped) plus `:nth-of-type` only when same-tag siblings exist. Robust enough
+  to survive re-renders, precise enough to be unique.
+- **Highlight UX:** a `position: fixed`, `pointer-events: none` overlay the
+  injected script draws in the app's own document (there is no other surface in
+  a sandboxed iframe), plus a crosshair cursor. Screenshots are not a topic yet
+  — Morphos takes none of the app; the overlay disappears with pick mode.
+- **Chat context:** a reference belongs to the **immediate next prompt** only,
+  exactly like an attachment — it is a deictic gesture („das da“), not a lasting
+  property of the dialogue. What went along stays visible in the history
+  (🎯-Kärtchen at the user message).
+- **Size:** built as one card, no /gello-plan needed.
 
 ## Notes
 
