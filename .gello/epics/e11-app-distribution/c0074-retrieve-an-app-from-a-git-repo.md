@@ -1,11 +1,12 @@
 ---
 id: c0074
 title: Retrieve an app from a git repo
-status: discuss
+status: backlog
 created: 2026-08-12
 updated: 2026-08-12
-status-changed: 2026-08-12T20:09:24
+status-changed: 2026-08-12T20:28:07
 epic: e11
+order: 10
 ---
 
 ## What
@@ -79,3 +80,4 @@ Open questions for planning:
 ## Log
 
 - 2026-08-12 status → discuss (app)
+- 2026-08-12 status → backlog (app)
