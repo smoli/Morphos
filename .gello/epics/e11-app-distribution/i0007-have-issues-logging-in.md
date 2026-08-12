@@ -73,6 +73,54 @@ er durch.
   osxkeychain-Eintrag entsteht also mit. Kein neuer Zustand gegenüber dem von
   GitHub empfohlenen Weg.
 
+## Review
+
+### 2026-08-12T21:04:56 — pass
+
+Checked: alle fünf Akzeptanzkriterien am Code, der Diff von 2d2f490, `npm test`,
+`npm run typecheck` (ein Lint-Skript gibt es in `package.json` nicht),
+dazu drei eigene Gegenproben mit dem echten git und der echten gh-CLI.
+
+- Kriterium 1 (privates Repository über https ohne `gh auth setup-git`)
+  gegengeprüft, nicht nur gelesen: `git -c credential.helper= -c
+  "credential.https://github.com.helper=!'/opt/homebrew/bin/gh' auth
+  git-credential" clone -- https://github.com/smoli/morphos-looper.git` — also
+  genau die Argumente aus `ghCredentialArgs` — kam durch; derselbe Klon ohne das
+  `-c`-Paar scheiterte wortgleich mit „could not read Username … terminal
+  prompts disabled".
+- Kriterium 2 (eigene Helfer zuerst) gegengeprüft: mit einem `credential.helper`
+  in `~/.gitconfig` und dem gh-Helfer per `-c` antwortete der Helfer des
+  Anwenders, der gh-Helfer wurde nicht gefragt; erst ohne ihn kam gh zum Zug —
+  `-c` steht in der Rangfolge also tatsächlich hinten. Ohne gh liefert
+  `ghCredentialArgs` `[]` und `cloneRepo` setzt denselben Befehl ab wie zuvor
+  (`gitstore.ts:127`). Auch die Notiz „bei fremder Gegenstelle kein zusätzliches
+  Rauschen" stimmt: ein gitlab.com-Klon mit und ohne gh-Helfer ergibt Zeichen für
+  Zeichen dieselbe Fehlermeldung.
+- Kriterium 3 (Token nie bei Morphos): `ghCredentialArgs` erzeugt nur eine
+  Konfigurationszeile, kein Aufruf holt ein Token, nichts wird geschrieben; git
+  ruft gh selbst. Der Klon läuft weiter über `runGit`, ohne neue Umgebung.
+- Kriterium 4 (Meldung mit Weg): `cloneErrorMessage` (`appimport.ts:113`) hängt
+  am einzigen Klon-Aufrufer (`appimport.ts:246-252`), trennt https von ssh und
+  reicht alles Übrige wörtlich durch — vier Tests in `appimport.spec.ts` decken
+  https, abgelehnte Anmeldung, ssh und den Durchreichfall ab.
+- Kriterium 5 (Tests): reine Teile in `gitstore.spec.ts` (Gegenstelle mit Port,
+  Grossschreibung, Benutzeranteil; ssh/git/file/Pfad; fehlendes gh; Quoting und
+  Steuerzeichen im Pfad) und `findGh` gegen ein untergeschobenes Verzeichnis.
+  Die Verdrahtung prüft `„lässt git den Zugang wirklich bei gh holen"` mit einem
+  echten `git credential fill` und einem untergeschobenen `gh` — kein Mock der
+  Stelle, an der der Fehler lag.
+- Diff bleibt im Rahmen: vier Dateien, nur `gitstore` und `appimport` plus deren
+  Tests, keine Fremdänderung, kein Debug-Rest, kein `.only`/`.skip` ausser dem
+  sachlichen `it.skipIf(process.platform === 'win32')` am Shell-Helfer-Test.
+- Checks grün: `npm test` 1484 Tests in 80 Dateien, alle bestanden;
+  `npm run typecheck` ohne Ausgabe.
+- Zwei Kleinigkeiten, kein Grund zum Rückweisen: (a) über ssh greift die
+  Schlüssel-Meldung an `NO_KEY`; eine ssh-Fehlermeldung, die nur „Repository not
+  found" enthält, ohne die übliche Zeile „Could not read from remote
+  repository", bekäme noch den gh-Text — git hängt die Zeile praktisch immer an.
+  (b) `runGit`s Notmeldung „git ${args[0]} endete mit Code …" sagt beim Klon nun
+  „git -c …", falls git gar nichts auf stderr schreibt.
+
 ## Log
 
 - 2026-08-12 status → in-progress (agent)
