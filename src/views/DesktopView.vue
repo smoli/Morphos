@@ -83,7 +83,8 @@ function visible(w: DesktopWindow): boolean {
   return singleMode.value ? w.instanceId === desktop.activeId : !w.minimized;
 }
 
-// Das Dock: das feste ＋ und dahinter, was core/dock aufstellt — die Ansichten
+// Das Dock: die festen Knöpfe (Suchen, ＋, aus Git holen) und dahinter, was
+// core/dock aufstellt — die Ansichten
 // der Schale (Dateien, Einstellungen), die behaltenen Apps und die laufenden
 // Fenster. Im Einzel-Modus verdeckt es die Vollbild-App nicht: Dort erscheint
 // es nur auf dem Desktop selbst.
@@ -644,14 +645,6 @@ function onMenuPick(id: string): void {
       <div ref="launcher" class="launcher" :class="deskReserve">
         <div class="desk-tools">
           <button
-            type="button"
-            class="tool search-btn"
-            :title="`Apps suchen (${shortcutKeys('launcher')})`"
-            @click="searchOpen = true"
-          >
-            🔍 Suchen
-          </button>
-          <button
             v-if="workspace.hasIconLayout"
             type="button"
             class="tool tidy"
@@ -744,8 +737,8 @@ function onMenuPick(id: string): void {
         @mouseleave="dockNear = false"
       ></div>
 
-      <!-- Das Dock: ＋, die Ansichten der Schale, die behaltenen Apps und was
-           gerade läuft (core/dock). -->
+      <!-- Das Dock: Suchen, ＋, aus Git holen, die Ansichten der Schale, die
+           behaltenen Apps und was gerade läuft (core/dock). -->
       <div
         v-if="dockVisible"
         class="dock"
@@ -759,6 +752,16 @@ function onMenuPick(id: string): void {
         @focusin="dockFocus = true"
         @focusout="dockFocus = false"
       >
+        <!-- Ganz vorn das Startmenü (c0076): Apps tippend finden gehört ins
+             Dock, nicht als fester Knopf auf die Fläche. -->
+        <button
+          type="button"
+          class="dock-item search"
+          :title="`Apps suchen (${shortcutKeys('launcher')})`"
+          @click="searchOpen = true"
+        >
+          <span class="dock-glyph">🔍</span>
+        </button>
         <button
           type="button"
           class="dock-item new"
@@ -881,7 +884,8 @@ function onMenuPick(id: string): void {
   inset: 0;
   pointer-events: none;
 }
-/* Werkzeuge des Desktops — Suchen, und Aufräumen, sobald es etwas aufzuräumen gibt. */
+/* Werkzeuge des Desktops — Aufräumen, sobald es etwas aufzuräumen gibt. Das
+   Suchen steht seit c0076 im Dock, nicht mehr fest auf der Fläche. */
 .desk-tools {
   position: absolute;
   top: 12px;
@@ -1147,6 +1151,11 @@ function onMenuPick(id: string): void {
 .dock-item:focus-visible {
   transform: scale(1.18);
   outline: none;
+}
+/* Die Lupe steht so groß da wie die Icons neben ihr (c0076). */
+.dock-item.search .dock-glyph {
+  font-size: 26px;
+  line-height: 1;
 }
 .dock-item.new .dock-glyph {
   font-size: 30px;

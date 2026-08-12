@@ -129,12 +129,13 @@ describe('DesktopView', () => {
   }
 
   /**
-   * Die Namen der App-Plätze im Dock, von links nach rechts — ohne das feste ＋
-   * und ohne die festen Ansichten der Schale (dafür: dockSystemNames).
+   * Die Namen der App-Plätze im Dock, von links nach rechts — ohne die festen
+   * Knöpfe (Suchen, ＋, Git) und ohne die festen Ansichten der Schale (dafür:
+   * dockSystemNames).
    */
   function dockNames(wrapper: VueWrapper): string[] {
     return wrapper
-      .findAll('.dock-item:not(.new):not(.import):not(.system)')
+      .findAll('.dock-item:not(.search):not(.new):not(.import):not(.system)')
       .map((d) => d.attributes('title') ?? '');
   }
 
@@ -909,8 +910,8 @@ describe('DesktopView', () => {
       useDesktopStore().openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
       await flushPromises();
 
-      // Das feste ＋ steht vor allem anderen.
-      expect(wrapper.findAll('.dock-item')[0].classes()).toContain('new');
+      // Die festen Knöpfe stehen vor allem anderen.
+      expect(wrapper.findAll('.dock-item')[1].classes()).toContain('new');
       expect(dockNames(wrapper)).toEqual(['Editor', 'Rechner']);
     });
 
@@ -1048,11 +1049,12 @@ describe('DesktopView', () => {
 
       expect(dockSystemNames(wrapper)).toEqual(SYSTEM_WINDOWS.map((s) => s.title));
       expect(dockNames(wrapper)).toEqual([]);
-      // Erst das ＋ und das Holen aus Git, dann die Plätze der Schale, dann alles andere.
+      // Erst Suchen, ＋ und das Holen aus Git, dann die Plätze der Schale, dann alles andere.
       const titles = wrapper.findAll('.dock-item').map((d) => d.attributes('title'));
-      expect(titles[0]).toContain('Neue App');
-      expect(titles[1]).toContain('Git');
-      expect(titles.slice(2, 2 + SYSTEM_WINDOWS.length)).toEqual(SYSTEM_WINDOWS.map((s) => s.title));
+      expect(titles[0]).toContain('suchen');
+      expect(titles[1]).toContain('Neue App');
+      expect(titles[2]).toContain('Git');
+      expect(titles.slice(3, 3 + SYSTEM_WINDOWS.length)).toEqual(SYSTEM_WINDOWS.map((s) => s.title));
       // Solange nichts folgt, steht nur der Strich hinter den festen Knöpfen.
       expect(wrapper.findAll('.dock .dock-sep')).toHaveLength(1);
     });
@@ -1063,7 +1065,7 @@ describe('DesktopView', () => {
       useDesktopStore().openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
       await flushPromises();
 
-      expect(wrapper.findAll('.dock-item:not(.new):not(.import)').map((d) => d.attributes('title'))).toEqual([
+      expect(wrapper.findAll('.dock-item:not(.search):not(.new):not(.import)').map((d) => d.attributes('title'))).toEqual([
         ...SYSTEM_WINDOWS.map((s) => s.title),
         'Editor',
         'Rechner',
@@ -1428,9 +1430,9 @@ describe('DesktopView', () => {
   });
 
   describe('Suchleiste (Startmenü)', () => {
-    /** Öffnet das Startmenü über seinen Knopf auf dem Desktop. */
+    /** Öffnet das Startmenü über seinen Platz im Dock. */
     async function openLauncher(wrapper: VueWrapper) {
-      await wrapper.get('.search-btn').trigger('click');
+      await wrapper.get('.dock-item.search').trigger('click');
       await flushPromises();
       return wrapper.getComponent(LauncherOverlay);
     }
@@ -1442,7 +1444,7 @@ describe('DesktopView', () => {
       await flushPromises();
     }
 
-    it('öffnet das Startmenü über den Knopf auf dem Desktop', async () => {
+    it('öffnet das Startmenü über seinen Platz im Dock', async () => {
       const { wrapper } = await mountView();
       expect(wrapper.findComponent(LauncherOverlay).exists()).toBe(false);
 
@@ -1450,6 +1452,23 @@ describe('DesktopView', () => {
       expect(wrapper.findComponent(LauncherOverlay).exists()).toBe(true);
       // Es kennt die Apps des Verzeichnisses.
       expect(wrapper.get('.lp-list').text()).toContain('Rechner');
+    });
+
+    it('steht als erster Platz im Dock — und auf der Fläche steht kein Knopf mehr (c0076)', async () => {
+      const { wrapper } = await mountView();
+
+      const item = wrapper.get('.dock-item.search');
+      expect(item.attributes('title')).toContain('suchen');
+      // Ganz vorn: erst das Suchen, dann das ＋ und das Holen aus Git.
+      const fixed = wrapper.findAll('.dock-item').slice(0, 3);
+      expect(fixed.map((d) => d.classes().filter((c) => c !== 'dock-item')).flat()).toEqual([
+        'search',
+        'new',
+        'import',
+      ]);
+      // Der feste Knopf auf dem Desktop ist weg; das Aufräumen bleibt dort.
+      expect(wrapper.find('.search-btn').exists()).toBe(false);
+      expect(wrapper.find('.desk-tools').text()).not.toContain('Suchen');
     });
 
     it('öffnet das Startmenü auch per Tastenkürzel (Strg/⌘ + K)', async () => {
@@ -1621,7 +1640,7 @@ describe('DesktopView', () => {
 
     it('rührt sich auch nicht, während das Startmenü Eingaben entgegennimmt', async () => {
       const { wrapper } = await mountView({ attach: true });
-      await wrapper.get('.search-btn').trigger('click');
+      await wrapper.get('.dock-item.search').trigger('click');
       await flushPromises();
 
       await pressOn(wrapper.get('.lp-input').element, 'n', { ctrlKey: true });
@@ -1816,7 +1835,7 @@ describe('DesktopView', () => {
 
     it('öffnet ihn auch aus der Suchleiste heraus', async () => {
       const { wrapper } = await mountView();
-      await wrapper.get('.search-btn').trigger('click');
+      await wrapper.get('.dock-item.search').trigger('click');
       await flushPromises();
       expect(wrapper.get('.lp-list').text()).toContain('Dateien');
 
@@ -2137,7 +2156,7 @@ describe('DesktopView', () => {
       const item = wrapper.get('.dock-item.import');
       expect(item.attributes('title')).toContain('Git');
       // Direkt hinter dem ＋, noch vor den Ansichten der Schale.
-      expect(wrapper.findAll('.dock-item')[1].classes()).toContain('import');
+      expect(wrapper.findAll('.dock-item')[2].classes()).toContain('import');
       expect(wrapper.findComponent(ImportAppDialog).exists()).toBe(false);
     });
 
