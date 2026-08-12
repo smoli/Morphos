@@ -19,26 +19,26 @@ workspace's apps folder so it appears on the desktop.
 
 ## Acceptance criteria
 
-- [ ] A desktop action **„App aus Git laden…“** (beside „Neue App“ / the dock ＋)
+- [x] A desktop action **„App aus Git laden…“** (beside „Neue App“ / the dock ＋)
       prompts for a **repo URL** and starts the import.
-- [ ] Morphos **clones** the repo (system git, default branch) into a temp
+- [x] Morphos **clones** the repo (system git, default branch) into a temp
       location, **keeping `.git` and the `origin` remote** (a real clone).
-- [ ] The clone is **validated as a Morphos app**: `app.json` exists at the root,
+- [x] The clone is **validated as a Morphos app**: `app.json` exists at the root,
       parses, and has an `id`/`name`; otherwise the import is **rejected** with a
       clear message and the temp clone is removed.
-- [ ] On an **id collision** with an existing app, the user is **asked**: import
+- [x] On an **id collision** with an existing app, the user is **asked**: import
       **as a copy** (new unique id + folder, `app.json` id updated → a commit;
       display name kept), **replace** the existing app (with confirmation), or
       **cancel**.
-- [ ] On success the app is moved into the workspace's **apps folder** and the
+- [x] On success the app is moved into the workspace's **apps folder** and the
       desktop **list refreshes** so it appears; opening it works (old-format
       `app.json` still migrates as usual).
-- [ ] Uses **system git credentials** — public repos work anonymously, private
+- [x] Uses **system git credentials** — public repos work anonymously, private
       ones work if the user's git is configured; **auth/clone failures** surface a
       clear error and clean up the temp clone.
-- [ ] The clone is **confined to the workspace**; the URL comes from the **user**,
+- [x] The clone is **confined to the workspace**; the URL comes from the **user**,
       not from app content. Cancel/failure leave the workspace unchanged.
-- [ ] Pure pieces (app-json validation, collision detection + rename to a unique
+- [x] Pure pieces (app-json validation, collision detection + rename to a unique
       id) covered by **unit tests**; the clone/move orchestration lives in the
       main process.
 
