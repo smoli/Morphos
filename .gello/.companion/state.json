@@ -1,19 +1,9 @@
 {
-  "status": "running",
+  "status": "idle",
   "ready": [],
   "waiting": [],
-  "runs": [
-    {
-      "cardId": "c0073",
-      "phase": "running",
-      "activity": {
-        "name": "Bash",
-        "arg": "python3 - <<'PY'\np='.gello/epics/e0004-chat-dialog/c0073-mark-ui-elements-and-discuss.md'\ns=open(p).read()\ns=s.replace(\"epic: e0004\\n\",\"epic: e0004\\ncommit: db6cc84\\n\",1)\ns=s.replace(\"- 2026-08-12 status → review (agent)\",\"- 2026-08-12 status → review (agent)\\n- 2026-08-12 umgesetzt in db6cc84 (agent)\")\nopen(p,'w').write(s)\nPY\ngit add .gello/epics/e0004-chat-dialog/c0073-mark-ui-elements-and-discuss.md\ngit commit -q -m \"c0073: Commit auf der Karte vermerkt\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\"\ngit log --oneline -3; head -12 .gello/epics/e0004-chat-dialog/c0073-mark-ui-elements-and-discuss.md"
-      },
-      "model": "claude-opus-5"
-    }
-  ],
-  "updated": "2026-08-12T20:22:43",
+  "runs": [],
+  "updated": "2026-08-12T20:22:57",
   "pickupDelay": 10,
   "owned": [
     "c0029",
