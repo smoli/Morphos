@@ -1,10 +1,11 @@
 ---
 id: c0077
 title: Create a readme for an app
-status: in-progress
+status: review
 created: 2026-08-12
+commit: e31d059
 updated: 2026-08-12
-status-changed: 2026-08-12T21:23:31
+status-changed: 2026-08-12T21:36:42
 epic: e11
 ---
 
@@ -121,3 +122,4 @@ Implemented (2026-08-12):
 - 2026-08-12 status → discuss (app)
 - 2026-08-12 status → ready (app)
 - 2026-08-12 status → in-progress (agent)
+- 2026-08-12 status → review (agent)
