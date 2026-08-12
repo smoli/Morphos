@@ -7,6 +7,8 @@ updated: 2026-08-12
 status-changed: 2026-08-12T21:14:14
 epic: e11
 commit: 892d273
+usage-tokens: 42621
+usage-cost: 5.053956
 ---
 
 # Add option to open Desktop host folder
