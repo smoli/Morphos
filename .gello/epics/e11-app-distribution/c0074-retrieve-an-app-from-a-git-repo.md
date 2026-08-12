@@ -1,10 +1,10 @@
 ---
 id: c0074
 title: Retrieve an app from a git repo
-status: backlog
+status: ready
 created: 2026-08-12
 updated: 2026-08-12
-status-changed: 2026-08-12T20:28:07
+status-changed: 2026-08-12T20:31:23
 epic: e11
 order: 10
 ---
@@ -81,3 +81,4 @@ Open questions for planning:
 
 - 2026-08-12 status → discuss (app)
 - 2026-08-12 status → backlog (app)
+- 2026-08-12 status → ready (app)

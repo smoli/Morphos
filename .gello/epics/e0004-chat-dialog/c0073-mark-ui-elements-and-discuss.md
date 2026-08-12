@@ -1,10 +1,10 @@
 ---
 id: c0073
 title: Mark UI elements and Discuss
-status: review
+status: done
 created: 2026-08-12
 updated: 2026-08-12
-status-changed: 2026-08-12T20:22:04
+status-changed: 2026-08-12T20:31:20
 epic: e0004
 commit: db6cc84
 usage-tokens: 65933
@@ -123,3 +123,4 @@ Umgesetzt (2026-08-12):
 - 2026-08-12 status → in-progress (agent)
 - 2026-08-12 status → review (agent)
 - 2026-08-12 umgesetzt in db6cc84 (agent)
+- 2026-08-12 status → done (app)

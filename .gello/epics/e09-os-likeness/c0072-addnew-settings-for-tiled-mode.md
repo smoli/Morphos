@@ -1,10 +1,10 @@
 ---
 id: c0072
 title: Add new settings for tiled mode
-status: review
+status: done
 created: 2026-08-10
-updated: 2026-08-10
-status-changed: 2026-08-10T07:02:40
+updated: 2026-08-12
+status-changed: 2026-08-12T20:31:18
 commit: 569df35
 epic: e09
 usage-tokens: 46212
@@ -73,3 +73,4 @@ Size of the window gap
   WindowFrame, Block „Die Kacheln“ in den Einstellungen, README nachgezogen
   (1360 Tests grün, typecheck + build sauber)
 - 2026-08-10 status → review (agent)
+- 2026-08-12 status → done (app)
