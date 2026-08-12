@@ -68,6 +68,54 @@ on an explicit action per app — and committed, so it travels with a push.
       version line) and the write+commit are covered by **unit tests**, the menu
       entry and the store action by **component/store tests**.
 
+## Notes
+
+Implemented (2026-08-12):
+
+- `core/readme` (new, main process only) is the whole thing: `shortDescription`
+  (first real paragraph of `concept.md` — headings, code fences and comments
+  skipped, markdown characters removed, capped at 300 chars on a word
+  boundary), `iconAsset`, `buildReadme` (pure) and `writeReadme` (the two
+  files). It **does not commit** — that stays with the caller (`main.ts`), like
+  everywhere else in this repo.
+- **Written by the shell, not by the LLM.** The card gives a fixed structure and
+  Morphos already knows every piece of it (manifest + the two docs), so a
+  generation pass would only cost tokens and drift. `README.md` therefore stays
+  outside the file protocol: `isValidOutputPath('README.md')` is already
+  `false` (asserted in `files.spec`), DELETE only takes `src/` paths, and
+  `writeAppState` only wipes `src/` — a new generation leaves the readme alone
+  (own test in `readme.spec`).
+- **Icon:** an emoji goes inline (`<h1 align="center">🧮<br>Name</h1>` — a
+  heading is the only way to show it big without a `style` attribute, which
+  repo pages strip). An image icon lives in the manifest as a `data:`-URI, and
+  repo pages throw those out of `<img>`, so it is written as a **real file**
+  next to the readme (`icon.png`/`.jpg`/`.gif`/`.webp`, chosen by its mime
+  type) and referenced by name. A stale icon file from an earlier readme is
+  removed, so switching image → emoji leaves nothing behind.
+- **Escaping:** name and description end up inside HTML, so both go through
+  `markdown.escapeHtml`; the description additionally loses its markdown
+  characters (inside an HTML block nothing renders them). Version and commit
+  are only printed if they *look* like a version / a hex sha — the readme
+  should never carry through whatever a manifest or build claims.
+- **Morphos-Stand:** the version comes from `app.getVersion()` (package.json),
+  the commit from a new build constant `__MORPHOS_COMMIT__` (`vite.config.ts`
+  runs `git rev-parse --short HEAD` at build time and defines it for the main
+  build; declared in `electron/env.d.ts`). Without git it stays empty and the
+  readme just names the version. Verified in the built `dist-electron/main.js`.
+- IPC `morphos:createReadme` (folder + id) goes through the existing
+  `knownWorkspaceError` and `appDir`/`safeId`, then `ensureRepo` +
+  `commitAll('Readme erstellt' | 'Readme aktualisiert')` — the readme travels
+  with a push. Store action `workspace.createReadme`, menu entry
+  „Readme erstellen“ (📄) between „Icon ändern“ and the dock entry, result as a
+  toast.
+- Checked against **real apps** from `~/Documents/MorhpOS-Desk-1` (copies): one
+  without docs (older app → „führt noch kein Konzept…“) and one with both docs
+  (Nodegrafik → its concept's first paragraph as the description). The
+  markdown-stripping of the description comes from exactly that run.
+- Not covered by tests, as everywhere in this repo: the IPC handler in
+  `electron/main.ts` itself (there is no main-process test level) — its two
+  parts, `writeReadme` and `commitAll`, are tested separately.
+
 ## Log
 
 - 2026-08-12 status → discuss (app)
