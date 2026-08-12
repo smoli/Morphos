@@ -7,8 +7,8 @@ tags: [audio, latency, performance]
 status-changed: 2026-08-12T23:29:01
 epic: e12
 updated: 2026-08-12
-usage-tokens: 45935
-usage-cost: 3.037866
+usage-tokens: 69734
+usage-cost: 6.387494
 ---
 
 # Investigate keypress→sound latency (Windows)

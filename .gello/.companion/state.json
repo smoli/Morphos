@@ -10,13 +10,13 @@
       "cardId": "c0081",
       "phase": "running",
       "activity": {
-        "name": "mcp__gello__set_status",
-        "arg": "review"
+        "name": "Bash",
+        "arg": "ls tools/audio-latency/ 2>&1; echo \"---\"; ls tools/audio-latency/measurements/ 2>&1; echo \"--- src/core ---\"; ls src/core/ | head -50"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T23:29:01",
+  "updated": "2026-08-12T23:29:26",
   "pickupDelay": 10,
   "owned": [
     "c0029",
