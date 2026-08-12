@@ -10,6 +10,7 @@ import SystemWindow from '@/components/SystemWindow.vue';
 import ExplorerPanel from '@/components/ExplorerPanel.vue';
 import IconDialog from '@/components/IconDialog.vue';
 import ImportAppDialog from '@/components/ImportAppDialog.vue';
+import GitLogo from '@/components/GitLogo.vue';
 import ContextMenu from '@/components/ContextMenu.vue';
 import LauncherOverlay from '@/components/LauncherOverlay.vue';
 import SwitcherOverlay from '@/components/SwitcherOverlay.vue';
@@ -2188,6 +2189,15 @@ describe('DesktopView', () => {
       // Direkt hinter dem ＋, noch vor den Ansichten der Schale.
       expect(wrapper.findAll('.dock-item')[2].classes()).toContain('import');
       expect(wrapper.findComponent(ImportAppDialog).exists()).toBe(false);
+    });
+
+    it('trägt das Git-Logo als Zeichen, kein Textpfeil (c0078)', async () => {
+      const { wrapper } = await mountView();
+      const item = wrapper.get('.dock-item.import');
+      const logo = item.findComponent(GitLogo);
+      expect(logo.exists()).toBe(true);
+      expect(logo.classes()).toContain('dock-glyph');
+      expect(item.text()).not.toContain('⤓');
     });
 
     it('holt die App und meldet sie, wenn sie da ist', async () => {

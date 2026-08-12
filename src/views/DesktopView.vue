@@ -12,6 +12,7 @@ import BusyDot from '@/components/BusyDot.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import IconDialog from '@/components/IconDialog.vue';
 import ImportAppDialog from '@/components/ImportAppDialog.vue';
+import GitLogo from '@/components/GitLogo.vue';
 import ContextMenu from '@/components/ContextMenu.vue';
 import LauncherOverlay from '@/components/LauncherOverlay.vue';
 import TileGaps from '@/components/TileGaps.vue';
@@ -793,7 +794,9 @@ function onMenuPick(id: string): void {
           title="App aus Git laden…"
           @click="openImport"
         >
-          <span class="dock-glyph">⤓</span>
+          <!-- Das Git-Logo selbst, nicht ein Pfeil: Der Platz ist an dem zu
+               erkennen, woher die App kommt (c0078). -->
+          <GitLogo class="dock-glyph" :size="28" />
         </button>
         <span v-if="dock.length" class="dock-sep" aria-hidden="true"></span>
         <template v-for="(entry, i) in dock" :key="entry.key">
