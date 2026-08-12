@@ -8,12 +8,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "npx vitest run src/core/audiolatency.spec.ts 2>&1 | tail -20"
+        "arg": "git status --short; echo \"=== what did c0080 commit include ===\"; git show --stat --oneline 5fface3 | head -20"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-12T23:04:00",
+  "updated": "2026-08-12T23:12:57",
   "pickupDelay": 10,
   "owned": [
     "c0029",

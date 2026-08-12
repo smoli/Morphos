@@ -45,6 +45,73 @@ Likely levers, cheapest first:
 - [ ] A recommendation: web-side fix suffices, or a native audio path is needed
       (with the finding fed back to c0079 if it argues for Rust).
 
+## Notes
+
+### Method
+
+No audio code exists in the repo — the sound app is a *generated* app, so the
+measurement needs its own minimal repro. Built one:
+
+- `tools/audio-latency/index.html` — a single self-contained page (no build, no
+  server: double-click it on any machine). Runs four arms × N keypresses and
+  records, per hit, `event.timeStamp → handler` (**input**) and
+  `handler → start() returned` (**dispatch**), plus `baseLatency` (**render**)
+  and the median `outputLatency` (**device**) of the arm.
+- `tools/audio-latency/measure.mjs` — runs the same page unattended inside
+  **Electron**, i.e. Morphos' actual shell (`npx electron … > messung.json`).
+- `src/core/audiolatency.ts` (+ 27 tests) — the interpretation: budget, dominant
+  contributor, arm-to-arm delta, verdict. Measuring is in the browser, judging
+  is in tested code.
+- `tools/audio-latency/report.ts` — prints the table below from a raw run.
+
+The model: `input + dispatch + render + device`. `render + device` is the
+**platform floor** — no app code gets below it.
+
+### Measured: macOS (Electron 33.4.11 / Chromium 130, 48 kHz)
+
+`tools/audio-latency/measurements/macos-electron33-auto.json`, 15 hits/arm:
+
+| Arm | input | dispatch | render | device | **total** | dominant |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| balanced (default), pre-decoded | 0,0 | 0,1 | 10,0 | 18,0 | **28,1** | device |
+| interactive, pre-decoded | 0,1 | 0,0 | 5,3 | 11,0 | **16,4** | device |
+| interactive, decode per hit | 0,0 | 0,2 | 5,3 | 11,0 | **16,5** | device |
+| latencyHint 0.001, pre-decoded | 0,0 | 0,1 | 2,7 | 5,0 | **7,8** | device |
+
+Buffer: 480 / 256 / 256 / **128 frames** (128 = one render quantum, the floor).
+
+Caveats, stated plainly: these are **synthesized** keydowns, so `input` reads ~0
+and the real OS key path (USB polling + input pipeline, typically 5–20 ms) is
+**not** in these numbers — it is platform-side and roughly equal on both OSes.
+The per-hit decode arm decodes a tiny 20 ms click; a real 1 s sample costs more.
+
+### Findings so far
+
+1. **`device` (`outputLatency`) dominates every arm** — the app's own hit path
+   (`input + dispatch`) is ≤ 0,3 ms. The card's hypothesis holds: it is the
+   audio output buffer, not the app and not the shell.
+2. **`latencyHint: 'interactive'` is worth −11,7 ms** on macOS (28,1 → 16,4).
+   That is the cheapest lever and it is real.
+3. **Pre-decoding is *not* the lever here** (−0,1 ms) — at least not for short
+   samples. Worth doing, but it is not where the 50–150 ms would come from.
+4. **A shell-level lever exists and Morphos owns it**: Chromium's
+   `--audio-buffer-size=128` switch (verified present in the shipped Electron
+   binary). Measured on macOS it pulls `interactive` from 16,4 → **7,8 ms** —
+   it overrides the page's `latencyHint` process-wide, so it fixes *every*
+   generated app at once, without touching generated code.
+   (`measurements/macos-electron33-buffer128.json`; trade-off: more wakeups,
+   higher risk of dropouts on weak machines.)
+5. **WASAPI exclusive mode is not reachable from Chromium** — no such switch
+   exists in the binary (checked). So if `--audio-buffer-size` does not fix
+   Windows, the remaining option really is a native audio path, which is the
+   part that would feed back into c0079.
+
+### Still open
+
+The Windows numbers — the actual subject of the card. They cannot be produced on
+this machine; the harness is built so one run on the Windows box answers it.
+See the question below.
+
 ## Discussion
 
 - Split out of **c0079** (Tauri): latency was the trigger for exploring Tauri,
