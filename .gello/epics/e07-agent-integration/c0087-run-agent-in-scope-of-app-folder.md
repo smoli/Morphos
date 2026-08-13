@@ -1,10 +1,10 @@
 ---
 id: c0087
 title: Run agent in scope of app folder
-status: in-progress
+status: done
 created: 2026-08-13
 updated: 2026-08-13
-status-changed: 2026-08-13T19:09:49
+status-changed: 2026-08-13T22:13:23
 epic: e07
 depends: [c0088]
 ---
@@ -138,3 +138,4 @@ result back from disk, bundles the artefact, and commits.
 - 2026-08-13 status → in-progress (agent)
 - 2026-08-13 Umstellung auf den App-Ordner: core/generate + MCP-Aufrufstelle,
   Blockprotokoll entfernt; status → review
+- 2026-08-13 status → done (app)
