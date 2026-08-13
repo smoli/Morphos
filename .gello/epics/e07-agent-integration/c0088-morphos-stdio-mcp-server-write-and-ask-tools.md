@@ -1,11 +1,12 @@
 ---
 id: c0088
 title: Morphos stdio MCP server — write/edit + ask tools with path confinement
-status: backlog
+status: ready
 created: 2026-08-13
 updated: 2026-08-13
-status-changed: 2026-08-13T16:27:02
+status-changed: 2026-08-13T16:31:26
 epic: e07
+order: 0
 ---
 
 # Morphos stdio MCP server — write/edit + ask tools with path confinement
@@ -30,3 +31,7 @@ every write and every question first-hand. Reads stay on the native CLI tools.
   server *is* the sandbox boundary, so no PreToolUse hook is needed.
 - Open: exact tool granularity (one write tool vs. separate edit/replace/
   delete/mkdir), and whether apps ever need deletes/renames under `src/`.
+
+## Log
+
+- 2026-08-13 status → ready (app)
