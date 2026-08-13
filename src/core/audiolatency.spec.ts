@@ -9,6 +9,10 @@ import {
   parseReport,
   formatReport,
   judgeReport,
+  forcedBufferFrames,
+  BUFFER_SIZE_ENV,
+  FORCED_BUFFER_FRAMES,
+  MAX_BUFFER_FRAMES,
   type LatencyArm,
   type LatencyReport,
 } from './audiolatency';
@@ -294,5 +298,62 @@ describe('formatReport', () => {
   it('markiert je Zeile den überwiegenden Abschnitt', () => {
     const table = formatReport({ platform: 'macOS', shell: 'Electron', arms: [arm()] });
     expect(table).toContain('device');
+  });
+});
+
+describe('forcedBufferFrames', () => {
+  it('erzwingt auf Windows das Renderquantum — dort sind es gemessen 9 ms', () => {
+    expect(forcedBufferFrames('win32', undefined)).toBe(FORCED_BUFFER_FRAMES);
+  });
+
+  it('erzwingt es auf macOS ebenso', () => {
+    expect(forcedBufferFrames('darwin', undefined)).toBe(128);
+  });
+
+  it('lässt ungemessene Plattformen in Ruhe', () => {
+    expect(forcedBufferFrames('linux', undefined)).toBeNull();
+    expect(forcedBufferFrames('freebsd', undefined)).toBeNull();
+  });
+
+  it('lässt sich auf jeder Plattform von Hand einschalten', () => {
+    expect(forcedBufferFrames('linux', '256')).toBe(256);
+  });
+
+  it('lässt sich abschalten — der Notausgang für schwache Maschinen', () => {
+    expect(forcedBufferFrames('win32', '0')).toBeNull();
+    expect(forcedBufferFrames('win32', 'aus')).toBeNull();
+    expect(forcedBufferFrames('win32', 'off')).toBeNull();
+    expect(forcedBufferFrames('win32', 'OFF')).toBeNull();
+  });
+
+  it('nimmt einen eigenen Wert an', () => {
+    expect(forcedBufferFrames('win32', '480')).toBe(480);
+  });
+
+  it('lässt niemanden unter das Renderquantum — darunter kann Chromium nicht', () => {
+    expect(forcedBufferFrames('win32', '64')).toBe(128);
+  });
+
+  it('deckelt nach oben, damit ein Tippfehler nicht das Gehör kostet', () => {
+    expect(forcedBufferFrames('win32', '999999')).toBe(MAX_BUFFER_FRAMES);
+  });
+
+  it('rundet Kommazahlen auf ganze Bilder', () => {
+    expect(forcedBufferFrames('win32', '256.7')).toBe(257);
+  });
+
+  it('fällt bei Unsinn auf die Vorgabe der Plattform zurück', () => {
+    expect(forcedBufferFrames('win32', 'viel')).toBe(FORCED_BUFFER_FRAMES);
+    expect(forcedBufferFrames('linux', 'viel')).toBeNull();
+    expect(forcedBufferFrames('win32', '-8')).toBe(FORCED_BUFFER_FRAMES);
+  });
+
+  it('behandelt Leerraum wie „nichts gesagt“', () => {
+    expect(forcedBufferFrames('win32', '   ')).toBe(FORCED_BUFFER_FRAMES);
+    expect(forcedBufferFrames('win32', ' 256 ')).toBe(256);
+  });
+
+  it('nennt die Umgebungsvariable, über die der Notausgang läuft', () => {
+    expect(BUFFER_SIZE_ENV).toBe('MORPHOS_AUDIO_BUFFER_SIZE');
   });
 });

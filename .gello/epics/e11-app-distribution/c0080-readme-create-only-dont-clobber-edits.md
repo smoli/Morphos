@@ -1,13 +1,13 @@
 ---
 id: c0080
 title: "Readme: create-only, don't clobber hand-edits"
-status: review
+status: done
 created: 2026-08-12
 epic: e11
 depends: [c0077]
 tags: [readme, git]
-status-changed: 2026-08-12T22:51:53
-updated: 2026-08-12
+status-changed: 2026-08-13T16:32:10
+updated: 2026-08-13
 usage-tokens: 30660
 usage-cost: 2.97369
 ---
@@ -121,3 +121,4 @@ eslint/prettier/biome, `package.json` hat nur `test`, `typecheck`, `build`).
 - 2026-08-12 create-only umgesetzt, Tests grün, offene Frage bleibt gestellt
 - 2026-08-12 status → in-progress (agent)
 - 2026-08-12 status → review (agent)
+- 2026-08-13 status → done (app)

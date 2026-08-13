@@ -149,6 +149,18 @@ export function writeAppState(
   if (docs) writeDocs(dir, docs);
 }
 
+/**
+ * Schreibt, was NACH einem Agentenlauf noch dazugehört: Manifest und gebündeltes
+ * Artefakt. Die Quellen und die beiden Dokumente stehen da bereits — der Agent
+ * hat sie selbst geschrieben (c0087), die Platte ist die maßgebliche Quelle.
+ */
+export function writeAppArtifact(dir: string, meta: AppMeta, html: string): void {
+  fs.mkdirSync(dir, { recursive: true });
+  ensureGitignore(dir);
+  writeManifest(dir, meta);
+  fs.writeFileSync(path.join(dir, 'index.html'), html, 'utf8');
+}
+
 /** Aktualisiert den updatedAt-Zeitstempel im Manifest (z. B. nach einem Revert). */
 export function touchManifest(dir: string, updatedAt: number): void {
   const meta = readManifest(dir);

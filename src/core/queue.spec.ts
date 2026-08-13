@@ -4,6 +4,7 @@ import {
   MAX_AGENTS_LIMIT,
   busyAppKeys,
   clampMaxAgents,
+  createSerialQueue,
   isAppBusy,
   runningCount,
   startableJobs,
@@ -113,5 +114,78 @@ describe('startableJobs', () => {
     const copy = JSON.parse(JSON.stringify(jobs));
     startableJobs(jobs, 2);
     expect(jobs).toEqual(copy);
+  });
+});
+
+describe('createSerialQueue', () => {
+  /** Eine Arbeit, die erst auf Zuruf fertig wird. */
+  function deferred(): { promise: Promise<string>; done: (value: string) => void } {
+    let done = (_value: string): void => {};
+    const promise = new Promise<string>((resolve) => {
+      done = resolve;
+    });
+    return { promise, done };
+  }
+
+  it('lässt zwei Arbeiten desselben Schlüssels nicht gleichzeitig laufen', async () => {
+    const queue = createSerialQueue();
+    const first = deferred();
+    const started: string[] = [];
+
+    const a = queue.run('app', () => {
+      started.push('a');
+      return first.promise;
+    });
+    const b = queue.run('app', async () => {
+      started.push('b');
+      return 'b';
+    });
+
+    // Der zweite Auftrag hat noch nicht einmal begonnen.
+    await Promise.resolve();
+    expect(started).toEqual(['a']);
+
+    first.done('a');
+    expect(await a).toBe('a');
+    expect(await b).toBe('b');
+    expect(started).toEqual(['a', 'b']);
+  });
+
+  it('lässt verschiedene Schlüssel nebeneinander laufen', async () => {
+    const queue = createSerialQueue();
+    const first = deferred();
+    const started: string[] = [];
+
+    const a = queue.run('app-1', () => {
+      started.push('a');
+      return first.promise;
+    });
+    const b = queue.run('app-2', async () => {
+      started.push('b');
+      return 'b';
+    });
+
+    expect(await b).toBe('b');
+    expect(started).toEqual(['a', 'b']);
+    first.done('a');
+    expect(await a).toBe('a');
+  });
+
+  it('reißt die Reihe nicht ab, wenn eine Arbeit scheitert', async () => {
+    const queue = createSerialQueue();
+    const failed = queue.run('app', async () => {
+      throw new Error('kaputt');
+    });
+    const next = queue.run('app', async () => 'weiter');
+
+    await expect(failed).rejects.toThrow('kaputt');
+    expect(await next).toBe('weiter');
+  });
+
+  it('gibt den Schlüssel wieder frei, wenn nichts mehr ansteht', async () => {
+    const queue = createSerialQueue();
+    await queue.run('app', async () => 'fertig');
+    await Promise.resolve();
+    expect(queue.size()).toBe(0);
   });
 });

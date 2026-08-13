@@ -2,7 +2,6 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type {
   AgentEvent,
   AppData,
-  AppDocs,
   AppSummary,
   Attachment,
   ChatMessage,
@@ -23,7 +22,6 @@ import type {
   Settings,
   ShellFsRequest,
   ShellFsResponse,
-  SourceFile,
   VersionInfo,
   WatchResult,
 } from '../src/types';
@@ -33,17 +31,19 @@ contextBridge.exposeInMainWorld('morphos', {
   // Betriebssystem, damit die Titelleiste die Fensterknöpfe passend anordnet.
   platform: process.platform,
 
+  // Der Agent arbeitet im Ordner der App: Es gehen nur der Wunsch und die
+  // Anschrift der App hinüber, keine Dateiinhalte mehr (c0087).
   generate: (
     prompt: string,
-    files: SourceFile[],
-    docs: AppDocs,
+    folder: string,
+    id: string | null,
     chat: ChatMessage[],
     attachments: Attachment[],
     runId?: string,
     framework?: Framework,
     elements?: ElementRef[],
   ): Promise<GenerateResult> =>
-    ipcRenderer.invoke('morphos:generate', { prompt, files, docs, chat, attachments, runId, framework, elements }),
+    ipcRenderer.invoke('morphos:generate', { prompt, folder, id, chat, attachments, runId, framework, elements }),
 
   // Fortschritt eines laufenden Agentenlaufs (Strom der Claude CLI).
   onAgentEvent: (cb: (runId: string, event: AgentEvent) => void): (() => void) => {
@@ -71,8 +71,6 @@ contextBridge.exposeInMainWorld('morphos', {
   listApps: (folder: string): Promise<AppSummary[]> => ipcRenderer.invoke('morphos:listApps', folder),
   loadApp: (folder: string, id: string): Promise<AppData | null> =>
     ipcRenderer.invoke('morphos:loadApp', folder, id),
-  saveApp: (folder: string, app: AppData, message: string): Promise<SaveResult> =>
-    ipcRenderer.invoke('morphos:saveApp', folder, app, message),
   deleteApp: (folder: string, id: string): Promise<SaveResult> =>
     ipcRenderer.invoke('morphos:deleteApp', folder, id),
   setAppIcon: (folder: string, id: string, icon: string | null): Promise<IconResult> =>

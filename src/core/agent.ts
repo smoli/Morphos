@@ -1,4 +1,5 @@
 import type { AgentEvent, AgentResult } from '@/types';
+import { mcpToolId } from './mcptools';
 
 /**
  * Ruhe-Zeitbudget eines Agentenlaufs: Weil die Claude CLI im Strom-Modus
@@ -121,50 +122,32 @@ type Json = Record<string, unknown>;
 const isJson = (v: unknown): v is Json => !!v && typeof v === 'object';
 
 /**
+ * Was die eigenen Werkzeuge von Morphos (core/mcp) im Fortschritt bedeuten:
+ * Sie sind das, was den Anwender wirklich interessiert — was geschrieben,
+ * gelöscht und gefragt wird. Alles andere ist ein Werkzeugschritt wie jeder.
+ */
+const MORPHOS_EVENTS: Record<string, (path: string) => AgentEvent> = {
+  [mcpToolId('write')]: (path) => ({ kind: 'write', path }),
+  [mcpToolId('edit')]: (path) => ({ kind: 'write', path }),
+  [mcpToolId('delete')]: (path) => ({ kind: 'delete', path }),
+  [mcpToolId('ask')]: () => ({ kind: 'say' }),
+};
+
+/**
  * Liest den JSONL-Strom der Claude CLI (`--output-format stream-json
  * --include-partial-messages`) mit: Werkzeugschritte kommen aus den
- * assistant-Nachrichten, der Fortschritt an den Dateien aus den Marken im
- * strömenden Antworttext (siehe core/files: ===MORPHOS:FILE …===).
+ * assistant-Nachrichten. Was der Agent an der App ändert, steht in den Aufrufen
+ * der Morphos-Werkzeuge — er schreibt ausschließlich durch sie (c0087).
  */
 export function createAgentStream(): AgentStream {
-  // Angefangene, noch nicht abgeschlossene JSON- bzw. Antworttext-Zeile.
+  // Angefangene, noch nicht abgeschlossene JSON-Zeile.
   let lineBuffer = '';
-  let textBuffer = '';
   let finished: AgentResult | null = null;
-
-  /** Marken im strömenden Antworttext erkennen — nur vollständige Zeilen zählen. */
-  function fromText(delta: string): AgentEvent[] {
-    textBuffer += delta;
-    const parts = textBuffer.split('\n');
-    textBuffer = parts.pop() ?? '';
-    const events: AgentEvent[] = [];
-    for (const part of parts) {
-      const text = part.trim();
-      const file = /^===MORPHOS:FILE (.+?)===$/.exec(text);
-      if (file) {
-        events.push({ kind: 'write', path: file[1].trim() });
-        continue;
-      }
-      const del = /^===MORPHOS:DELETE (.+?)===$/.exec(text);
-      if (del) {
-        events.push({ kind: 'delete', path: del[1].trim() });
-        continue;
-      }
-      if (text === '===MORPHOS:SAY===') events.push({ kind: 'say' });
-    }
-    return events;
-  }
 
   function fromStreamEvent(event: Json): AgentEvent[] {
     if (event.type === 'content_block_start') {
       const block = event.content_block;
       return isJson(block) && block.type === 'thinking' ? [{ kind: 'think' }] : [];
-    }
-    if (event.type === 'content_block_delta') {
-      const delta = event.delta;
-      if (isJson(delta) && delta.type === 'text_delta' && typeof delta.text === 'string') {
-        return fromText(delta.text);
-      }
     }
     return [];
   }
@@ -178,7 +161,8 @@ export function createAgentStream(): AgentStream {
       if (!isJson(block) || block.type !== 'tool_use') continue;
       const name = typeof block.name === 'string' ? block.name : 'Werkzeug';
       const detail = toolDetail(block.input);
-      events.push({ kind: 'tool', name, ...(detail ? { detail } : {}) });
+      const own = MORPHOS_EVENTS[name];
+      events.push(own ? own(detail ?? '') : { kind: 'tool', name, ...(detail ? { detail } : {}) });
     }
     return events;
   }

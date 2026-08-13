@@ -19,7 +19,6 @@ function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
     saveSettings: vi.fn(async () => ({ ok: true })),
     listApps: vi.fn(async () => []),
     loadApp: vi.fn(async () => null),
-    saveApp: vi.fn(async () => ({ ok: true })),
     saveChat: vi.fn(async () => ({ ok: true })),
     deleteApp: vi.fn(async () => ({ ok: true })),
     setAppIcon: vi.fn(async (_f: string, _i: string, icon: string | null) => ({ ok: true, icon: icon ?? '🧩' })),

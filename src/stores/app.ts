@@ -1,12 +1,12 @@
 import { defineStore } from 'pinia';
-import type { AgentEvent, AppData, AppDocs, Attachment, ChatMessage, ElementRef, Framework, SourceFile, VersionInfo } from '@/types';
+import type { AgentEvent, AppDocs, Attachment, ChatMessage, ElementRef, Framework, SourceFile, VersionInfo } from '@/types';
 import { getHost } from '@/services/host';
 import { agentEventLabel } from '@/core/agent';
 import { refLabel } from '@/core/pick';
-import { extractIcon, extractTitle } from '@/core/html';
+import { extractIcon } from '@/core/html';
 import { EMPTY_DOCS, toDocs } from '@/core/docs';
 import { DEFAULT_FRAMEWORK } from '@/core/framework';
-import { DEFAULT_ICON, DEFAULT_NAME, makeAppId } from '@/core/app';
+import { DEFAULT_ICON } from '@/core/app';
 
 /** Deckel für den mitlaufenden Fortschritt — ein langer Lauf soll nicht wachsen ohne Ende. */
 const MAX_ACTIVITY = 200;
@@ -198,9 +198,11 @@ export function useAppWindow(instanceId: string) {
     },
 
     /**
-     * Erzeugt oder verändert die App anhand des Wunsches. Das LLM kann statt
-     * Änderungen auch eine Rückfrage stellen (pendingQuestion) — dann wird
-     * nichts committet und der Anwender antwortet im Chat.
+     * Erzeugt oder verändert die App anhand des Wunsches. Der Agent arbeitet
+     * dafür unmittelbar im Ordner der App (c0087): Hier geht nur der Wunsch
+     * hinüber, zurück kommt der Stand, den die Schale committet hat — oder,
+     * wenn der Agent nur gefragt hat, seine Rückfrage (pendingQuestion). Dann
+     * wurde nichts committet und der Anwender antwortet im Chat.
      *
      * Während der Lauf arbeitet, strömen seine Fortschrittsereignisse herein
      * (activity) — der Chat zeigt live, was der Agent gerade tut.
@@ -210,6 +212,10 @@ export function useAppWindow(instanceId: string) {
       const text = prompt.trim();
       if (!text) {
         this.error = 'Bitte gib einen Wunsch ein.';
+        return;
+      }
+      if (!this.folder) {
+        this.error = 'Es ist kein Arbeitsverzeichnis geöffnet.';
         return;
       }
 
@@ -227,8 +233,6 @@ export function useAppWindow(instanceId: string) {
       const chatMark = this.chat.length;
       try {
         // Reine Werte übergeben (kein reaktiver Proxy) — Electron-IPC nutzt structured clone.
-        const plainFiles = this.files.map((f) => ({ path: f.path, content: f.content }));
-        const plainDocs = { concept: this.docs.concept, userdoc: this.docs.userdoc };
         const plainAtts = attachments.map((a) => ({ path: a.path, name: a.name, kind: a.kind }));
         const plainRefs = JSON.parse(JSON.stringify(elements)) as ElementRef[];
         // Der bisherige Dialog OHNE den aktuellen Wunsch — der geht separat in den Prompt.
@@ -246,7 +250,7 @@ export function useAppWindow(instanceId: string) {
         // Die Framework-Wahl geht immer mit; für eine bestehende App entscheidet
         // ohnehin deren eigener Quelltext (siehe core/framework).
         const res = await getHost().generate(
-          text, plainFiles, plainDocs, priorChat, plainAtts, runId, this.newFramework, plainRefs,
+          text, this.folder, this.id, priorChat, plainAtts, runId, this.newFramework, plainRefs,
         );
         // Abgebrochen: Das (Teil-)Ergebnis wird verworfen und der Wunsch aus dem
         // Dialog genommen — die App bleibt, wie sie war, und der Abbruch selbst
@@ -260,32 +264,31 @@ export function useAppWindow(instanceId: string) {
           return;
         }
 
-        if (res.files && res.html) {
-          this.files = res.files;
-          this.currentHtml = res.html;
-          // Konzept und Anleitung sind Teil derselben Generierung.
-          if (res.docs) this.docs = toDocs(res.docs);
+        // Hat der Lauf etwas geschrieben, steht der neue Stand schon auf der
+        // Platte und ist committet — hier wird er nur übernommen.
+        if (res.app) {
+          this.id = res.app.id;
+          this.name = res.app.name;
+          this.icon = res.app.icon;
+          this.iconCustom = res.app.iconCustom === true;
+          this.createdAt = res.app.createdAt;
+          this.files = res.app.files;
+          this.currentHtml = res.app.html;
+          this.docs = toDocs(res.app.docs);
+        }
 
-          // Erste Version: Name und Icon aus dem Artefakt ableiten und Id/Ordner festlegen.
-          if (this.id === null) {
-            this.name = extractTitle(res.html) || DEFAULT_NAME;
-            this.applyGeneratedIcon(res.html);
-            this.id = makeAppId(this.name);
-            this.createdAt = Date.now();
-          }
+        const message = res.say?.trim() || (res.app ? 'Umgesetzt.' : res.question ?? '');
+        if (message) this.chat.push({ role: 'assistant', text: message, time: Date.now() });
+        else if (!res.app) this.error = 'Der Agent hat nichts geändert und nichts mitgeteilt.';
 
-          this.chat.push({ role: 'assistant', text: res.say || 'Umgesetzt.', time: Date.now() });
-          await this.persist(text);
-          await this.loadVersions();
-        } else if (res.say) {
-          // Reine Rückfrage: kein neuer Stand, der Chat wartet auf die Antwort.
-          // Er geht dafür von selbst auf — eine übersehene Frage bliebe sonst
-          // unbeantwortet stehen, und der Lauf käme nie zum Ende.
-          this.chat.push({ role: 'assistant', text: res.say, time: Date.now() });
-          this.pendingQuestion = res.say;
+        // Rückfrage: Der Chat geht von selbst auf — eine übersehene Frage bliebe
+        // sonst unbeantwortet stehen, und der Wunsch käme nie zum Ende.
+        if (res.question) {
+          this.pendingQuestion = res.question;
           this.composerOpen = true;
         }
 
+        if (res.app) await this.loadVersions();
         await this.persistChat();
       } catch (err) {
         if (this.aborted) this.chat.splice(chatMark);
@@ -350,30 +353,6 @@ export function useAppWindow(instanceId: string) {
       }
     },
 
-    async persist(message: string): Promise<void> {
-      if (!this.folder || this.id === null) return;
-      // Als reines Objekt serialisieren: Pinia-State ist ein reaktiver Proxy, der
-      // sich nicht über die Electron-IPC (structured clone) übertragen lässt.
-      const data: AppData = JSON.parse(
-        JSON.stringify({
-          id: this.id,
-          name: this.name,
-          icon: this.icon,
-          iconCustom: this.iconCustom,
-          createdAt: this.createdAt,
-          updatedAt: Date.now(),
-          files: this.files,
-          html: this.currentHtml,
-          docs: this.docs,
-        }),
-      );
-      try {
-        const res = await getHost().saveApp(this.folder, data, message);
-        if (!res.ok) this.error = res.error ?? 'Die App konnte nicht gespeichert werden.';
-      } catch (err) {
-        this.error = err instanceof Error ? err.message : String(err);
-      }
-    },
   },
   })();
 }

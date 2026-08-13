@@ -77,3 +77,41 @@ export function startableJobs<T extends QueueEntry>(jobs: readonly T[], maxAgent
   }
   return start;
 }
+
+/** Reiht Arbeiten je Schlüssel hintereinander (siehe createSerialQueue). */
+export interface SerialQueue {
+  /** Führt die Arbeit aus, sobald keine andere mit demselben Schlüssel mehr läuft. */
+  run<T>(key: string, task: () => Promise<T>): Promise<T>;
+  /** Wie viele Schlüssel gerade belegt sind (für Tests und Telemetrie). */
+  size(): number;
+}
+
+/**
+ * Die letzte Reihung, unmittelbar am Ordner: Zwei Läufe dürfen NIE gleichzeitig
+ * an derselben App arbeiten — sie schrieben sonst auf derselben Platte
+ * gegeneinander und Morphos committete einen Zwischenstand aus zwei Wünschen.
+ *
+ * Die Warteschlange im Renderer achtet bereits darauf (isAppBusy), aber sie ist
+ * die Oberfläche; hier hält es auch dann, wenn ein Lauf von woanders käme
+ * (Defense in depth). Ein Fehlschlag reißt die Reihe nicht ab — der nächste
+ * Auftrag desselben Schlüssels kommt trotzdem dran.
+ */
+export function createSerialQueue(): SerialQueue {
+  const tails = new Map<string, Promise<unknown>>();
+  return {
+    run<T>(key: string, task: () => Promise<T>): Promise<T> {
+      const previous = tails.get(key) ?? Promise.resolve();
+      const next = previous.then(task, task);
+      // Der Schlüssel wird wieder frei, sobald DIESER Auftrag der letzte war.
+      const settled = next.then(
+        () => {},
+        () => {},
+      ).then(() => {
+        if (tails.get(key) === settled) tails.delete(key);
+      });
+      tails.set(key, settled);
+      return next;
+    },
+    size: () => tails.size,
+  };
+}

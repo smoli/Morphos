@@ -4,7 +4,7 @@ import { useAppWindow } from './app';
 import { setHost } from '@/services/host';
 // Jeder Test bekommt eine frische Pinia — dieselbe Instanz-Id ist damit isoliert.
 const useAppStore = () => useAppWindow('test');
-import type { AgentEvent, AppData, ElementRef, GenerateResult, MorphosHost, SourceFile, VersionInfo } from '@/types';
+import type { AgentEvent, AppData, AppSnapshot, ElementRef, GenerateResult, MorphosHost, SourceFile, VersionInfo } from '@/types';
 
 const DOC = (body: string, title = 'Test', icon = '🧪'): string =>
   `<!DOCTYPE html><html><head><title>${title}</title><meta name="morphos:icon" content="${icon}"></head><body>${body}</body></html>`;
@@ -14,9 +14,26 @@ const FILES = (html: string, extra: SourceFile[] = []): SourceFile[] => [
   ...extra,
 ];
 
+/**
+ * Der Stand, den der Hauptprozess nach einem Lauf zurückgibt: Er hat die App
+ * auf der Platte gelesen, gebündelt und committet (c0087) — hier wird er nur
+ * noch übernommen.
+ */
+const SNAP = (html: string, over: Partial<AppSnapshot> = {}): AppSnapshot => ({
+  id: 'test-abc12',
+  name: 'Test',
+  icon: '🧪',
+  createdAt: 1,
+  updatedAt: 2,
+  files: FILES(html),
+  html,
+  docs: { concept: '', userdoc: '' },
+  ...over,
+});
+
 function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
   return {
-    generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(DOC('x')), html: DOC('x') })),
+    generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, app: SNAP(DOC('x')) })),
     chooseFolder: vi.fn(async () => ({ ok: false })),
     chooseAttachment: vi.fn(async () => ({ ok: false })),
     readClipboardImage: vi.fn(async () => ({ ok: false })),
@@ -24,7 +41,6 @@ function makeHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
     saveSettings: vi.fn(async () => ({ ok: true })),
     listApps: vi.fn(async () => []),
     loadApp: vi.fn(async () => null),
-    saveApp: vi.fn(async () => ({ ok: true })),
     saveChat: vi.fn(async () => ({ ok: true })),
     deleteApp: vi.fn(async () => ({ ok: true })),
     setAppIcon: vi.fn(async (_f: string, _i: string, icon: string | null) => ({ ok: true, icon: icon ?? '🧩' })),
@@ -47,11 +63,11 @@ function makeStreamingHost(events: AgentEvent[], opts: { foreignRunId?: boolean;
       listeners.add(cb);
       return () => listeners.delete(cb);
     },
-    generate: vi.fn(async (_p, _f, _d, _c, _a, runId?: string): Promise<GenerateResult> => {
+    generate: vi.fn(async (_p, _folder, _id, _c, _a, runId?: string): Promise<GenerateResult> => {
       const id = opts.foreignRunId ? 'anderer-lauf' : (runId ?? '');
       for (const event of events) for (const cb of listeners) cb(id, event);
       if (opts.fail) return { ok: false, error: 'Fehlgeschlagen.' };
-      return { ok: true, files: FILES(DOC('x')), html: DOC('x') };
+      return { ok: true, app: SNAP(DOC('x')) };
     }),
   });
   return { host, listenerCount: (): number => listeners.size };
@@ -74,10 +90,13 @@ describe('useAppStore', () => {
     expect(store.activeSha).toBeNull();
   });
 
-  it('leitet Name, Icon und Id aus der ersten Version ab und committet mit dem Wunsch', async () => {
+  it('schickt nur den Wunsch und die Anschrift der App — und übernimmt den Stand des Laufs', async () => {
     const doc = DOC('calc', 'Taschenrechner', '🧮');
     const host = makeHost({
-      generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(doc), html: doc })),
+      generate: vi.fn(async (): Promise<GenerateResult> => ({
+        ok: true,
+        app: SNAP(doc, { id: 'taschenrechner-abc12', name: 'Taschenrechner', icon: '🧮' }),
+      })),
     });
     setHost(host);
     const store = useAppStore();
@@ -85,10 +104,11 @@ describe('useAppStore', () => {
 
     await store.generate('Ein Taschenrechner');
 
+    // Ein Entwurf hat noch keine Id — der Ordner entsteht erst im Lauf.
     expect(host.generate).toHaveBeenCalledWith(
       'Ein Taschenrechner',
-      [],
-      { concept: '', userdoc: '' },
+      '/apps',
+      null,
       [],
       [],
       expect.any(String),
@@ -97,33 +117,27 @@ describe('useAppStore', () => {
     );
     expect(store.name).toBe('Taschenrechner');
     expect(store.icon).toBe('🧮');
-    expect(store.id).toMatch(/^taschenrechner-/);
+    expect(store.id).toBe('taschenrechner-abc12');
     expect(store.isDraft).toBe(false);
     expect(store.files).toHaveLength(1);
     expect(store.currentHtml).toContain('calc');
-    expect(host.saveApp).toHaveBeenCalledOnce();
-    const [folderArg, dataArg, messageArg] = (host.saveApp as unknown as { mock: { calls: [string, AppData, string][] } }).mock.calls[0];
-    expect(folderArg).toBe('/apps');
-    expect(dataArg.id).toBe(store.id);
-    expect(dataArg.files).toHaveLength(1);
-    expect(dataArg.html).toContain('calc');
-    expect(messageArg).toBe('Ein Taschenrechner');
   });
 
-  it('übergibt saveApp ein serialisierbares (nicht-reaktives) Objekt', async () => {
+  it('übergibt dem Host nur serialisierbare (nicht-reaktive) Werte', async () => {
     const host = makeHost();
     setHost(host);
     const store = useAppStore();
     store.newDraft('/apps');
+    store.chat.push({ role: 'user', text: 'früher', time: 1 });
 
-    await store.generate('Ein Taschenrechner');
+    await store.generate('Ein Taschenrechner', [], [{ tag: 'button', selector: 'button', text: 'Los' }]);
 
-    const [, dataArg] = (host.saveApp as unknown as { mock: { calls: [string, AppData, string][] } }).mock.calls[0];
+    const call = (host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[0];
     // Würde bei einem Vue-Proxy über die Electron-IPC scheitern ("could not be cloned").
-    expect(() => structuredClone(dataArg)).not.toThrow();
+    expect(() => structuredClone(call)).not.toThrow();
   });
 
-  it('lädt nach dem Speichern die Versionshistorie', async () => {
+  it('lädt nach dem Lauf die Versionshistorie', async () => {
     const versions: VersionInfo[] = [{ sha: 'abc', prompt: 'Ein Taschenrechner', time: 5 }];
     const host = makeHost({ listVersions: vi.fn(async () => versions) });
     setHost(host);
@@ -137,24 +151,21 @@ describe('useAppStore', () => {
     expect(store.activeSha).toBe('abc');
   });
 
-  it('meldet einen Fehler, wenn das Speichern fehlschlägt', async () => {
-    const host = makeHost({ saveApp: vi.fn(async () => ({ ok: false, error: 'Platte voll' })) });
-    setHost(host);
-    const store = useAppStore();
-    store.newDraft('/apps');
-
-    await store.generate('Ein Taschenrechner');
-
-    expect(store.error).toBe('Platte voll');
-  });
-
-  it('behält Id und Name bei Folgeänderungen und sendet die aktuellen Quelldateien mit', async () => {
+  it('nennt beim zweiten Wunsch die Id der App, statt Dateien mitzuschicken', async () => {
     let n = 0;
     const host = makeHost({
       generate: vi.fn(async (): Promise<GenerateResult> => {
         n += 1;
         const doc = DOC(`v${n}`, 'App', '🧩');
-        return { ok: true, files: FILES(doc, [{ path: 'src/app.js', content: `// v${n}` }]), html: doc };
+        return {
+          ok: true,
+          app: SNAP(doc, {
+            id: 'app-abc12',
+            name: 'App',
+            icon: '🧩',
+            files: FILES(doc, [{ path: 'src/app.js', content: `// v${n}` }]),
+          }),
+        };
       }),
     });
     setHost(host);
@@ -165,11 +176,12 @@ describe('useAppStore', () => {
     const id = store.id;
     await store.generate('zweite Version');
 
-    const secondCall = (host.generate as unknown as { mock: { calls: [string, SourceFile[]][] } }).mock.calls[1];
+    const secondCall = (host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[1];
     expect(secondCall[0]).toBe('zweite Version');
-    expect(secondCall[1].map((f) => f.path)).toEqual(['src/index.html', 'src/app.js']);
-    expect(secondCall[1][0].content).toContain('v1');
+    expect(secondCall[1]).toBe('/apps');
+    expect(secondCall[2]).toBe('app-abc12');
     expect(store.id).toBe(id);
+    expect(store.files.map((f) => f.path)).toEqual(['src/index.html', 'src/app.js']);
     expect(store.currentHtml).toContain('v2');
   });
 
@@ -205,10 +217,10 @@ describe('useAppStore', () => {
   describe('Konzept und Anleitung', () => {
     const DOCS = { concept: '# Rechner\nRechnet.', userdoc: '# Anleitung\nZahl tippen.' };
 
-    it('übernimmt die Dokumente der Generierung und speichert sie mit', async () => {
+    it('übernimmt den Stand der Dokumente, den der Lauf zurückmeldet', async () => {
       const doc = DOC('calc');
       const host = makeHost({
-        generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(doc), html: doc, docs: DOCS })),
+        generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, app: SNAP(doc, { docs: DOCS }) })),
       });
       setHost(host);
       const store = useAppStore();
@@ -218,24 +230,6 @@ describe('useAppStore', () => {
 
       expect(store.docs).toEqual(DOCS);
       expect(store.hasDocs).toBe(true);
-      const [, dataArg] = (host.saveApp as unknown as { mock: { calls: [string, AppData, string][] } }).mock.calls[0];
-      expect(dataArg.docs).toEqual(DOCS);
-    });
-
-    it('reicht den aktuellen Stand der Dokumente an die nächste Generierung weiter', async () => {
-      const doc = DOC('calc');
-      const host = makeHost({
-        generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(doc), html: doc, docs: DOCS })),
-      });
-      setHost(host);
-      const store = useAppStore();
-      store.newDraft('/apps');
-
-      await store.generate('Ein Taschenrechner');
-      await store.generate('Mit Prozenttaste');
-
-      const secondCall = (host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[1];
-      expect(secondCall[2]).toEqual(DOCS);
     });
 
     it('lädt die Dokumente beim Öffnen einer App mit', async () => {
@@ -274,8 +268,8 @@ describe('useAppStore', () => {
       const host = makeHost({
         generate: vi.fn(async (): Promise<GenerateResult> => {
           call += 1;
-          if (call === 1) return { ok: true, files: FILES(DOC('calc')), html: DOC('calc'), docs: DOCS };
-          return { ok: true, say: 'Wie genau meinst du das?' };
+          if (call === 1) return { ok: true, app: SNAP(DOC('calc'), { docs: DOCS }) };
+          return { ok: true, question: 'Wie genau meinst du das?' };
         }),
       });
       setHost(host);
@@ -290,9 +284,13 @@ describe('useAppStore', () => {
     });
   });
 
-  it('behandelt eine reine Rückfrage: kein Speichern, Frage im Chat, pendingQuestion gesetzt', async () => {
+  it('behandelt eine reine Rückfrage: kein neuer Stand, Frage im Chat, pendingQuestion gesetzt', async () => {
     const host = makeHost({
-      generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, say: 'Welche Art von Spiel?' })),
+      generate: vi.fn(async (): Promise<GenerateResult> => ({
+        ok: true,
+        say: 'Welche Art von Spiel?',
+        question: 'Welche Art von Spiel?',
+      })),
     });
     setHost(host);
     const store = useAppStore();
@@ -304,9 +302,35 @@ describe('useAppStore', () => {
     expect(store.chat).toHaveLength(2);
     expect(store.chat[1]).toMatchObject({ role: 'assistant', text: 'Welche Art von Spiel?' });
     expect(store.isDraft).toBe(true);
-    expect(host.saveApp).not.toHaveBeenCalled();
+    expect(store.currentHtml).toBe('');
     expect(host.saveChat).not.toHaveBeenCalled(); // Entwurf hat noch keinen Ordner
     expect(store.error).toBeNull();
+  });
+
+  it('nimmt eine Mitteilung ohne Änderung als Antwort in den Chat — ohne Rückfrage', async () => {
+    const host = makeHost({
+      generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, say: 'Das kann die App bereits.' })),
+    });
+    setHost(host);
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    await store.generate('Zahlen addieren');
+
+    expect(store.chat[1]).toMatchObject({ role: 'assistant', text: 'Das kann die App bereits.' });
+    expect(store.pendingQuestion).toBeNull();
+    expect(store.error).toBeNull();
+  });
+
+  it('meldet einen Lauf, der weder etwas geändert noch etwas gesagt hat', async () => {
+    setHost(makeHost({ generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true })) }));
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    await store.generate('Irgendwas');
+
+    expect(store.error).toBeTruthy();
+    expect(store.isDraft).toBe(true);
   });
 
   it('löst die Rückfrage bei der nächsten Generierung mit Änderungen auf', async () => {
@@ -314,8 +338,9 @@ describe('useAppStore', () => {
     const host = makeHost({
       generate: vi.fn(async (): Promise<GenerateResult> => {
         call += 1;
-        if (call === 1) return { ok: true, say: 'Snake oder Tetris?' };
-        return { ok: true, files: FILES(DOC('snake', 'Snake', '🐍')), html: DOC('snake', 'Snake', '🐍'), say: 'Snake ist fertig.' };
+        if (call === 1) return { ok: true, say: 'Snake oder Tetris?', question: 'Snake oder Tetris?' };
+        const doc = DOC('snake', 'Snake', '🐍');
+        return { ok: true, app: SNAP(doc, { id: 'snake-abc12', name: 'Snake', icon: '🐍' }), say: 'Snake ist fertig.' };
       }),
     });
     setHost(host);
@@ -358,7 +383,7 @@ describe('useAppStore', () => {
     const host = makeHost({
       generate: vi.fn(async (): Promise<GenerateResult> => {
         duringRun = store.runStartedAt;
-        return { ok: true, files: FILES(DOC('x')), html: DOC('x') };
+        return { ok: true, app: SNAP(DOC('x')) };
       }),
     });
     setHost(host);
@@ -461,7 +486,6 @@ describe('useAppStore', () => {
     expect(store.error).toBe('CLI nicht gefunden');
     expect(store.files).toHaveLength(0);
     expect(store.busy).toBe(false);
-    expect(host.saveApp).not.toHaveBeenCalled();
   });
 
   it('fängt geworfene Ausnahmen des Hosts ab', async () => {
@@ -487,7 +511,7 @@ describe('useAppStore', () => {
         generate: vi.fn(async (): Promise<GenerateResult> => {
           runIdDuringRun = store.runId;
           store.abortRun();
-          return { ok: true, files: FILES(DOC('neu')), html: DOC('neu') };
+          return { ok: true, app: SNAP(DOC('neu')) };
         }),
       });
       setHost(host);
@@ -498,10 +522,9 @@ describe('useAppStore', () => {
 
       expect(runIdDuringRun).toBeTruthy();
       expect(cancelAgent).toHaveBeenCalledWith(runIdDuringRun);
-      // Nichts übernommen, nichts gespeichert, kein Fehler — und wieder frei.
+      // Nichts übernommen, kein Fehler — und wieder frei.
       expect(store.currentHtml).toBe('');
       expect(store.isDraft).toBe(true);
-      expect(host.saveApp).not.toHaveBeenCalled();
       expect(store.error).toBeNull();
       expect(store.busy).toBe(false);
       expect(store.runId).toBeNull();
@@ -612,16 +635,18 @@ describe('useAppStore', () => {
   });
 
   it('lädt nach mehreren Änderungen beim erneuten Öffnen die zuletzt gespeicherte Version', async () => {
-    // Persistenz durch eine einfache In-Memory-"Platte" nachbilden.
+    // Die "Platte" ist der Hauptprozess: Er schreibt und committet den Stand
+    // selbst (c0087) — hier nachgebildet durch das, was generate zurückgibt.
     const disk = new Map<string, AppData>();
     let n = 0;
     const host = makeHost({
       generate: vi.fn(async (): Promise<GenerateResult> => {
         n += 1;
         const doc = DOC(`v${n}`, 'Flow', '🧩');
-        return { ok: true, files: FILES(doc), html: doc };
+        const app = SNAP(doc, { id: 'flow-abc12', name: 'Flow', icon: '🧩' });
+        disk.set(app.id, { ...app, chat: [] });
+        return { ok: true, app };
       }),
-      saveApp: vi.fn(async (_folder, appData: AppData) => { disk.set(appData.id, appData); return { ok: true }; }),
       loadApp: vi.fn(async (_folder, id: string) => disk.get(id) ?? null),
     });
     setHost(host);
@@ -658,14 +683,18 @@ describe('useAppStore', () => {
       expect(store.iconCustom).toBe(true);
     });
 
-    it('lässt eine Generierung das eigene Icon NICHT überschreiben', async () => {
+    // Welches Icon nach einem Lauf gilt, entscheidet der Hauptprozess am
+    // Manifest der App (core/generate) — das Fenster übernimmt es.
+    it('übernimmt Icon und dessen Herkunft aus dem Ergebnis des Laufs', async () => {
       const doc = DOC('calc', 'Rechner', '🧮');
       setHost(makeHost({
-        generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(doc), html: doc })),
+        generate: vi.fn(async (): Promise<GenerateResult> => ({
+          ok: true,
+          app: SNAP(doc, { icon: '🎯', iconCustom: true }),
+        })),
       }));
       const store = useAppStore();
       store.newDraft('/apps');
-      store.applyIcon('🎯', true);
 
       await store.generate('Ein Taschenrechner');
 
@@ -676,7 +705,7 @@ describe('useAppStore', () => {
     it('nimmt das Icon des LLM, solange der Anwender keines gesetzt hat', async () => {
       const doc = DOC('calc', 'Rechner', '🧮');
       setHost(makeHost({
-        generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(doc), html: doc })),
+        generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, app: SNAP(doc, { icon: '🧮' }) })),
       }));
       const store = useAppStore();
       store.newDraft('/apps');
@@ -685,20 +714,6 @@ describe('useAppStore', () => {
 
       expect(store.icon).toBe('🧮');
       expect(store.iconCustom).toBe(false);
-    });
-
-    it('schickt das Merkmal mit ins Manifest — es überlebt jede Generierung', async () => {
-      const host = makeHost();
-      setHost(host);
-      const store = useAppStore();
-      store.newDraft('/apps');
-      store.applyIcon('🎯', true);
-
-      await store.generate('Ein Taschenrechner');
-
-      const [, dataArg] = (host.saveApp as unknown as { mock: { calls: [string, AppData, string][] } }).mock.calls[0];
-      expect(dataArg.icon).toBe('🎯');
-      expect(dataArg.iconCustom).toBe(true);
     });
   });
 
@@ -756,7 +771,7 @@ describe('useAppStore', () => {
 
     it('geht bei einer Rückfrage des LLM von selbst auf', async () => {
       setHost(makeHost({
-        generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, say: 'Welche Art von Spiel?' })),
+        generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, question: 'Welche Art von Spiel?' })),
       }));
       const store = useAppStore();
       store.newDraft('/apps');
@@ -827,7 +842,7 @@ describe('useAppWindow — markierte Elemente', () => {
   it('schickt sie mit dem Wunsch an den Host und vermerkt sie im Verlauf', async () => {
     const doc = DOC('x');
     const host = makeHost({
-      generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(doc), html: doc })),
+      generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, app: SNAP(doc) })),
     });
     setHost(host);
     const store = useAppStore();

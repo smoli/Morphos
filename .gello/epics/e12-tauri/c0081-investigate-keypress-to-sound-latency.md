@@ -1,10 +1,10 @@
 ---
 id: c0081
 title: "Investigate keypress→sound latency (Windows)"
-status: review
+status: done
 created: 2026-08-12
 tags: [audio, latency, performance]
-status-changed: 2026-08-12T23:29:01
+status-changed: 2026-08-12T23:53:07
 epic: e12
 updated: 2026-08-12
 usage-tokens: 78472
@@ -174,6 +174,26 @@ is shell-neutral: native audio can be reached from Electron via a native addon o
 a sidecar just as it can from Rust. **Latency is off the list of Tauri arguments**
 — which is what c0079 already assumed, now with numbers behind it.
 
+### Outcome of step 1 — measured in c0085 (2026-08-13)
+
+`--audio-buffer-size=128` **does** move the Windows floor, but only partly:
+**52,0 → 42,8 ms** in Electron 33 on Windows 11. The whole saving is `render`
+(10 → 2,7 ms); `device` stays at 40 ms. The switch is now set process-wide in
+`electron/main.ts`, so every generated app gets those 9 ms.
+
+Two things this card left open are answered there, both negative:
+
+- **WASAPI exclusive mode is reachable** (`--enable-exclusive-audio` is in the
+  Windows binary) **and is 3× worse** — `device` 40 → 128 ms.
+- **`IAudioClient3`** (`AllowIAudioClient3`) changes nothing at all.
+
+So the correction in finding 6 above is now resolved: the path exists, it just
+does not help. **Step 3 (a native audio path) remains the only thing that can
+reach the 40 ms**, and it means a real WASAPI implementation at a small period —
+not a Chromium switch. One extra finding for c0086: a *numeric* `latencyHint`
+makes the page opt out of the process-wide buffer, so generated apps must ask
+for `'interactive'` and never a number.
+
 ## Discussion
 
 - Split out of **c0079** (Tauri): latency was the trigger for exploring Tauri,
@@ -245,3 +265,4 @@ typecheck`, and a re-run of the harness on this machine.
 - 2026-08-12 Windows measured (Chrome 151, hand-typed) — floor 50 ms, latencyHint
   has no effect there; findings and recommendation written (agent)
 - 2026-08-12 status → review (agent)
+- 2026-08-12 status → done (app)

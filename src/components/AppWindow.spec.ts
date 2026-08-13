@@ -29,7 +29,15 @@ function appData(over: Partial<AppData> = {}): AppData {
 
 function makeHost(over: Partial<MorphosHost> = {}): MorphosHost {
   return {
-    generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(DOC('x', 'Rechner', '🧮')), html: DOC('x', 'Rechner', '🧮') })),
+    generate: vi.fn(async (): Promise<GenerateResult> => ({
+      ok: true,
+      app: {
+        id: 'rechner-1', name: 'Rechner', icon: '🧮', createdAt: 1, updatedAt: 2,
+        files: FILES(DOC('x', 'Rechner', '🧮')),
+        html: DOC('x', 'Rechner', '🧮'),
+        docs: { concept: '', userdoc: '' },
+      },
+    })),
     chooseFolder: vi.fn(async () => ({ ok: false })),
     chooseAttachment: vi.fn(async () => ({ ok: false })),
     readClipboardImage: vi.fn(async () => ({ ok: false })),
@@ -37,7 +45,6 @@ function makeHost(over: Partial<MorphosHost> = {}): MorphosHost {
     saveSettings: vi.fn(async () => ({ ok: true })),
     listApps: vi.fn(async () => []),
     loadApp: vi.fn(async () => appData()),
-    saveApp: vi.fn(async () => ({ ok: true })),
     saveChat: vi.fn(async () => ({ ok: true })),
     deleteApp: vi.fn(async () => ({ ok: true })),
     setAppIcon: vi.fn(async (_f: string, _i: string, icon: string | null) => ({ ok: true, icon: icon ?? '🧩' })),

@@ -53,25 +53,34 @@ geladen, nicht neu erzeugt; Apps im alten JSON-Historienformat werden beim erste
 ## Wie es funktioniert
 
 ```
-┌────────────────────────────┐        ┌──────────────────────┐
-│  Morphos (Electron + Vue)  │        │  Claude CLI          │
-│                            │ prompt │  (claude -p)         │
-│  Chat der App ──────────────────────▶  erzeugt/ändert die  │
-│                            │        │  App als HTML-Dok.   │
-│  Sandbox-iframe ◀───────────────────  vollständiges HTML   │
-│  (zeigt die erzeugte App)  │  html  │                      │
-└────────────────────────────┘        └──────────────────────┘
+┌────────────────────────────┐         ┌──────────────────────┐
+│  Morphos (Electron + Vue)  │ Wunsch  │  Claude CLI          │
+│                            │────────▶│  (claude -p, cwd =   │
+│  Chat der App              │         │   Ordner der App)    │
+│                            │  MCP    │  liest mit Read/Glob │
+│  MCP-Server (write/ask) ◀────────────│  /Grep, schreibt und │
+│         │                  │         │  fragt über Morphos  │
+│         ▼                  │         └──────────────────────┘
+│  App-Ordner (Git) ──▶ bündeln ──▶ Sandbox-iframe           │
+└────────────────────────────────────────────────────────────┘
 ```
 
 - **LLM-Anbindung:** Der Electron-Hauptprozess ruft die **Claude CLI** als
-  Subprozess auf (`claude -p --output-format json`). Es wird **kein API-Key** in
-  der App verwaltet — es zählt deine bestehende Claude-Anmeldung.
+  Subprozess auf (`claude -p --output-format stream-json`). Es wird **kein
+  API-Key** in der App verwaltet — es zählt deine bestehende Claude-Anmeldung.
 - **Quelldatei-Modell:** Eine App besteht aus Quelldateien unter `src/`
-  (Einstieg: `src/index.html`, daneben z. B. `style.css`, `app.js`, …). Das LLM
-  liefert Änderungen **inkrementell** als markierte Datei-Blöcke
-  (`===MORPHOS:FILE …===` / `===MORPHOS:DELETE …===`) — nur geänderte Dateien,
-  jede aber vollständig. Das hält auch große Apps schnell und schützt
-  unveränderte Features vor versehentlichem Umschreiben.
+  (Einstieg: `src/index.html`, daneben z. B. `style.css`, `app.js`, …).
+- **Der Agent arbeitet im Ordner der App:** Die CLI läuft mit dem App-Ordner als
+  Arbeitsverzeichnis und ändert die Dateien **unmittelbar auf der Platte** — es
+  gibt kein Austauschformat für Dateiinhalte mehr. Gelesen wird mit den eigenen
+  Werkzeugen der CLI (`Read`/`Glob`/`Grep`); **geschrieben und gefragt** wird
+  ausschließlich über einen **stdio-MCP-Server**, den Morphos für den Lauf
+  startet (`mcp__morphos__write` / `edit` / `delete` / `ask`). `Write`, `Edit`
+  und `Bash` der CLI sind ausdrücklich verboten. Der Server prüft jeden Pfad
+  (`core/fsaccess: confineWithin`) — geschrieben wird nur unter `src/` und in
+  die beiden Dokumente — und führt Buch, woran Morphos danach abliest, ob es
+  etwas zu committen gibt. Nach dem Lauf liest die Shell den Stand von der
+  Platte, bündelt ihn und macht **einen** Commit.
 - **Bündeln & Rendering:** Die Shell bündelt die Quellen zu **einem** in sich
   geschlossenen HTML-Dokument (`core/bundle`): verlinkte Stylesheets und Skripte
   werden inline eingebettet. Es läuft isoliert in einem **Sandbox-iframe**
@@ -100,9 +109,9 @@ geladen, nicht neu erzeugt; Apps im alten JSON-Historienformat werden beim erste
   **Markdown** gerendert (escape-first, kein Markup aus dem Modell). Über ⧉
   wandert der Chat in ein **eigenes Fenster** (gleicher Zustand, per Portal —
   kein zweiter Renderer); Schließen des Fensters dockt ihn wieder an. Ist ein
-  Wunsch unklar, kann das LLM eine **Rückfrage** stellen (`===MORPHOS:SAY===`)
-  — dann wird nichts committet, der Chat öffnet sich von selbst (auch aus dem
-  Zu heraus) und die Antwort führt den Wunsch fort. Der Verlauf wird pro App
+  Wunsch unklar, kann das LLM eine **Rückfrage** stellen (Werkzeug
+  `mcp__morphos__ask`) — dann wird nichts committet, der Chat öffnet sich von
+  selbst (auch aus dem Zu heraus) und die Antwort führt den Wunsch fort. Der Verlauf wird pro App
   gespeichert (`chat.json`, bewusst **nicht** versioniert — ein Revert spult
   das Gespräch nicht zurück) und als Kontext an jede Generierung mitgegeben.
 - **Referenzdateien:** Über 📎 lassen sich Dateien als Referenz anhängen —
@@ -113,11 +122,12 @@ geladen, nicht neu erzeugt; Apps im alten JSON-Historienformat werden beim erste
   Es sind nur Pfade zulässig, die der Anwender selbst gewählt bzw. eingefügt hat.
 - **Konzept & Anleitung:** Neben ihren Quellen führt jede App zwei mitwachsende
   Dokumente im App-Ordner: `concept.md` — die **lebende Spezifikation** (Zweck,
-  Aufbau, Entscheidungen), die als Kontext in **jeden** Prompt zurückgeht und die
-  App über den Dialog hinaus zusammenhält — und `userdocumentation.md`, die
-  **Anleitung für den Anwender**. Beide entstehen in **derselben Generierung**
-  wie die Änderung (als Datei-Blöcke; außerhalb von `src/` sind genau diese zwei
-  Pfade zulässig), sind **mitversioniert** (ein Revert holt sie mit zurück) und
+  Aufbau, Entscheidungen), die der Agent zu Beginn **jedes Laufs** selbst liest
+  und die die App über den Dialog hinaus zusammenhält — und
+  `userdocumentation.md`, die **Anleitung für den Anwender**. Beide schreibt der
+  Agent in **demselben Lauf** wie die Änderung fort (außerhalb von `src/` sind
+  genau diese zwei Pfade zulässig), sind **mitversioniert** (ein Revert holt sie
+  mit zurück) und
   werden **nicht** in das Artefakt gebündelt. Über 📄 in der Fenster-Titelleiste
   lassen sie sich als **Nur-Lese-Ansicht** lesen (Markdown, escape-first).
 - **Name & Icon:** Das LLM setzt in `src/index.html` einen `<title>` (App-Name)
@@ -188,17 +198,24 @@ electron/
   main.ts              Hauptprozess: Fenster, IPC, Claude CLI, App-Dateien,
                        Datei-Explorer, Datenstrom (morphos-file://), Preact eingebaut
   preload.ts           Sichere Brücke (contextBridge) → window.morphos
+  mcp-server.ts        Der stdio-MCP-Server für einen Agentenlauf (Hülle um core/mcp)
   libcache.ts          Tier-1-Bibliotheken: einmalig laden (Whitelist), cachen
 src/
   core/                Framework-unabhängige, reine Logik (voll getestet)
     prompt.ts          Systemprompt + Zusammenbau des LLM-Prompts
-    files.ts           Datei-Blockformat: serialisieren/parsen, Pfad-Validierung
-    docs.ts            Die zwei Dokumente je App: Pfade, Abtrennen, Fortschreiben
+    generate.ts        Ein Lauf im App-Ordner: Ordner bereitstellen, Agent starten,
+                       Ergebnis von der Platte lesen, bündeln, EIN Commit
+    files.ts           Welche Pfade zu einer App gehören dürfen (src/ + die zwei Dokumente)
+    docs.ts            Die zwei Dokumente je App: Pfade, Stand einlesen
     bundle.ts          Bündelt Quelldateien + Bibliotheken zu EINEM Dokument
     libs.ts · framework.ts   morphos:lib + Whitelist · Preact-Schalter je App
     gitstore.ts        Git je App: init, commit, log, Wiederherstellen (System-Git)
     appstore.ts        App-Ablage: Manifest, src/, Artefakt, Dokumente, Migration
     agent.ts · queue.ts      Agentenlauf (Strom der CLI) + Warteschlange/Parallel-Deckel
+    mcp.ts             Werkzeuge für den Agenten (write/edit/delete/ask): MCP-Protokoll,
+                       Pfad-Grenze, Lauf-Protokoll, Aufruf der CLI
+    mcptools.ts        Ihre Namen — ohne Dateisystem, denn auch der Renderer liest
+                       an ihnen den Fortschritt ab
     html.ts · markdown.ts · icon.ts   HTML/Titel/Icon · Markdown (escape-first) · Icons
     app.ts             App-Identität: Slug/Id, Vorgaben für Name & Icon
     appfs.ts           Bridge-SDK (window.morphosFS) + CSP + Dispatch
