@@ -35,8 +35,23 @@ export default defineConfig({
     vue(),
     electron({
       // Der Hauptprozess wird eigenständig gebaut — die Build-Konstanten muss
-      // er darum ausdrücklich mitbekommen.
-      main: { entry: 'electron/main.ts', vite: { define: buildDefines } },
+      // er darum ausdrücklich mitbekommen. Daneben entsteht aus demselben Bau
+      // der stdio-MCP-Server (c0088): ein zweiter Einstieg, den die Claude CLI
+      // während eines Agentenlaufs als eigenen Prozess startet.
+      main: {
+        entry: 'electron/main.ts',
+        vite: {
+          define: buildDefines,
+          build: {
+            rollupOptions: {
+              // `rollupOptions.input` sticht `build.lib` — so werden aus einem
+              // Bau zwei Einstiege (dist-electron/main.js, mcp-server.js).
+              input: { main: 'electron/main.ts', 'mcp-server': 'electron/mcp-server.ts' },
+              output: { entryFileNames: '[name].js', chunkFileNames: '[name].js' },
+            },
+          },
+        },
+      },
       preload: {
         input: 'electron/preload.ts',
         // Als CommonJS (.cjs) bauen: Der Renderer läuft mit sandbox:true, und

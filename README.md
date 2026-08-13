@@ -188,6 +188,7 @@ electron/
   main.ts              Hauptprozess: Fenster, IPC, Claude CLI, App-Dateien,
                        Datei-Explorer, Datenstrom (morphos-file://), Preact eingebaut
   preload.ts           Sichere Brücke (contextBridge) → window.morphos
+  mcp-server.ts        Der stdio-MCP-Server für einen Agentenlauf (Hülle um core/mcp)
   libcache.ts          Tier-1-Bibliotheken: einmalig laden (Whitelist), cachen
 src/
   core/                Framework-unabhängige, reine Logik (voll getestet)
@@ -199,6 +200,8 @@ src/
     gitstore.ts        Git je App: init, commit, log, Wiederherstellen (System-Git)
     appstore.ts        App-Ablage: Manifest, src/, Artefakt, Dokumente, Migration
     agent.ts · queue.ts      Agentenlauf (Strom der CLI) + Warteschlange/Parallel-Deckel
+    mcp.ts             Werkzeuge für den Agenten (write/edit/delete/ask): MCP-Protokoll,
+                       Pfad-Grenze, Lauf-Protokoll, Aufruf der CLI
     html.ts · markdown.ts · icon.ts   HTML/Titel/Icon · Markdown (escape-first) · Icons
     app.ts             App-Identität: Slug/Id, Vorgaben für Name & Icon
     appfs.ts           Bridge-SDK (window.morphosFS) + CSP + Dispatch
