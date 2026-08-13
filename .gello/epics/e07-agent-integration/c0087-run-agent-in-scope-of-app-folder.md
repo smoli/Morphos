@@ -1,11 +1,12 @@
 ---
 id: c0087
 title: Run agent in scope of app folder
-status: discuss
+status: backlog
 created: 2026-08-13
 updated: 2026-08-13
-status-changed: 2026-08-13T16:18:57
-epic: e0001
+status-changed: 2026-08-13T16:27:02
+epic: e07
+depends: [c0088]
 ---
 
 ## What
@@ -55,3 +56,4 @@ result back from disk, bundles the artefact, and commits.
 
 - 2026-08-13 status → ready (app)
 - 2026-08-13 status → discuss (app)
+- 2026-08-13 discussed → backlog; moved e0001 → e07; split out [[c0088]] (depends)
