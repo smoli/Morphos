@@ -9,13 +9,13 @@
       "cardId": "c0088",
       "phase": "running",
       "activity": {
-        "name": "Read",
-        "arg": "C:\\ILC\\Morphos\\src\\core\\gitstore.ts"
+        "name": "PowerShell",
+        "arg": "git -C C:\\ILC\\Morphos show 655682a -- vite.config.ts README.md electron/mcp-server.ts"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-13T16:32:45",
+  "updated": "2026-08-13T16:45:18",
   "pickupDelay": 10,
   "owned": [
     "c0029",

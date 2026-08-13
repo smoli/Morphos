@@ -1,11 +1,13 @@
 ---
 id: c0088
 title: Morphos stdio MCP server — write/edit + ask tools with path confinement
-status: in-progress
+status: review
 created: 2026-08-13
 updated: 2026-08-13
-status-changed: 2026-08-13T16:32:02
+status-changed: 2026-08-13T16:44:33
 epic: e07
+usage-tokens: 50179
+usage-cost: 4.426146
 ---
 
 # Morphos stdio MCP server — write/edit + ask tools with path confinement
@@ -83,3 +85,4 @@ bereit.
 - 2026-08-13 status → in-progress (agent)
 - 2026-08-13 MCP-Server gebaut (core/mcp + electron/mcp-server + Build-Einstieg); status → review
 - 2026-08-13 status → in-progress (agent)
+- 2026-08-13 status → review (agent)
