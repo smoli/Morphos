@@ -3,6 +3,7 @@ import path from 'node:path';
 import { confineWithin, resolveWithin } from './fsaccess';
 import { isValidOutputPath, isValidSourcePath } from './files';
 import { CONCEPT_FILE, USERDOC_FILE } from './docs';
+import { MCP_SERVER_NAME, mcpToolId, type McpToolName } from './mcptools';
 
 /**
  * Der Werkzeugkasten, den Morphos dem Agenten für einen Lauf hinhält (c0088).
@@ -24,8 +25,6 @@ import { CONCEPT_FILE, USERDOC_FILE } from './docs';
  * eigentliche Prozess ist nur die Hülle darum (electron/mcp-server.ts).
  */
 
-/** Unter diesem Namen kennt die CLI den Server; ihre Werkzeuge heißen `mcp__morphos__…`. */
-export const MCP_SERVER_NAME = 'morphos';
 export const MCP_SERVER_VERSION = '0.1.0';
 
 /** Die Fassung des MCP-Protokolls, die dieser Server spricht. */
@@ -38,12 +37,10 @@ const KNOWN_PROTOCOL_VERSIONS = [MCP_PROTOCOL_VERSION, '2025-03-26', '2024-11-05
 export const MCP_ROOT_ENV = 'MORPHOS_MCP_ROOT';
 export const MCP_JOURNAL_ENV = 'MORPHOS_MCP_JOURNAL';
 
-export type McpToolName = 'write' | 'edit' | 'delete' | 'ask';
-
-/** Der Name, unter dem die CLI ein Werkzeug dieses Servers führt. */
-export function mcpToolId(name: McpToolName): string {
-  return `mcp__${MCP_SERVER_NAME}__${name}`;
-}
+// Die Namen der Werkzeuge stehen für sich (core/mcptools): Sie kommen ohne
+// Dateisystem aus, denn auch der Renderer liest an ihnen den Fortschritt ab.
+export { MCP_SERVER_NAME, mcpToolId };
+export type { McpToolName };
 
 /* ------------------------------------------------------------------ *
  * Die Grenze
@@ -211,6 +208,21 @@ export const MCP_ALLOWED_TOOLS: readonly string[] = [
   'Read',
   'Glob',
   'Grep',
+];
+
+/**
+ * Was der Agent NICHT benutzen darf — ausdrücklich, nicht bloß mangels Freigabe.
+ * Schreiben geht allein durch die Grenze dieses Servers; eine Schale („Bash“)
+ * führte an ihr vorbei, und Netzzugriffe hat in einem Lauf niemand zu suchen.
+ */
+export const MCP_DENIED_TOOLS: readonly string[] = [
+  'Write',
+  'Edit',
+  'MultiEdit',
+  'NotebookEdit',
+  'Bash',
+  'WebFetch',
+  'WebSearch',
 ];
 
 /* ------------------------------------------------------------------ *
@@ -533,13 +545,15 @@ export function mcpConfigJson(launch: McpLaunch): string {
 
 /**
  * Die Aufrufteile für die Claude CLI: unser Server, streng (keine Server aus der
- * Einrichtung des Anwenders) und eine Freigabe, die nur Lesen und unsere eigenen
- * Werkzeuge kennt.
+ * Einrichtung des Anwenders), eine Freigabe, die nur Lesen und unsere eigenen
+ * Werkzeuge kennt — und ein ausdrückliches Verbot der schreibenden Werkzeuge der
+ * CLI.
  */
 export function agentMcpArgs(launch: McpLaunch): string[] {
   return [
     '--mcp-config', mcpConfigJson(launch),
     '--strict-mcp-config',
     ...MCP_ALLOWED_TOOLS.flatMap((tool) => ['--allowedTools', tool]),
+    ...MCP_DENIED_TOOLS.flatMap((tool) => ['--disallowedTools', tool]),
   ];
 }

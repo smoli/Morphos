@@ -15,16 +15,6 @@ export interface SourceFile {
 export type Framework = 'vanilla' | 'preact';
 
 /**
- * Vom LLM gelieferte Änderungen: geänderte/neue Dateien plus gelöschte Pfade,
- * optional eine Mitteilung an den Anwender (Rückfrage oder Erläuterung).
- */
-export interface FileChanges {
-  files: SourceFile[];
-  deletions: string[];
-  say?: string;
-}
-
-/**
  * Die beiden mitwachsenden Dokumente einer App (Inhalt, leer = noch keines):
  * das Konzept (lebende Spezifikation, geht in jeden Prompt zurück) und die
  * Anleitung für den Anwender. Siehe core/docs.
@@ -33,9 +23,6 @@ export interface AppDocs {
   concept: string;
   userdoc: string;
 }
-
-/** Vom LLM geliefertes Dokument-Update: nur die genannten Dokumente. */
-export type DocChanges = Partial<AppDocs>;
 
 /** Eine Nachricht im Dialog zwischen Anwender und LLM (pro App). */
 export interface ChatMessage {
@@ -78,15 +65,25 @@ export interface ElementRef {
 }
 
 /**
- * Ergebnis einer Generierung durch das LLM. Bei Dateiänderungen kommt der
- * vollständige NEUE Quelldatei-Satz plus gebündeltes Artefakt zurück, dazu der
- * fortgeschriebene Stand der beiden Dokumente; `say` trägt eine etwaige
- * Rückfrage/Erläuterung. Eine reine Rückfrage hat KEINE files/html/docs — es
- * wird nichts committet.
+ * Ergebnis einer Generierung. Der Agent arbeitet unmittelbar im App-Ordner
+ * (c0087); zurück kommt daher der Stand, den Morphos danach von der Platte
+ * gelesen, gebündelt und committet hat:
+ *
+ *   app       der neue Stand der App — nur, wenn der Lauf etwas geschrieben
+ *             hat. Ohne ihn wurde auch nichts committet.
+ *   say       die abschließende Mitteilung des Agenten an den Anwender.
+ *   question  seine Rückfrage (MCP-Werkzeug `ask`) — der Chat geht dafür auf.
  */
 export type GenerateResult =
-  | { ok: true; files?: SourceFile[]; html?: string; docs?: AppDocs; say?: string }
+  | { ok: true; app?: AppSnapshot; say?: string; question?: string }
   | { ok: false; error: string };
+
+/** Der Stand einer App nach einem Lauf: Kopfdaten, Quellen, Artefakt, Dokumente. */
+export interface AppSnapshot extends AppMeta {
+  files: SourceFile[];
+  html: string;
+  docs: AppDocs;
+}
 
 /**
  * Ein Fortschrittsereignis eines laufenden Agentenlaufs — aus dem Strom der
@@ -555,21 +552,23 @@ export interface MorphosHost {
   platform?: string;
 
   /**
-   * Erzeugt bzw. verändert die App über die Claude CLI. `files` ist der aktuelle
-   * Quelldatei-Satz (leer bei einer neuen App), `docs` der aktuelle Stand von
-   * Konzept und Anleitung (steuert die Generierung und wird fortgeschrieben),
-   * `chat` der bisherige Dialog (für den Kontext), `attachments` mitgeschickte
-   * Referenzdateien. Zurück kommen Dateiänderungen samt fortgeschriebener
-   * Dokumente und/oder eine Rückfrage (`say`). `runId` markiert den Lauf, unter
-   * dem seine Fortschrittsereignisse gemeldet werden. `framework` ist die im
-   * Composer getroffene Wahl für eine NEUE App — eine bestehende bringt ihre
-   * eigene mit (siehe core/framework). `elements` sind die in der laufenden App
-   * markierten Elemente, auf die sich der Wunsch bezieht (siehe core/pick).
+   * Erzeugt bzw. verändert die App über die Claude CLI. Der Agent arbeitet IM
+   * Ordner der App (`folder`/`id`) — der Renderer schickt daher keine Dateien
+   * mehr mit, sondern nur, um welche App es geht: `id` ist null für einen
+   * Entwurf, der mit diesem Lauf erst entsteht. `chat` ist der bisherige Dialog
+   * (für den Kontext), `attachments` sind mitgeschickte Referenzdateien.
+   * Zurück kommt der neue Stand der App (`app`, sofern etwas geschrieben und
+   * damit committet wurde), die Mitteilung des Agenten (`say`) und/oder seine
+   * Rückfrage (`question`). `runId` markiert den Lauf, unter dem seine
+   * Fortschrittsereignisse gemeldet werden. `framework` ist die im Composer
+   * getroffene Wahl für eine NEUE App — eine bestehende bringt ihre eigene mit
+   * (siehe core/framework). `elements` sind die in der laufenden App markierten
+   * Elemente, auf die sich der Wunsch bezieht (siehe core/pick).
    */
   generate(
     prompt: string,
-    files: SourceFile[],
-    docs: AppDocs,
+    folder: string,
+    id: string | null,
     chat: ChatMessage[],
     attachments: Attachment[],
     runId?: string,
@@ -618,8 +617,6 @@ export interface MorphosHost {
   listApps(folder: string): Promise<AppSummary[]>;
   /** Lädt eine einzelne App (oder null, wenn nicht vorhanden). Migriert Alt-Format zu Git. */
   loadApp(folder: string, id: string): Promise<AppData | null>;
-  /** Speichert eine App und übernimmt den Stand als Git-Commit (message = Wunsch). */
-  saveApp(folder: string, app: AppData, message: string): Promise<SaveResult>;
   /** Löscht eine App samt ihres Unterordners. */
   deleteApp(folder: string, id: string): Promise<SaveResult>;
 

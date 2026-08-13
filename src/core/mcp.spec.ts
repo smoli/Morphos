@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   MCP_ALLOWED_TOOLS,
+  MCP_DENIED_TOOLS,
   MCP_PROTOCOL_VERSION,
   MCP_SERVER_FILE,
   MCP_SERVER_NAME,
@@ -423,6 +424,19 @@ describe('Aufruf-Konfiguration', () => {
     expect(allowed).not.toContain('Write');
     expect(allowed).not.toContain('Edit');
     expect(allowed).not.toContain('Bash');
+  });
+
+  it('verbietet die schreibenden Werkzeuge der CLI ausdrücklich (c0087)', () => {
+    const denied = agentMcpArgs(launch)
+      .map((a, i, all) => (all[i - 1] === '--disallowedTools' ? a : ''))
+      .filter(Boolean);
+
+    expect(denied).toEqual([...MCP_DENIED_TOOLS]);
+    expect(denied).toContain('Write');
+    expect(denied).toContain('Edit');
+    expect(denied).toContain('Bash');
+    // Die eigenen Werkzeuge stehen selbstverständlich nicht auf der Verbotsliste.
+    expect(denied).not.toContain('mcp__morphos__write');
   });
 
   it('benennt die Werkzeuge so, wie die CLI sie sieht', () => {

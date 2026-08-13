@@ -6,12 +6,33 @@ import { useWorkspaceStore } from './workspace';
 import { useAppWindow } from './app';
 import { useNotificationsStore } from './notifications';
 import { MAX_RECENT_RUNS } from '@/core/queue';
+import { slugify } from '@/core/app';
 import { setHost } from '@/services/host';
-import type { AppData, GenerateResult, MorphosHost, SourceFile } from '@/types';
+import type { AppData, AppSnapshot, GenerateResult, MorphosHost, SourceFile } from '@/types';
 
 const DOC = (t = 'Rechner', icon = '🧮', body = 'x'): string =>
   `<!DOCTYPE html><html><head><title>${t}</title><meta name="morphos:icon" content="${icon}"></head><body>${body}</body></html>`;
 const FILES = (html = DOC()): SourceFile[] => [{ path: 'src/index.html', content: html }];
+
+/**
+ * Der Stand, den der Hauptprozess nach einem Lauf zurückgibt (c0087): Er hat
+ * die App auf der Platte gelesen, gebündelt und committet. Eine bestehende App
+ * behält dabei ihre Id; ein Entwurf bekommt seine aus dem Artefakt.
+ */
+const SNAP = (id: string | null, html = DOC(), over: Partial<AppSnapshot> = {}): AppSnapshot => {
+  const name = /<title[^>]*>([^<]*)</.exec(html)?.[1] ?? 'App';
+  return {
+    id: id ?? `${slugify(name)}-abc12`,
+    name,
+    icon: /morphos:icon" content="([^"]*)"/.exec(html)?.[1] ?? '🧩',
+    createdAt: 1,
+    updatedAt: 2,
+    files: FILES(html),
+    html,
+    docs: { concept: '', userdoc: '' },
+    ...over,
+  };
+};
 
 /** Ein von außen auflösbarer Lauf — damit lässt sich die Reihung prüfen. */
 function deferred<T>() {
@@ -22,7 +43,7 @@ function deferred<T>() {
 
 function makeHost(over: Partial<MorphosHost> = {}): MorphosHost {
   return {
-    generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, files: FILES(), html: DOC() })),
+    generate: vi.fn(async (_p, _folder, id): Promise<GenerateResult> => ({ ok: true, app: SNAP(id) })),
     chooseFolder: vi.fn(async () => ({ ok: false })),
     chooseAttachment: vi.fn(async () => ({ ok: false })),
     readClipboardImage: vi.fn(async () => ({ ok: false })),
@@ -30,7 +51,6 @@ function makeHost(over: Partial<MorphosHost> = {}): MorphosHost {
     saveSettings: vi.fn(async () => ({ ok: true })),
     listApps: vi.fn(async () => []),
     loadApp: vi.fn(async () => null),
-    saveApp: vi.fn(async () => ({ ok: true })),
     saveChat: vi.fn(async () => ({ ok: true })),
     deleteApp: vi.fn(async () => ({ ok: true })),
     setAppIcon: vi.fn(async (_f: string, _i: string, icon: string | null) => ({ ok: true, icon: icon ?? '🧩' })),
@@ -47,13 +67,13 @@ function makeHost(over: Partial<MorphosHost> = {}): MorphosHost {
  * läuft und was wartet.
  */
 function makeSlowHost(over: Partial<MorphosHost> = {}) {
-  const gates: { resolve: (v: GenerateResult) => void }[] = [];
+  const gates: { resolve: (v: GenerateResult) => void; id: string | null }[] = [];
   const prompts: string[] = [];
   const host = makeHost({
-    generate: vi.fn(async (prompt: string): Promise<GenerateResult> => {
+    generate: vi.fn(async (prompt: string, _folder: string, id: string | null): Promise<GenerateResult> => {
       prompts.push(prompt);
       const gate = deferred<GenerateResult>();
-      gates.push(gate);
+      gates.push({ ...gate, id });
       return gate.promise;
     }),
     ...over,
@@ -63,7 +83,7 @@ function makeSlowHost(over: Partial<MorphosHost> = {}) {
     prompts,
     started: (): number => gates.length,
     async release(index: number, result?: GenerateResult): Promise<void> {
-      gates[index].resolve(result ?? { ok: true, files: FILES(), html: DOC() });
+      gates[index].resolve(result ?? { ok: true, app: SNAP(gates[index].id) });
       await flush();
     },
   };
@@ -184,7 +204,7 @@ describe('useAgentsStore', () => {
       expect(agents.queuedJobs).toHaveLength(1);
     });
 
-    it('führt den zweiten Wunsch einer App gegen ihren aktualisierten Stand aus', async () => {
+    it('führt den zweiten Wunsch derselben App erst nach dem ersten aus', async () => {
       const slow = makeSlowHost();
       setHost(slow.host);
       const agents = useAgentsStore();
@@ -193,11 +213,13 @@ describe('useAgentsStore', () => {
       agents.submit(a, 'eins');
       agents.submit(a, 'zwei');
       await flush();
-      await slow.release(0, { ok: true, files: FILES(DOC('A', '🧮', 'v2')), html: DOC('A', '🧮', 'v2') });
+      await slow.release(0, { ok: true, app: SNAP('a-1', DOC('A', '🧮', 'v2')) });
 
       expect(slow.prompts).toEqual(['eins', 'zwei']);
       const secondCall = (slow.host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[1];
-      expect((secondCall[1] as SourceFile[])[0].content).toContain('v2');
+      // Der zweite Lauf nennt dieselbe App — ihren Stand holt er sich von der Platte.
+      expect(secondCall[1]).toBe('/apps');
+      expect(secondCall[2]).toBe('a-1');
       // Der Dialog des ersten Laufs ist Kontext des zweiten.
       expect((secondCall[3] as { text: string }[]).map((m) => m.text)).toEqual(['eins', 'Umgesetzt.']);
     });
@@ -263,7 +285,6 @@ describe('useAgentsStore', () => {
       expect(store.busy).toBe(false);
       expect(store.chat).toEqual([]);
       expect(agents.count).toBe(0);
-      expect(slow.host.saveApp).not.toHaveBeenCalled();
     });
 
     it('startet einen Auftrag nicht mehr, der während seines Anlaufs abgebrochen wird', async () => {
@@ -311,11 +332,8 @@ describe('useAgentsStore', () => {
   });
 
   describe('Läufe überleben ihr Fenster', () => {
-    it('läuft weiter, wenn das Fenster geschlossen wird, und speichert das Ergebnis', async () => {
-      const saved: AppData[] = [];
-      const slow = makeSlowHost({
-        saveApp: vi.fn(async (_f, data: AppData) => { saved.push(data); return { ok: true }; }),
-      });
+    it('läuft weiter, wenn das Fenster geschlossen wird, und zieht die Kacheln nach', async () => {
+      const slow = makeSlowHost();
       setHost(slow.host);
       const agents = useAgentsStore();
       const desktop = useDesktopStore();
@@ -329,19 +347,17 @@ describe('useAgentsStore', () => {
       desktop.closeWindow(a);
       store.$dispose();
 
-      await slow.release(0, { ok: true, files: FILES(DOC('A', '🧮', 'neu')), html: DOC('A', '🧮', 'neu') });
+      // Gespeichert und committet hat der Hauptprozess (c0087); hier zählt, dass
+      // der Lauf zu Ende kommt und der Schreibtisch den neuen Stand holt.
+      await slow.release(0, { ok: true, app: SNAP('a-1', DOC('A', '🧮', 'neu')) });
 
-      expect(saved).toHaveLength(1);
-      expect(saved[0].id).toBe('a-1');
-      expect(saved[0].html).toContain('neu');
+      expect(store.currentHtml).toContain('neu');
+      expect(slow.host.listApps).toHaveBeenCalledWith('/apps');
       expect(agents.count).toBe(0);
     });
 
-    it('macht aus einem Entwurf, dessen Fenster zugeht, eine echte App auf der Platte', async () => {
-      const saved: AppData[] = [];
-      const slow = makeSlowHost({
-        saveApp: vi.fn(async (_f, data: AppData) => { saved.push(data); return { ok: true }; }),
-      });
+    it('macht aus einem Entwurf, dessen Fenster zugeht, eine echte App', async () => {
+      const slow = makeSlowHost();
       setHost(slow.host);
       const agents = useAgentsStore();
       const desktop = useDesktopStore();
@@ -354,12 +370,12 @@ describe('useAgentsStore', () => {
       desktop.closeWindow(draft);
       store.$dispose();
 
-      await slow.release(0, { ok: true, files: FILES(DOC('Taschenrechner', '🧮')), html: DOC('Taschenrechner', '🧮') });
+      await slow.release(0, { ok: true, app: SNAP(null, DOC('Taschenrechner', '🧮')) });
 
-      expect(saved).toHaveLength(1);
-      expect(saved[0].id).toMatch(/^taschenrechner-/);
-      expect(saved[0].name).toBe('Taschenrechner');
-      expect(saved[0].icon).toBe('🧮');
+      expect(store.id).toBe('taschenrechner-abc12');
+      expect(store.name).toBe('Taschenrechner');
+      expect(store.icon).toBe('🧮');
+      expect(slow.host.listApps).toHaveBeenCalledWith('/apps');
     });
 
     it('holt für einen wartenden Wunsch den Stand von der Platte, wenn sein Fenster zu ist', async () => {
@@ -371,7 +387,7 @@ describe('useAgentsStore', () => {
         updatedAt: 2,
         files: FILES(DOC('A', '🧩', 'von-platte')),
         html: DOC('A', '🧩', 'von-platte'),
-        chat: [],
+        chat: [{ role: 'user', text: 'von-platte', time: 1 }],
       };
       const slow = makeSlowHost({ loadApp: vi.fn(async () => disk) });
       setHost(slow.host);
@@ -390,8 +406,12 @@ describe('useAgentsStore', () => {
       await slow.release(0);
 
       expect(slow.prompts).toEqual(['zuerst', 'danach']);
+      expect(slow.host.loadApp).toHaveBeenCalledWith('/apps', 'a-1');
+      // Der Stand kommt von der Platte — der Dialog des geladenen Standes ist
+      // Kontext des Laufs (die Dateien liest der Agent selbst, c0087).
       const secondCall = (slow.host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[1];
-      expect((secondCall[1] as SourceFile[])[0].content).toContain('von-platte');
+      expect(secondCall[2]).toBe('a-1');
+      expect((secondCall[3] as { text: string }[]).map((m) => m.text)).toEqual(['von-platte']);
     });
 
     it('lädt ein inzwischen woanders geöffnetes Fenster derselben App nach', async () => {

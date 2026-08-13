@@ -9,6 +9,7 @@ import {
   createAgentStream,
   formatElapsed,
 } from './agent';
+import { mcpToolId } from './mcp';
 import type { AgentEvent } from '@/types';
 
 /** Baut eine stream-json-Zeile, wie die Claude CLI sie ausgibt. */
@@ -123,26 +124,34 @@ describe('createAgentStream', () => {
     expect(events).toEqual([{ kind: 'think' }]);
   });
 
-  it('leitet aus dem strömenden Antworttext ab, welche Datei gerade entsteht', () => {
+  it('liest an den Werkzeugen von Morphos ab, was an der App geschieht', () => {
     const stream = createAgentStream();
-    const events = [
-      ...stream.push(textDelta('===MORPHOS:FILE src/index.html===\n<!DOCTYPE html>\n')),
-      ...stream.push(textDelta('<body>hallo</body>\n===MORPHOS:END===\n')),
-      ...stream.push(textDelta('===MORPHOS:DELETE src/alt.js===\n')),
-      ...stream.push(textDelta('===MORPHOS:SAY===\nUmgesetzt.\n===MORPHOS:END===\n')),
-    ];
+    const events = stream.push(
+      line({
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'tool_use', id: 't1', name: mcpToolId('write'), input: { path: 'src/index.html', content: '<html>' } },
+            { type: 'tool_use', id: 't2', name: mcpToolId('edit'), input: { path: 'src/app.js', old_text: 'a', new_text: 'b' } },
+            { type: 'tool_use', id: 't3', name: mcpToolId('delete'), input: { path: 'src/alt.js' } },
+            { type: 'tool_use', id: 't4', name: mcpToolId('ask'), input: { question: 'Welche Farbe?' } },
+          ],
+        },
+      }),
+    );
     expect(events).toEqual([
       { kind: 'write', path: 'src/index.html' },
+      { kind: 'write', path: 'src/app.js' },
       { kind: 'delete', path: 'src/alt.js' },
       { kind: 'say' },
     ]);
   });
 
-  it('erkennt eine Marke auch, wenn sie über mehrere Ereignisse verteilt ankommt', () => {
+  it('liest den strömenden Antworttext nicht mehr auf Marken ab', () => {
     const stream = createAgentStream();
-    expect(stream.push(textDelta('===MORPHOS:'))).toEqual([]);
-    expect(stream.push(textDelta('FILE src/style'))).toEqual([]);
-    expect(stream.push(textDelta('.css===\n'))).toEqual([{ kind: 'write', path: 'src/style.css' }]);
+    expect(stream.push(textDelta('===MORPHOS:FILE src/style.css===\n'))).toEqual([]);
+    expect(stream.push(textDelta('Ich schreibe jetzt src/app.js\n'))).toEqual([]);
   });
 
   it('meldet Werkzeugaufrufe mit Namen und Ziel', () => {

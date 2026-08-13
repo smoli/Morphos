@@ -7,14 +7,11 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { AGENT_IDLE_TIMEOUT_MS, agentIdleTimeoutMessage, createAgentStream } from '../src/core/agent';
 import { BUFFER_SIZE_ENV, forcedBufferFrames } from '../src/core/audiolatency';
-import { clampMaxAgents, DEFAULT_MAX_AGENTS } from '../src/core/queue';
-import { buildPrompt, SYSTEM_PROMPT } from '../src/core/prompt';
-import { extractHtml } from '../src/core/html';
-import { applyChanges, isValidSourcePath, parseLLMOutput } from '../src/core/files';
-import { applyDocs, hasDocChanges, splitDocs, toDocs } from '../src/core/docs';
-import { bundle, ENTRY_FILE } from '../src/core/bundle';
-import { BUILTIN_LIBS, extractLibs, isBuiltinLib, splitLibs } from '../src/core/libs';
-import { resolveFramework } from '../src/core/framework';
+import { clampMaxAgents, createSerialQueue, DEFAULT_MAX_AGENTS } from '../src/core/queue';
+import { SYSTEM_PROMPT } from '../src/core/prompt';
+import { generateApp } from '../src/core/generate';
+import { MCP_SERVER_FILE } from '../src/core/mcp';
+import { BUILTIN_LIBS, isBuiltinLib } from '../src/core/libs';
 import { sanitizeRefs } from '../src/core/pick';
 import {
   aheadBehind,
@@ -31,7 +28,7 @@ import {
   restoreTree,
 } from '../src/core/gitstore';
 import { pullProblem, pushProblem, syncErrorMessage } from '../src/core/remote';
-import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeAppState, writeChat } from '../src/core/appstore';
+import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeChat } from '../src/core/appstore';
 import { isSafeAppId } from '../src/core/app';
 import { IMPORT_DIR, resolveImport, startImport } from '../src/core/appimport';
 import { validateIcon } from '../src/core/icon';
@@ -56,7 +53,6 @@ import type {
   AgentEvent,
   AgentResult,
   AppData,
-  AppDocs,
   AppSummary,
   Attachment,
   ChatMessage,
@@ -78,7 +74,6 @@ import type {
   Settings,
   ShellFsRequest,
   ShellFsResponse,
-  SourceFile,
   VersionInfo,
   WatchResult,
 } from '../src/types';
@@ -324,6 +319,7 @@ const runningAgents = new Map<string, ReturnType<typeof spawn>>();
  */
 function runClaude(
   prompt: string,
+  cwd: string,
   extraArgs: string[] = [],
   onEvent: (event: AgentEvent) => void = () => {},
   runId = '',
@@ -338,7 +334,9 @@ function runClaude(
       ...extraArgs,
     ];
 
-    const child = spawn('claude', args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    // Der Agent arbeitet IM Ordner der App (c0087): Read/Glob/Grep beziehen sich
+    // damit auf genau diese App, und die Werkzeuge von Morphos schreiben in sie.
+    const child = spawn('claude', args, { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
     if (runId) runningAgents.set(runId, child);
 
     const stream = createAgentStream();
@@ -401,13 +399,25 @@ function runClaude(
 }
 
 /**
- * Eine Generierung: Prompt bauen (samt Dialog, Referenzen, markierten Elementen
- * und den beiden
- * Dokumenten der App), Claude CLI aufrufen, Datei-Blöcke und Rückfrage lesen,
- * Dokumente von den Quellen trennen, Änderungen anwenden, Bibliotheken auflösen
- * (Whitelist + Cache) und zum Artefakt bündeln.
- * Eine reine Rückfrage kommt ohne files/html/docs zurück — es wird nichts
- * committet und auch kein Dokument angefasst.
+ * Nie zwei Läufe gleichzeitig an derselben App (siehe core/queue): Der zweite
+ * wartet, bis der erste seinen Commit gemacht hat. Die Warteschlange im
+ * Renderer achtet schon darauf — hier hält es unmittelbar am Ordner.
+ */
+const appRuns = createSerialQueue();
+
+/** Die Protokolldatei eines Laufs — außerhalb des App-Ordners (sonst im Commit). */
+let journalCounter = 0;
+function journalFile(): string {
+  journalCounter += 1;
+  return path.join(app.getPath('temp'), `morphos-run-${process.pid}-${journalCounter}.jsonl`);
+}
+
+/**
+ * Eine Generierung: Der Agent arbeitet IM Ordner der App und ändert deren
+ * Dateien unmittelbar (c0087). Der Ablauf steht in core/generate; hier wird er
+ * mit dem verdrahtet, was allein der Hauptprozess hat — Claude CLI,
+ * Einstellungen, Bibliotheks-Cache und Git.
+ *
  * `requestedFramework` ist die Wahl aus dem Composer; sie zählt nur für eine
  * NEUE App — eine bestehende bringt ihre eigene mit (siehe core/framework).
  * `onEvent` meldet den Fortschritt des Laufs an das aufrufende Fenster,
@@ -415,8 +425,8 @@ function runClaude(
  */
 async function generate(
   userRequest: string,
-  current: SourceFile[],
-  currentDocs: AppDocs,
+  folder: string,
+  id: string | null,
   chat: ChatMessage[],
   attachments: Attachment[],
   elements: ElementRef[],
@@ -428,58 +438,45 @@ async function generate(
 
   const prepared = preparePromptAttachments(attachments);
   if (prepared.error) return { ok: false, error: prepared.error };
-  const framework = resolveFramework(current, requestedFramework);
-  const context: PromptContext = { chat, attachments: prepared.atts, elements, docs: currentDocs, framework };
 
-  // Bild-Referenzen liest die CLI selbst — Read nur für genau diese Pfade freigeben.
-  const extraArgs = prepared.atts
-    .filter((a) => a.kind === 'image' && a.path)
-    .flatMap((a) => ['--allowedTools', `Read(${a.path})`]);
-
-  const res = await runClaude(buildPrompt(userRequest, current, whitelist, context), extraArgs, onEvent, runId);
-  if (!res.ok) return res;
-
-  const changes = parseLLMOutput(res.text);
-  // Die beiden Dokumente kommen im selben Dateisatz — sie gehören aber neben
-  // die App, nicht in sie hinein.
-  const { sources, docs: docChanges } = splitDocs(changes.files);
-
-  // Reine Rückfrage: nichts anwenden, nichts bündeln, kein Dokument anfassen.
-  if (sources.length === 0 && changes.deletions.length === 0 && !hasDocChanges(docChanges)) {
-    if (changes.say) return { ok: true, say: changes.say };
-    return { ok: false, error: 'Es wurden keine verwertbaren Dateien erzeugt. Bitte den Wunsch anders formulieren.' };
+  // Eine bekannte App geht durch safeId (kein Ausbruch aus dem
+  // Arbeitsverzeichnis); ein Entwurf bekommt seinen Ordner erst im Lauf.
+  let appId: string | null = null;
+  try {
+    appId = id === null ? null : safeId(id);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 
-  const files = applyChanges(current, { ...changes, files: sources });
-  const entry = files.find((f) => f.path === ENTRY_FILE);
-  if (!entry || !extractHtml(entry.content)) {
-    return { ok: false, error: 'Die App hat kein gültiges src/index.html. Bitte den Wunsch anders formulieren.' };
-  }
-
-  // Eingebaute Bibliotheken (Preact) vor der Whitelist abfangen und aus
-  // node_modules einbetten; der Rest läuft über die freigegebenen Quellen.
-  const { builtin: builtinNames, external: externalUrls } = splitLibs(extractLibs(entry.content));
-
-  const libs: Record<string, string> = {};
-  for (const name of builtinNames) {
-    const src = readBuiltinLib(name);
-    if (!src) return { ok: false, error: `Eingebaute Bibliothek nicht verfügbar: ${name}` };
-    libs[name] = src;
-  }
-
-  const libRes = await resolveLibs(externalUrls, whitelist, libCacheDir());
-  if (!libRes.ok) return libRes;
-  Object.assign(libs, libRes.libs);
-
-  const html = bundle(files, libs);
-  if (!html) return { ok: false, error: 'Das Bündeln der App ist fehlgeschlagen.' };
-  return {
-    ok: true,
-    files,
-    html,
-    docs: applyDocs(currentDocs, docChanges),
-    ...(changes.say ? { say: changes.say } : {}),
+  const context: PromptContext = {
+    chat,
+    attachments: prepared.atts,
+    elements,
+    framework: requestedFramework,
   };
+
+  return generateApp(
+    {
+      folder,
+      id: appId,
+      wish: userRequest,
+      context,
+      libWhitelist: whitelist,
+      // Der MCP-Server ist Morphos selbst, als schlichtes Node gestartet
+      // (core/mcp: mcpLaunch) — der Anwender braucht dafür kein eigenes Node.
+      execPath: process.execPath,
+      server: path.join(__dirname, MCP_SERVER_FILE),
+      journal: journalFile(),
+    },
+    {
+      runAgent: ({ prompt, cwd, args }) => runClaude(prompt, cwd, args, onEvent, runId),
+      resolveLibs: (urls) => resolveLibs(urls, whitelist, libCacheDir()),
+      builtinLib: readBuiltinLib,
+      ensureRepo,
+      commitAll,
+      now: Date.now,
+    },
+  );
 }
 
 // ---- Fenster ----
@@ -532,8 +529,8 @@ ipcMain.handle('morphos:generate', async (
   event,
   payload: {
     prompt: string;
-    files: SourceFile[];
-    docs?: AppDocs;
+    folder: string;
+    id?: string | null;
     chat: ChatMessage[];
     attachments: Attachment[];
     runId?: string;
@@ -542,10 +539,14 @@ ipcMain.handle('morphos:generate', async (
   },
 ): Promise<GenerateResult> => {
   if (!payload?.prompt?.trim()) return { ok: false, error: 'Bitte gib einen Wunsch ein.' };
-  const current = Array.isArray(payload.files)
-    ? payload.files.filter((f) => f && isValidSourcePath(f.path) && typeof f.content === 'string')
-    : [];
-  const docs = toDocs(payload.docs);
+  // Gearbeitet wird nur in einem BEKANNTEN Arbeitsverzeichnis (wie bei
+  // diskUsage/importApp): Der Agent legt dort Dateien an, und ein beliebiger
+  // Pfad aus dem Renderer wäre dafür der falsche Ort.
+  const folder = typeof payload.folder === 'string' ? payload.folder : '';
+  if (!folder || !readSettings().recentFolders.includes(folder)) {
+    return { ok: false, error: 'Dieses Arbeitsverzeichnis ist nicht bekannt.' };
+  }
+  const id = typeof payload.id === 'string' && payload.id ? payload.id : null;
   const chat = Array.isArray(payload.chat)
     ? payload.chat.filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.text === 'string')
     : [];
@@ -567,7 +568,12 @@ ipcMain.handle('morphos:generate', async (
     if (sender.isDestroyed()) return;
     sender.send('morphos:agentEvent', runId, agentEvent);
   };
-  return generate(payload.prompt, current, docs, chat, attachments, elements, framework, onEvent, runId);
+  // Ein Entwurf hat noch keinen Ordner — er kann mit niemandem zusammenstoßen
+  // und wartet daher auf nichts.
+  const key = id === null ? `entwurf:${runId}` : `${folder} :: ${id}`;
+  return appRuns.run(key, () =>
+    generate(payload.prompt, folder, id, chat, attachments, elements, framework, onEvent, runId),
+  );
 });
 
 // Abbruch eines laufenden Agenten: Der Kindprozess zu dieser Lauf-Id wird
@@ -822,34 +828,6 @@ ipcMain.handle('morphos:loadApp', async (_e, folder: string, id: string): Promis
   } catch (err) {
     console.error('[morphos] loadApp fehlgeschlagen:', err);
     return null;
-  }
-});
-
-ipcMain.handle('morphos:saveApp', async (_e, folder: string, appData: AppData, message: string): Promise<SaveResult> => {
-  try {
-    const dir = appDir(folder, appData.id);
-    writeAppState(
-      dir,
-      {
-        id: appData.id,
-        name: appData.name,
-        icon: appData.icon,
-        // Ein selbst gesetztes Icon bleibt über jede Generierung hinweg erhalten.
-        ...(appData.iconCustom ? { iconCustom: true } : {}),
-        createdAt: appData.createdAt,
-        updatedAt: Date.now(),
-      },
-      appData.files,
-      appData.html,
-      // Konzept und Anleitung liegen neben der App und wandern mit in den Commit.
-      toDocs(appData.docs),
-    );
-    await ensureRepo(dir);
-    await commitAll(dir, message || appData.name);
-    return { ok: true };
-  } catch (err) {
-    console.error('[morphos] saveApp fehlgeschlagen:', err);
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 });
 
