@@ -9,8 +9,8 @@ status-changed: 2026-08-13T00:09:24
 epic: e12
 updated: 2026-08-13
 commit: 9321c53
-usage-tokens: 38287
-usage-cost: 5.374112
+usage-tokens: 55539
+usage-cost: 7.168606
 ---
 
 # Test --audio-buffer-size on Windows, then set it in main.ts
@@ -167,6 +167,62 @@ machine, not on a fleet.
   under `measurements/`. The two root files are untracked leftovers and can be
   deleted.
 
+## Review
+
+### 2026-08-13T00:16:33 — pass
+
+Checked: all four acceptance criteria, the raw measurement files against the
+card's tables, the diff of `9321c53`, `npm test`, `npm run typecheck`,
+`npm run build`. There is no lint script in this repo, so none was run.
+
+- Criterion 1 (measurements stored) is met: eight Windows runs under
+  `tools/audio-latency/measurements/`, with and without the switch plus the
+  exclusive/IAudioClient3/in-process/waveOut arms. Re-running the repo's own
+  report tool on `windows-electron33-auto.json` and `…-buffer128.json`
+  reproduces the card's table verbatim — 52,0 ms at 480 frames, and
+  43,9 / 42,8 / 44,1 ms at 128 frames with the numeric-hint arm left at 480.
+  Every `userAgent` says Electron 33.4.11 / Chromium 130, as claimed.
+- Criterion 2 (switch set, trade-off weighed) is met: `electron/main.ts:112-126`
+  appends `audio-buffer-size` at module scope, i.e. before `whenReady`, from
+  `forcedBufferFrames()` in `src/core/audiolatency.ts:369`. The trade-off is
+  bounded twice and both bounds are tested: unasked only on `win32`/`darwin`,
+  and `MORPHOS_AUDIO_BUFFER_SIZE` overrides in both directions (`aus`/`off`/`0`
+  off, a number clamped to 128…8192, garbage falling back to the platform
+  default). 11 new tests, `audiolatency.spec.ts` green at 45/45. The switch and
+  the env var both survive into `dist-electron/main.js`.
+- Criterion 3 (exclusive mode / `IAudioClient3`) is met and answered with
+  measurements, not prose: `outputLatency` is 0,128 s in both
+  `…-exclusive.json` files versus 0,042 s in `…-auto.json`, and
+  `…-iaudioclient3.json` is numerically identical to `…-auto.json`.
+- Criterion 4 (feedback) is met on all three targets, not just on this card:
+  c0081 has "Outcome of step 1 — measured in c0085", c0079 has "Follow-up from
+  c0085", c0086 has "Update from c0085" with the no-numeric-`latencyHint`
+  requirement.
+- Diff stays inside the What: main process, the decision function plus its
+  tests, the `--switch=` passthrough the exclusive-mode measurements needed,
+  eight raw runs, the README table. No `.only`, `.skip` or removed assertion —
+  the spec diff is purely additive (+61/-0).
+- The suite's red is confirmed pre-existing, not this card's: 13 failures
+  (symlinks needing admin, `gh` absent, two git tests) reproduce identically at
+  the pre-c0085 commit `839646e` in a clean worktree. Nothing in `src/` imports
+  `audiolatency` except its own spec.
+
+Three things for the record, none blocking:
+
+- Finding 3 says the numeric-`latencyHint` opt-out was "reproduced in all four
+  runs that set the switch" — there are five such runs, and in
+  `…-exclusive-buffer128.json` that arm *did* take 128 frames (`baseLatency`
+  2,67 ms). The claim holds for the four shared-mode runs, which is the case
+  c0086 cares about; the wording is wider than the data.
+- The caveat's "13 failures" is exact at the baseline, but a full run at `HEAD`
+  shows 15–16: `DesktopView.spec.ts` loses two or three different tests per run
+  under load and passes 148/148 in isolation. Flaky, and older than this card.
+- The built-app DevTools check (128 vs 480 frames inside Morphos) was not
+  independently re-run here; what I verified is the code path, the bundle, and
+  that `measure.mjs` proves the same switch works from a main process.
+  `win.json` / `win-128.json` are still untracked in the repo root — left for
+  whoever cleans up, as the card notes.
+
 ## Log
 
 - 2026-08-12 status → ready (app)
@@ -175,3 +231,5 @@ machine, not on a fleet.
   `IAudioClient3` are dead ends; switch set in `electron/main.ts` behind a tested
   decision, with an escape hatch (agent)
 - 2026-08-13 status → review (agent)
+- 2026-08-13 reviewed → pass; stays in `review` because this board has no
+  `signoff` column — the move to `done` is the human's (agent)
