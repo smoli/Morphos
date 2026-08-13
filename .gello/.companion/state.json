@@ -1,21 +1,19 @@
 {
   "status": "running",
-  "ready": [
-    "c0087"
-  ],
+  "ready": [],
   "waiting": [],
   "runs": [
     {
-      "cardId": "c0088",
+      "cardId": "c0087",
       "phase": "running",
       "activity": {
-        "name": "PowerShell",
-        "arg": "git -C C:\\ILC\\Morphos show 655682a -- vite.config.ts README.md electron/mcp-server.ts"
+        "name": "Read",
+        "arg": "C:\\ILC\\Morphos\\src\\core\\files.ts"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-13T16:45:18",
+  "updated": "2026-08-13T19:10:19",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -76,10 +74,9 @@
     "c0081",
     "c0082",
     "c0085",
-    "c0088"
+    "c0088",
+    "c0087"
   ],
-  "afk": true,
-  "firstSeen": {
-    "c0087": "2026-08-13T16:31:53"
-  }
+  "afk": false,
+  "firstSeen": {}
 }

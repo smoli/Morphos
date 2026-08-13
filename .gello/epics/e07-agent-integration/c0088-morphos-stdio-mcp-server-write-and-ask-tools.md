@@ -1,13 +1,13 @@
 ---
 id: c0088
 title: Morphos stdio MCP server — write/edit + ask tools with path confinement
-status: review
+status: done
 created: 2026-08-13
 updated: 2026-08-13
-status-changed: 2026-08-13T16:44:33
+status-changed: 2026-08-13T19:09:43
 epic: e07
-usage-tokens: 50179
-usage-cost: 4.426146
+usage-tokens: 57623
+usage-cost: 5.680914
 ---
 
 # Morphos stdio MCP server — write/edit + ask tools with path confinement
@@ -79,6 +79,64 @@ bereit.
   `findGh`/git-Proben aus der Umgebung, und `prompt.spec` wegen der noch nicht
   eingecheckten Änderung an `src/core/prompt.ts` im Arbeitsverzeichnis.
 
+## Review
+
+### 2026-08-13T18:59:06 — pass
+
+Checked: alle sechs Kriterien am Code, der Diff von 655682a, `npx vitest run`
+(einzeln und volle Suite), `npx vue-tsc --noEmit`, `npx vite build` und eine
+eigene Rauchprobe am gebauten Server.
+
+- Kriterium 1 (Server liegt bei, streng über `--mcp-config`): `electron/mcp-server.ts`
+  entsteht durch den zweiten Rollup-Einstieg in `vite.config.ts` als
+  `dist-electron/mcp-server.js` (`npx vite build` → Exit 0, Datei da).
+  `agentMcpArgs` (src/core/mcp.ts:539) liefert `--mcp-config <json>
+  --strict-mcp-config`, `mcpConfigJson` genau einen Server; beides getestet.
+  **Die Aufrufstelle fehlt bewusst:** niemand ruft `agentMcpArgs`/`mcpLaunch`
+  auf (`electron/main.ts`, `src/core/agent.ts` kennen `core/mcp` nicht). Das ist
+  die Abgrenzung, die die Karte nennt und die [[c0087]] als eigenes Kriterium
+  führt („Morphos launches a stdio MCP server for the run", `depends: [c0088]`) —
+  darum kein Mangel dieser Karte, aber bis c0087 ist der Server im echten Lauf
+  nicht in Gebrauch.
+- Kriterium 2 (write/edit, delete/mkdir nach Bedarf): `write`/`edit`/`delete` in
+  src/core/mcp.ts:298-371; `edit` besteht auf einer eindeutigen Stelle bzw.
+  `replace_all`, `write` legt fehlende Ordner mit an. Kein `mkdir` — auf der
+  Karte begründet und stichhaltig.
+- Kriterium 3 (ask): `ask` (src/core/mcp.ts:373) nimmt genau eine Frage,
+  weist die zweite ab und schreibt sie ins Journal; `wroteSomething`
+  (src/core/mcp.ts:109) zählt eine reine Rückfrage NICHT als Änderung, also
+  kein Commit. Chat-Öffnen gehört zu [[c0087]].
+- Kriterium 4 (Grenze): `writablePath` → `confineWithin` + `isValidOutputPath`,
+  danach `resolveWithin` gegen Symlinks (src/core/mcp.ts:63-91). `..`,
+  absolute Pfade, `app.json`, `.git/config` und `src` selbst fallen durch —
+  getestet und in der Rauchprobe am echten Prozess bestätigt (`../escape.txt`
+  und `app.json` abgewiesen, nichts außerhalb des Ordners entstanden).
+- Kriterium 5 (Buchführung): `note` schreibt jeden Vorgang als JSON-Zeile,
+  `parseRunLog`/`wroteSomething` lesen sie zurück; ein Journal-Fehler kommt als
+  Werkzeugfehler zurück statt still zu bleiben. Ohne Vorgang entsteht keine Datei.
+- Kriterium 6 (Unit-Tests): `npx vitest run src/core/mcp.spec.ts` → 47/47 grün,
+  kein `.only`, kein `.skip`, keine abgeschwächte Erwartung.
+- `npx vue-tsc --noEmit` → Exit 0. Lint gibt es im Projekt nicht (`package.json`
+  hat nur `test`/`typecheck`/`build`), also nichts zu laufen.
+- Volle Suite: 1677 grün, 19 rot in 6 Dateien — keine davon berührt der Diff,
+  und keine importiert `core/mcp`: Symlink-Tests in `fsaccess`/`diskusage`
+  (dieser Rechner darf keine Symlinks anlegen), `gitstore > findGh` (Umgebung),
+  `appimport` (8.3-Kurzpfad `STEPHA~1.SMO` in der origin-URL), `appstore`
+  Revert-Dokumente (CRLF statt LF) und 6× `prompt.spec` gegen die noch
+  **nicht eingecheckte** Änderung an `src/core/prompt.ts` im Arbeitsverzeichnis
+  (sie entfernt genau die Blockformat-Zeilen, die die Tests erwarten). Dass
+  diese 19 auf einem sauberen Rechner grün sind, konnte ich hier nicht prüfen.
+- Zwei Hinweise für [[c0087]], kein Mangel dieser Karte:
+  - Ein absoluter Pfad auf einem ANDEREN Laufwerk wird nicht abgewiesen, sondern
+    umgebogen: `path.relative` gibt bei fremdem Laufwerk den absoluten Pfad
+    zurück, `confineWithin` streicht den Laufwerksbuchstaben — `D:\src\app.js`
+    landet als `<root>/src/app.js`. Es bricht nichts aus, aber es wird eine
+    andere Datei geschrieben als genannt.
+  - `main.js` ist nach der Build-Umstellung nicht mehr in sich geschlossen: aus
+    den zwei Einstiegen entsteht der gemeinsame Brocken `dist-electron/fsaccess.js`,
+    den `main.js` importiert. Heute harmlos (es gibt noch keine
+    electron-builder-Konfiguration), beim Paketieren muss der ganze Ordner mit.
+
 ## Log
 
 - 2026-08-13 status → ready (app)
@@ -86,3 +144,6 @@ bereit.
 - 2026-08-13 MCP-Server gebaut (core/mcp + electron/mcp-server + Build-Einstieg); status → review
 - 2026-08-13 status → in-progress (agent)
 - 2026-08-13 status → review (agent)
+- 2026-08-13 status → in-progress (app)
+- 2026-08-13 status → review (app)
+- 2026-08-13 status → done (app)

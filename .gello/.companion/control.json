@@ -14,6 +14,11 @@
       "id": "ea7044e0-9f47-446d-84da-d5f5bc357b74",
       "kind": "restart",
       "cardId": "c0073"
+    },
+    {
+      "id": "99e3e317-440d-486c-8459-118278aa2faf",
+      "kind": "stop",
+      "cardId": "c0088"
     }
   ]
 }
