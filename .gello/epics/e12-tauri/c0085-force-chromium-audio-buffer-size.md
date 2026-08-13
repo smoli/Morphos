@@ -1,11 +1,11 @@
 ---
 id: c0085
 title: "Test --audio-buffer-size on Windows, then set it in main.ts"
-status: review
+status: done
 tags: [audio, latency, performance]
 depends: [c0081]
 created: 2026-08-12
-status-changed: 2026-08-13T00:09:24
+status-changed: 2026-08-13T16:32:15
 epic: e12
 updated: 2026-08-13
 commit: 9321c53
@@ -233,3 +233,4 @@ Three things for the record, none blocking:
 - 2026-08-13 status → review (agent)
 - 2026-08-13 reviewed → pass; stays in `review` because this board has no
   `signoff` column — the move to `done` is the human's (agent)
+- 2026-08-13 status → done (app)

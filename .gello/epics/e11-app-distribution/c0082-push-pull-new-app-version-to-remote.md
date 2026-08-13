@@ -1,10 +1,10 @@
 ---
 id: c0082
 title: Push /pull new app version to remote
-status: review
+status: done
 created: 2026-08-12
-updated: 2026-08-12
-status-changed: 2026-08-12T23:47:55
+updated: 2026-08-13
+status-changed: 2026-08-13T16:32:12
 epic: e11
 usage-tokens: 64670
 usage-cost: 9.009208
@@ -135,3 +135,4 @@ ersten Push zu bauen — das ist c0083.
 - 2026-08-12 status → ready (app)
 - 2026-08-12 status → in-progress (agent)
 - 2026-08-12 status → review (agent)
+- 2026-08-13 status → done (app)

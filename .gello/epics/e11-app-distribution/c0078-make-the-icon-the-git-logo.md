@@ -1,13 +1,13 @@
 ---
 id: c0078
 title: Make the icon the git logo
-status: review
+status: done
 ref: c0074
 epic: e11
 created: 2026-08-12
-updated: 2026-08-12
+updated: 2026-08-13
 commit: 2fe200b
-status-changed: 2026-08-12T22:36:06
+status-changed: 2026-08-13T16:32:08
 usage-tokens: 17738
 usage-cost: 1.907976
 ---
@@ -69,3 +69,4 @@ Checked: Akzeptanzkriterien, Diff von 2fe200b, Tests, Typecheck, Build.
 - 2026-08-12 status → in-progress (agent)
 - 2026-08-12 status → review (agent)
 - 2026-08-12 implemented in 2fe200b (agent)
+- 2026-08-13 status → done (app)

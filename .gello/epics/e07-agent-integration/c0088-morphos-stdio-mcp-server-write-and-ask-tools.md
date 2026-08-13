@@ -1,12 +1,11 @@
 ---
 id: c0088
 title: Morphos stdio MCP server — write/edit + ask tools with path confinement
-status: ready
+status: in-progress
 created: 2026-08-13
 updated: 2026-08-13
-status-changed: 2026-08-13T16:31:26
+status-changed: 2026-08-13T16:32:02
 epic: e07
-order: 0
 ---
 
 # Morphos stdio MCP server — write/edit + ask tools with path confinement
@@ -35,3 +34,4 @@ every write and every question first-hand. Reads stay on the native CLI tools.
 ## Log
 
 - 2026-08-13 status → ready (app)
+- 2026-08-13 status → in-progress (agent)
