@@ -1,13 +1,15 @@
 ---
 id: c0083
 title: Publish a local app to a new remote
-status: in-progress
+status: review
 created: 2026-08-12
 epic: e11
 depends: [c0082]
 tags: [git, distribution]
-status-changed: 2026-08-15T22:49:24
+status-changed: 2026-08-15T22:59:05
 updated: 2026-08-15
+usage-tokens: 46283
+usage-cost: 6.78962
 ---
 
 # Publish a local app to a new remote
@@ -91,3 +93,4 @@ füllt, bekommt die Absage von git selbst (dann bleibt `origin` ungesetzt).
 - 2026-08-12 status → backlog (app)
 - 2026-08-15 status → ready (app)
 - 2026-08-15 status → in-progress (agent)
+- 2026-08-15 status → review (agent)
