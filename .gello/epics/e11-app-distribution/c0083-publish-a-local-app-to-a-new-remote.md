@@ -1,13 +1,12 @@
 ---
 id: c0083
 title: Publish a local app to a new remote
-status: ready
+status: in-progress
 created: 2026-08-12
 epic: e11
 depends: [c0082]
 tags: [git, distribution]
-status-changed: 2026-08-15T22:49:09
-order: 10
+status-changed: 2026-08-15T22:49:24
 updated: 2026-08-15
 ---
 
@@ -55,3 +54,4 @@ pastes its URL.
 - 2026-08-12 status → ready (app)
 - 2026-08-12 status → backlog (app)
 - 2026-08-15 status → ready (app)
+- 2026-08-15 status → in-progress (agent)
