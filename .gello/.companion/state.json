@@ -7,13 +7,13 @@
       "cardId": "c0083",
       "phase": "running",
       "activity": {
-        "name": "Bash",
-        "arg": "npm test 2>&1 | tail -25"
+        "name": "Edit",
+        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e11-app-distribution/c0083-publish-a-local-app-to-a-new-remote.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-15T22:57:33",
+  "updated": "2026-08-15T22:58:25",
   "pickupDelay": 10,
   "owned": [
     "c0029",

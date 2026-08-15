@@ -27,17 +27,17 @@ pastes its URL.
 
 ## Acceptance criteria
 
-- [ ] A per-app action **„App veröffentlichen…"** appears **only when the app has
+- [x] A per-app action **„App veröffentlichen…"** appears **only when the app has
       no `origin`**; once published, it's replaced by c0082's Push/Pull.
-- [ ] The user supplies the **remote URL**; Morphos sets it as `origin` and does
+- [x] The user supplies the **remote URL**; Morphos sets it as `origin` and does
       the **initial push** of the default branch (setting upstream).
-- [ ] Uses **system git + the `gh` credential helper** (like clone/push);
+- [x] Uses **system git + the `gh` credential helper** (like clone/push);
       auth/network failures surface a clear error and **leave `origin` unset** if
       the first push fails (no half-published state).
-- [ ] Morphos **does not create** the remote repo; the message makes clear the
+- [x] Morphos **does not create** the remote repo; the message makes clear the
       user must create an (ideally empty) repo first. Pushing to a **non-empty**
       remote is refused cleanly (that's c0082/c0084 territory).
-- [ ] The URL comes from the **user**, not app content; the operation is confined
+- [x] The URL comes from the **user**, not app content; the operation is confined
       to the app's own repo.
 
 ## Discussion
