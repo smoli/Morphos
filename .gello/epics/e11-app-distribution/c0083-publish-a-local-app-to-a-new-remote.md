@@ -48,6 +48,42 @@ pastes its URL.
   or guidance? Creating the remote via `gh repo create` was considered but
   rejected for now (keeps the no-API-key stance; the user owns the remote).
 
+## Notes
+
+### So gebaut (2026-08-15)
+
+- **`core/remote`** (rein, neuer Abschnitt c0083): `remoteRefNames` (was auf der
+  Gegenstelle liegt, aus `ls-remote`), `publishProblem` (schon ein `origin` /
+  noch keine Version), `remoteNotEmptyMessage` (die saubere Absage samt Weg:
+  leeres Repo anlegen — oder die App holen statt schieben) und
+  `publishErrorMessage`, das sich `accessProblem` (i0007) mit Klonen und
+  Abgleichen teilt.
+- **`core/gitstore`**: `currentBranch` (über `symbolic-ref`, auch ohne Commit),
+  `remoteRefs` (`ls-remote --heads --tags -- <adresse>` mit `ghCredentialArgs` +
+  `NON_INTERACTIVE`) und `publishRepo` = `remote add -- origin <adresse>` +
+  `push -u origin HEAD:refs/heads/<zweig>`; scheitert der Push, wird `origin`
+  wieder ENTFERNT.
+- **Hauptprozess**: `morphos:publishApp` hinter `knownWorkspaceError` +
+  `appDir`/`safeId`, Adresse durch `repoUrlError` (dieselbe Prüfung wie beim
+  Holen). Reihenfolge mit Absicht: prüfen → bei der Gegenstelle nachfragen
+  (`ls-remote`, sie muss erreichbar UND leer sein) → erst dann eintragen und
+  schieben. Vor dem ersten geglückten Push existiert kein `origin`.
+- **Schale**: `workspace.publishApp(id, url)` (merkt den Stand, liest bei Erfolg
+  neu ein — die Kachel bekommt ihr Zeichen), Kachelmenü zeigt „App
+  veröffentlichen…" **statt** Push/Pull, wenn `hasRemote` fehlt; neuer
+  `components/PublishAppDialog` fragt nach der Adresse und sagt ausdrücklich,
+  dass das **leere** Repository der Anwender selbst anlegt.
+
+Antwort auf die offene Frage (missing/non-empty remote): **klare Absage mit
+Weg**, keine Automatik. Eine Adresse, die es nicht gibt, klingt wie ein
+fehlender Zugang (`accessProblem` nennt gh/ssh); eine volle Gegenstelle bekommt
+einen eigenen Satz, der auf „leeres Repository anlegen" bzw. „App aus Git
+laden…" verweist. `gh repo create` bleibt draußen (kein API-Schlüssel im Haus).
+
+**Nicht abgedeckt**: Der Zweigname auf der Gegenstelle ist immer der lokale
+(kein Umbenennen nach `main`), und wer die Adresse während des Veröffentlichens
+füllt, bekommt die Absage von git selbst (dann bleibt `origin` ungesetzt).
+
 ## Log
 
 - 2026-08-12 created (split from c0082)
