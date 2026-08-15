@@ -10,6 +10,7 @@ import SystemWindow from '@/components/SystemWindow.vue';
 import ExplorerPanel from '@/components/ExplorerPanel.vue';
 import IconDialog from '@/components/IconDialog.vue';
 import ImportAppDialog from '@/components/ImportAppDialog.vue';
+import PublishAppDialog from '@/components/PublishAppDialog.vue';
 import GitLogo from '@/components/GitLogo.vue';
 import ContextMenu from '@/components/ContextMenu.vue';
 import LauncherOverlay from '@/components/LauncherOverlay.vue';
@@ -576,6 +577,117 @@ describe('DesktopView', () => {
       expect(toastText()).toMatch(/Beide Seiten/);
       expect((host.loadApp as ReturnType<typeof vi.fn>).mock.calls.length).toBe(geladen);
     });
+
+    // c0083: Eine App, die nur hier liegt, bekommt zum ersten Mal eine
+    // Gegenstelle — die Adresse gibt der Anwender an, angelegt wird dort nichts.
+    describe('Veröffentlichen (c0083)', () => {
+      const veröffentlicht = status({ url: 'https://github.com/jemand/editor.git' });
+
+      function publishHost(overrides: Partial<MorphosHost> = {}): MorphosHost {
+        return syncHost({
+          publishApp: vi.fn(async () => ({ ok: true, status: veröffentlicht })),
+          ...overrides,
+        });
+      }
+
+      /** Adresse eintippen und absenden (der Dialog steht dann offen). */
+      async function submitUrl(wrapper: VueWrapper, url: string) {
+        await wrapper.get('.url-input').setValue(url);
+        await wrapper.get('form.row').trigger('submit');
+        await flushPromises();
+      }
+
+      it('bietet „App veröffentlichen…“ nur bei einer App OHNE Gegenstelle', async () => {
+        setHost(publishHost());
+        const { wrapper } = await mountView();
+
+        // Der Editor hat keine Gegenstelle — dort steht das Veröffentlichen.
+        await openIconMenu(wrapper, 'Editor');
+        const ohne = wrapper.findAll('.ctx-item').map((i) => i.get('.ctx-label').text());
+        expect(ohne).toContain('App veröffentlichen…');
+        expect(ohne).not.toContain('Push');
+        expect(ohne).not.toContain('Pull');
+
+        // Der Rechner hat eine — dort steht Push/Pull und NICHT das Veröffentlichen.
+        await openIconMenu(wrapper, 'Rechner');
+        const mit = wrapper.findAll('.ctx-item').map((i) => i.get('.ctx-label').text());
+        expect(mit).toContain('Push');
+        expect(mit).not.toContain('App veröffentlichen…');
+      });
+
+      it('sieht fürs Veröffentlichen bei keiner Gegenstelle nach — es gibt ja keine', async () => {
+        const host = publishHost();
+        setHost(host);
+        const { wrapper } = await mountView();
+
+        await openIconMenu(wrapper, 'Editor');
+        expect(host.remoteStatus).not.toHaveBeenCalled();
+      });
+
+      it('trägt die Adresse des Anwenders ein und meldet die Veröffentlichung', async () => {
+        // Nach dem Veröffentlichen steht auf der Platte eine App MIT Gegenstelle.
+        let veröffentlichtWorden = false;
+        const host = publishHost({
+          publishApp: vi.fn(async () => {
+            veröffentlichtWorden = true;
+            return { ok: true, status: veröffentlicht };
+          }),
+          listApps: vi.fn(async () =>
+            veröffentlichtWorden ? [withRemote[0], { ...apps[1], hasRemote: true }] : withRemote,
+          ),
+        });
+        setHost(host);
+        const { wrapper } = await mountView();
+
+        await openIconMenu(wrapper, 'Editor');
+        await pickMenu(wrapper, 'App veröffentlichen…');
+        await submitUrl(wrapper, 'https://github.com/jemand/editor.git');
+
+        expect(host.publishApp).toHaveBeenCalledWith('/apps', 'editor-2', 'https://github.com/jemand/editor.git');
+        expect(wrapper.findComponent(PublishAppDialog).exists()).toBe(false);
+        expect(useNotificationsStore().toasts[0].kind).toBe('success');
+        expect(toastText()).toContain('Editor');
+        // Von nun an ist es eine App mit Gegenstelle: Push und Pull stehen bereit.
+        await openIconMenu(wrapper, 'Editor');
+        const labels = wrapper.findAll('.ctx-item').map((i) => i.get('.ctx-label').text());
+        expect(labels).toContain('Push');
+        expect(labels).not.toContain('App veröffentlichen…');
+      });
+
+      it('lässt den Fehler im Dialog stehen — die App bleibt ohne Gegenstelle', async () => {
+        const host = publishHost({
+          publishApp: vi.fn(async () => ({
+            ok: false,
+            error: 'Auf github.com liegt unter dieser Adresse schon etwas (Zweige oder Marken).',
+          })),
+        });
+        setHost(host);
+        const { wrapper } = await mountView();
+
+        await openIconMenu(wrapper, 'Editor');
+        await pickMenu(wrapper, 'App veröffentlichen…');
+        await submitUrl(wrapper, 'https://github.com/jemand/voll.git');
+
+        expect(wrapper.findComponent(PublishAppDialog).exists()).toBe(true);
+        expect(wrapper.get('.error').text()).toMatch(/liegt unter dieser Adresse schon etwas/);
+        expect(tileWrap(wrapper, 'Editor').find('.tile-remote').exists()).toBe(false);
+      });
+
+      it('lässt sich schließen, ohne etwas zu tun', async () => {
+        const host = publishHost();
+        setHost(host);
+        const { wrapper } = await mountView();
+
+        await openIconMenu(wrapper, 'Editor');
+        await pickMenu(wrapper, 'App veröffentlichen…');
+        expect(wrapper.getComponent(PublishAppDialog).props('appName')).toBe('Editor');
+
+        await wrapper.get('.close').trigger('click');
+        await flushPromises();
+        expect(wrapper.findComponent(PublishAppDialog).exists()).toBe(false);
+        expect(host.publishApp).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('Icon einer App', () => {
@@ -711,6 +823,9 @@ describe('DesktopView', () => {
         'Öffnen',
         'Icon ändern',
         'Readme erstellen',
+        // Ohne Gegenstelle steht hier das Veröffentlichen (c0083), mit ihr
+        // Push/Pull (c0082).
+        'App veröffentlichen…',
         'Im Dock behalten',
         'Löschen',
       ]);

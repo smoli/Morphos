@@ -206,6 +206,58 @@ export function upstreamBranchName(mergeRef: string): string {
   return name;
 }
 
+// ---- Veröffentlichen: die erste Gegenstelle einer eigenen App (c0083) ----
+
+/**
+ * Die Referenzen, die auf einer Gegenstelle liegen — aus der Auskunft von
+ * `git ls-remote` (je Zeile „<sha>\t<ref>“). Gefragt wird VOR dem Eintragen von
+ * `origin`: Ein leeres Repository nimmt die Historie der App auf, in einem
+ * vollen hätte sie nichts verloren.
+ */
+export function remoteRefNames(out: string): string[] {
+  return out
+    .split('\n')
+    .map((line) => line.split('\t')[1]?.trim() ?? '')
+    .filter(Boolean);
+}
+
+/**
+ * Der Grund, warum sich diese App nicht veröffentlichen lässt — leer heißt: los.
+ * Veröffentlicht wird genau einmal: Was schon eine Gegenstelle hat, geht von da
+ * an über Push und Pull (c0082), und was noch keine Version hat, hat auch
+ * nichts zu zeigen.
+ */
+export function publishProblem(app: { hasRemote: boolean; versions: number }): string | null {
+  if (app.hasRemote) {
+    return 'Diese App hat schon eine Gegenstelle (origin) — sie wird mit Push und Pull abgeglichen.';
+  }
+  if (app.versions <= 0) return 'Diese App hat noch keine Version, die sich veröffentlichen ließe.';
+  return null;
+}
+
+/**
+ * Auf der Gegenstelle liegt schon etwas. Geschoben wird dann NICHT: Die
+ * Historie der App ist eine eigene Kette vollständiger Schnappschüsse, die zu
+ * einer fremden nicht passt — sie darüberzuschieben ginge nur mit Gewalt.
+ * Gebraucht wird ein leeres Repository; wer die App von dort holen will, holt
+ * sie („App aus Git laden…“).
+ */
+export function remoteNotEmptyMessage(url: string): string {
+  return `Auf ${hostOf(url)} liegt unter dieser Adresse schon etwas (Zweige oder Marken).`
+    + ' Veröffentlicht wird nur in ein LEERES Repository — lege dort eines ohne Readme und ohne Lizenz an.'
+    + ' Gehört die App dort schon hin, hole sie stattdessen („App aus Git laden…“) und gleiche mit Push und Pull ab.';
+}
+
+/**
+ * Die Meldung zu einem gescheiterten Veröffentlichen. Der fehlende Zugang
+ * klingt hier wie überall (accessProblem, i0007) — und er deckt zugleich den
+ * häufigsten Fall ab: Das Repository gibt es noch gar nicht, denn Morphos legt
+ * keines an. Alles Übrige bleibt wörtlich stehen, da weiß git es besser.
+ */
+export function publishErrorMessage(reason: string, url: string): string {
+  return accessProblem(reason, url) ?? `Die App konnte nicht veröffentlicht werden: ${reason}`;
+}
+
 /**
  * Steht in dieser `.git/config` eine Gegenstelle namens `origin`? So findet die
  * Kachelliste heraus, ob eine App überhaupt zum Abgleichen taugt — ohne für

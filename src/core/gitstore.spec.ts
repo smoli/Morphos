@@ -15,8 +15,10 @@ import {
   ghCredentialArgs,
   hasRemote,
   listVersions,
+  publishRepo,
   pullFastForward,
   pushRemote,
+  remoteRefs,
   remoteUrl,
   restoreVersion,
 } from './gitstore';
@@ -313,6 +315,88 @@ describe('gitstore', () => {
     it('lässt sich keinen Zweignamen unterschieben, der eine Option wäre', async () => {
       await expect(pushRemote(alice, '--mirror')).rejects.toThrow(/Ungültiger Zweig/);
       await expect(pushRemote(alice, 'refs/tags/v1')).rejects.toThrow(/Ungültiger Zweig/);
+    });
+
+    // c0083: Eine eigene App hat noch gar kein origin — sie bekommt eines und
+    // zieht das erste Mal um. Gelingt der erste Push nicht, bleibt sie, was sie
+    // war: eine App ohne Gegenstelle.
+    describe('Veröffentlichen (c0083)', () => {
+      /** Ein leeres nacktes Repository — so, wie der Anwender eines anlegt. */
+      function emptyRemote(name: string): string {
+        const p = path.join(tmp, name);
+        execFileSync('git', ['init', '--bare', '--quiet', p]);
+        return p;
+      }
+
+      it('sieht der Gegenstelle an, ob dort schon etwas liegt — vor jedem Eintragen', async () => {
+        expect(await remoteRefs(dir, emptyRemote('leer.git'))).toEqual([]);
+        expect(await remoteRefs(dir, origin)).toContain('refs/heads/main');
+      });
+
+      it('meldet eine Adresse, die es nicht gibt — Morphos legt dort nichts an', async () => {
+        await expect(remoteRefs(dir, path.join(tmp, 'gibtesnicht.git'))).rejects.toThrow();
+      });
+
+      it('trägt origin ein und schiebt die ganze Historie in das leere Repository', async () => {
+        await ensureRepo(dir);
+        write('app.json', '{"id":"a","name":"A"}');
+        await commitAll(dir, 'erste');
+        write('app.json', '{"id":"a","name":"A2"}');
+        await commitAll(dir, 'zweite');
+        expect(hasRemote(dir)).toBe(false);
+
+        const url = emptyRemote('neu.git');
+        const branch = await publishRepo(dir, url);
+
+        expect(hasRemote(dir)).toBe(true);
+        expect(await remoteUrl(dir)).toBe(url);
+        // Danach ist es eine ganz gewöhnliche App mit Gegenstelle (c0082):
+        // verfolgter Zweig, Gleichstand, die volle Historie drüben.
+        const up = (await getUpstream(dir))!;
+        expect(up).toEqual({ branch, remoteBranch: branch, name: `origin/${branch}` });
+        expect(await aheadBehind(dir)).toEqual({ ahead: 0, behind: 0 });
+        expect(execFileSync('git', ['-C', url, 'log', '--format=%s']).toString().trim().split('\n'))
+          .toEqual(['zweite', 'erste']);
+      });
+
+      it('lässt den Dialogverlauf auch beim ersten Mal zu Hause', async () => {
+        await ensureRepo(dir);
+        write('app.json', '{"id":"a","name":"A"}');
+        writeChat(dir, [{ role: 'user', text: 'geheim', time: 1 }]);
+        await commitAll(dir, 'erste');
+
+        const url = emptyRemote('ohne-chat.git');
+        await publishRepo(dir, url);
+        expect(execFileSync('git', ['-C', url, 'show', 'HEAD:app.json']).toString()).toContain('"id":"a"');
+        expect(() => execFileSync('git', ['-C', url, 'show', 'HEAD:chat.json'], { stdio: 'pipe' })).toThrow();
+      });
+
+      it('lässt origin UNGESETZT, wenn der erste Push scheitert — nichts halb veröffentlicht', async () => {
+        await ensureRepo(dir);
+        write('app.json', '{"id":"a","name":"A"}');
+        await commitAll(dir, 'erste');
+
+        await expect(publishRepo(dir, path.join(tmp, 'gibtesnicht.git'))).rejects.toThrow();
+        expect(hasRemote(dir)).toBe(false);
+        expect(await remoteUrl(dir)).toBe(null);
+        // Die App selbst ist unversehrt.
+        expect((await listVersions(dir)).map((v) => v.prompt)).toEqual(['erste']);
+      });
+
+      it('veröffentlicht nichts, wovon es noch keine Version gibt', async () => {
+        await ensureRepo(dir);
+        write('app.json', '{"id":"a","name":"A"}');
+        await expect(publishRepo(dir, emptyRemote('ohne-version.git'))).rejects.toThrow();
+        expect(hasRemote(dir)).toBe(false);
+      });
+
+      it('trägt keine Adresse ein, die eine Option wäre', async () => {
+        await ensureRepo(dir);
+        write('a.txt', 'x');
+        await commitAll(dir, 'eins');
+        await expect(publishRepo(dir, '--upload-pack=touch /tmp/pwned')).rejects.toThrow();
+        expect(hasRemote(dir)).toBe(false);
+      });
     });
   });
 

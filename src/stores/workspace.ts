@@ -709,6 +709,27 @@ export const useWorkspaceStore = defineStore('workspace', {
       return res;
     },
 
+    /**
+     * Veröffentlicht eine App, die noch keine Gegenstelle hat (c0083): Die
+     * Adresse eines leeren Repositories gibt der Anwender an, eingetragen und
+     * geschoben wird im Hauptprozess. Gelingt es, hat die App von nun an ein
+     * `origin` — die Kachelliste wird dafür neu eingelesen (`hasRemote`), und
+     * ab da gelten Push und Pull. Gelingt es nicht, ist nichts geschehen.
+     */
+    async publishApp(id: string, url: string): Promise<RemoteResult> {
+      if (!this.folder) return { ok: false, error: 'Kein Arbeitsverzeichnis geöffnet.' };
+      const host = getHost();
+      if (!host.publishApp) return { ok: false, error: 'Das Veröffentlichen ist hier nicht verfügbar.' };
+      try {
+        const res = await host.publishApp(this.folder, id, url);
+        if (res.status) this.remoteStatuses = { ...this.remoteStatuses, [id]: res.status };
+        if (res.ok) await this.refresh();
+        return res;
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
     /** Der gemeinsame Weg von Push und Pull: aufrufen, Stand merken, melden. */
     async syncApp(id: string, op: 'pushApp' | 'pullApp'): Promise<RemoteResult> {
       if (!this.folder) return { ok: false, error: 'Kein Arbeitsverzeichnis geöffnet.' };

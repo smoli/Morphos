@@ -12,6 +12,7 @@ import BusyDot from '@/components/BusyDot.vue';
 import AppIcon from '@/components/AppIcon.vue';
 import IconDialog from '@/components/IconDialog.vue';
 import ImportAppDialog from '@/components/ImportAppDialog.vue';
+import PublishAppDialog from '@/components/PublishAppDialog.vue';
 import GitLogo from '@/components/GitLogo.vue';
 import ContextMenu from '@/components/ContextMenu.vue';
 import LauncherOverlay from '@/components/LauncherOverlay.vue';
@@ -418,6 +419,49 @@ async function pullApp(app: AppSummary): Promise<void> {
   await reloadOpenWindows(app.id);
 }
 
+// ---- Eine eigene App veröffentlichen (c0083) ----
+
+// Eine App ohne Gegenstelle lässt sich nicht teilen. Veröffentlichen heißt:
+// einmalig ein `origin` eintragen und die Historie hinüberschieben. Die Adresse
+// eines LEEREN Repositories gibt der Anwender an — angelegt wird es dort von
+// ihm, nicht von Morphos (kein API-Schlüssel im Haus).
+const publishTarget = ref<AppSummary | null>(null);
+const publishBusy = ref(false);
+const publishError = ref<string | null>(null);
+
+function openPublish(app: AppSummary): void {
+  publishTarget.value = app;
+  publishBusy.value = false;
+  publishError.value = null;
+}
+
+function closePublish(): void {
+  if (publishBusy.value) return;
+  publishTarget.value = null;
+  publishError.value = null;
+}
+
+/**
+ * Trägt die Gegenstelle ein und schiebt zum ersten Mal. Gelingt es, ist die App
+ * von nun an eine ganz gewöhnliche mit Gegenstelle (Push/Pull, c0082) und der
+ * Dialog verschwindet. Gelingt es nicht, bleibt er stehen und sagt, woran es
+ * lag — die App ist dann unverändert ohne Gegenstelle.
+ */
+async function submitPublish(url: string): Promise<void> {
+  const app = publishTarget.value;
+  if (!app) return;
+  publishBusy.value = true;
+  publishError.value = null;
+  const res = await workspace.publishApp(app.id, url);
+  publishBusy.value = false;
+  if (!res.ok) {
+    publishError.value = res.error ?? 'Das Veröffentlichen ist nicht gelungen.';
+    return;
+  }
+  publishTarget.value = null;
+  notifications.success(`„${app.name}“ ist veröffentlicht — ab jetzt geht es mit Push und Pull.`);
+}
+
 /** Lädt die offenen Fenster einer App neu — auf der Platte steht ein neuer Stand. */
 async function reloadOpenWindows(appId: string): Promise<void> {
   const folder = workspace.folder;
@@ -671,8 +715,9 @@ function dockItem(appId: string): MenuItem {
  * App mit Gegenstelle bekommt zusätzlich „Push" und „Pull" (c0082) — und beim
  * Aufklappen wird dort nachgesehen, wie sie zur Gegenstelle steht. Das ist eine
  * der wenigen Stellen, an denen Morphos von sich aus ans Netz geht; im
- * Hintergrund tut es das nie. Eine App ohne Gegenstelle hat hier nichts stehen
- * — sie zu veröffentlichen ist eine eigene Sache (c0083).
+ * Hintergrund tut es das nie. Eine App OHNE Gegenstelle bekommt stattdessen das
+ * Veröffentlichen (c0083): Sie hat noch keine, also gibt es dort auch nichts
+ * nachzusehen — geholt wird für sie nicht.
  */
 function openIconMenu(e: MouseEvent, app: AppSummary): void {
   const sync: MenuItem[] = app.hasRemote
@@ -680,7 +725,7 @@ function openIconMenu(e: MouseEvent, app: AppSummary): void {
         { id: 'push', label: 'Push', icon: '↑', separator: true },
         { id: 'pull', label: 'Pull', icon: '↓' },
       ]
-    : [];
+    : [{ id: 'publish', label: 'App veröffentlichen…', icon: '⇪', separator: true }];
   menu.value = {
     x: e.clientX,
     y: e.clientY,
@@ -733,6 +778,9 @@ function onMenuPick(id: string): void {
       break;
     case 'pull':
       if (app) void pullApp(app);
+      break;
+    case 'publish':
+      if (app) openPublish(app);
       break;
     case 'dock':
     case 'undock':
@@ -933,6 +981,17 @@ function onMenuPick(id: string): void {
       @close="closeImport"
       @submit="startImport"
       @choose="chooseImport"
+    />
+
+    <!-- „App veröffentlichen…“ — die Adresse eines leeren Repositories für eine
+         App, die bisher nur hier liegt (c0083). -->
+    <PublishAppDialog
+      v-if="publishTarget"
+      :app-name="publishTarget.name"
+      :busy="publishBusy"
+      :error="publishError"
+      @close="closePublish"
+      @submit="submitPublish"
     />
 
     <IconDialog

@@ -22,15 +22,24 @@ import {
   getUpstream,
   hasRemote,
   listVersions,
+  publishRepo,
   pullFastForward,
   pushRemote,
+  remoteRefs,
   remoteUrl,
   restoreTree,
 } from '../src/core/gitstore';
-import { pullProblem, pushProblem, syncErrorMessage } from '../src/core/remote';
+import {
+  publishErrorMessage,
+  publishProblem,
+  pullProblem,
+  pushProblem,
+  remoteNotEmptyMessage,
+  syncErrorMessage,
+} from '../src/core/remote';
 import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeChat } from '../src/core/appstore';
 import { isSafeAppId } from '../src/core/app';
-import { IMPORT_DIR, resolveImport, startImport } from '../src/core/appimport';
+import { IMPORT_DIR, repoUrlError, resolveImport, startImport } from '../src/core/appimport';
 import { validateIcon } from '../src/core/icon';
 import { writeReadme } from '../src/core/readme';
 import { resolveWithin, runFs, runShellFs } from '../src/core/fsaccess';
@@ -1037,6 +1046,58 @@ ipcMain.handle('morphos:pullApp', async (_e, folder: string, id: string): Promis
       };
     }
     return { ok: true, changed: true, status: await readRemoteStatus(dir, false) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+/**
+ * Veröffentlicht eine App, die noch KEINE Gegenstelle hat (c0083): Die Adresse
+ * eines leeren Repositories kommt vom Anwender, Morphos trägt sie als `origin`
+ * ein und schiebt die Historie das erste Mal hinüber. Danach ist es eine ganz
+ * gewöhnliche App mit Gegenstelle — es gilt c0082 (Push/Pull).
+ *
+ * Das Repository selbst legt Morphos NICHT an: Dafür bräuchte es einen Zugang
+ * zur API der jeweiligen Plattform (und damit einen Schlüssel im Haus). Der
+ * Anwender legt es an, Morphos zieht ein.
+ *
+ * Der Reihe nach, und in dieser Reihenfolge mit Absicht:
+ *
+ *   1. Bekanntes Arbeitsverzeichnis, Id durch `appDir`, Adresse durch
+ *      `repoUrlError` (dieselbe Prüfung wie beim Holen, core/appimport).
+ *   2. Hat die App schon ein `origin` oder noch keine Version — dann nicht.
+ *   3. Bei der Gegenstelle nachfragen, BEVOR etwas eingetragen wird
+ *      (`ls-remote`): Sie muss erreichbar und leer sein. Liegt dort schon
+ *      etwas, wird sauber abgelehnt — darüberschieben ginge nur mit Gewalt.
+ *   4. Erst dann `origin` eintragen und schieben; scheitert das, ist `origin`
+ *      danach wieder weg (siehe gitstore publishRepo) — nichts halb
+ *      veröffentlicht.
+ */
+ipcMain.handle('morphos:publishApp', async (_e, folder: string, id: string, url: string): Promise<RemoteResult> => {
+  const problem = knownWorkspaceError(folder);
+  if (problem) return { ok: false, error: problem };
+  const address = String(url ?? '').trim();
+  const urlError = repoUrlError(address);
+  if (urlError) return { ok: false, error: urlError };
+  try {
+    const dir = appDir(folder, id);
+    const refusal = publishProblem({ hasRemote: hasRemote(dir), versions: await countVersions(dir) });
+    if (refusal) return { ok: false, error: refusal };
+
+    let refs: string[];
+    try {
+      refs = await remoteRefs(dir, address);
+    } catch (err) {
+      return { ok: false, error: publishErrorMessage(err instanceof Error ? err.message : String(err), address) };
+    }
+    if (refs.length > 0) return { ok: false, error: remoteNotEmptyMessage(address) };
+
+    try {
+      await publishRepo(dir, address);
+    } catch (err) {
+      return { ok: false, error: publishErrorMessage(err instanceof Error ? err.message : String(err), address) };
+    }
+    return { ok: true, status: await readRemoteStatus(dir, false) };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }

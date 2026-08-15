@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { COMMON_PLACES, findOnPath } from './which';
-import { hasOriginSection, parseAheadBehind, upstreamBranchName } from './remote';
+import { hasOriginSection, parseAheadBehind, remoteRefNames, upstreamBranchName } from './remote';
 import type { AheadBehind, VersionInfo } from '@/types';
 
 /**
@@ -227,6 +227,71 @@ export async function pushRemote(dir: string, remoteBranch: string): Promise<voi
  */
 export async function pullFastForward(dir: string): Promise<void> {
   await runGit(dir, ['merge', '--ff-only', '--quiet', '@{u}']);
+}
+
+// ---- Veröffentlichen: die erste Gegenstelle einer eigenen App (c0083) ----
+
+/**
+ * Der Zweig, auf dem die App steht — auch ohne jeden Commit (dann sagt
+ * `rev-parse` nichts). Leer, wenn das kein Zweigname ist, den man git guten
+ * Gewissens als Teil eines Refspecs reicht (siehe upstreamBranchName).
+ */
+export async function currentBranch(dir: string): Promise<string> {
+  try {
+    return upstreamBranchName(await runGit(dir, ['symbolic-ref', '--quiet', '--short', 'HEAD']));
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Was auf der Gegenstelle dieser Adresse liegt (Zweige und Marken) — gefragt,
+ * OHNE etwas einzutragen: `ls-remote` redet allein über das Netz. Gibt es die
+ * Adresse nicht oder fehlt der Zugang, scheitert das hier — und zwar bevor die
+ * App eine Gegenstelle bekommen hat.
+ *
+ * Die Adresse kommt vom Anwender, wird in core/appimport geprüft und geht
+ * hinter `--` als eigenes Argument an git: Eine Option kann sie nicht werden.
+ */
+export async function remoteRefs(dir: string, url: string): Promise<string[]> {
+  const out = await runGit(
+    dir,
+    [...ghCredentialArgs(url, findGh()), 'ls-remote', '--heads', '--tags', '--', url],
+    NON_INTERACTIVE,
+  );
+  return remoteRefNames(out);
+}
+
+/**
+ * Veröffentlicht eine App, die noch keine Gegenstelle hat: `origin` eintragen
+ * und den eigenen Zweig zum ersten Mal schieben, samt Verfolgung (`-u`). Zurück
+ * kommt der Name des Zweiges.
+ *
+ * Scheitert der erste Push — kein Zugang, kein Netz, die Gegenstelle hat sich
+ * inzwischen gefüllt —, wird `origin` wieder ENTFERNT: Eine App mit einer
+ * Gegenstelle, auf der nichts von ihr steht, wäre eine Lüge; Push und Pull
+ * kämen daran nicht vorbei. Nach einem Fehlschlag ist die App also wieder
+ * genau das, was sie war.
+ */
+export async function publishRepo(dir: string, url: string): Promise<string> {
+  const branch = await currentBranch(dir);
+  if (!branch) throw new Error('Diese App steht auf keinem Zweig, der sich veröffentlichen ließe.');
+  await runGit(dir, ['remote', 'add', '--', 'origin', url]);
+  try {
+    await runGit(
+      dir,
+      [...ghCredentialArgs(url, findGh()), 'push', '--quiet', '--set-upstream', 'origin', `HEAD:refs/heads/${branch}`],
+      NON_INTERACTIVE,
+    );
+  } catch (err) {
+    try {
+      await runGit(dir, ['remote', 'remove', 'origin']);
+    } catch {
+      /* dann steht sie eben noch da — die Meldung des Pushs wiegt schwerer */
+    }
+    throw err;
+  }
+  return branch;
 }
 
 /** Initialisiert das Repository im Ordner, falls noch keines existiert. */

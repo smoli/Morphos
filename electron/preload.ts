@@ -99,6 +99,12 @@ contextBridge.exposeInMainWorld('morphos', {
   pullApp: (folder: string, id: string): Promise<RemoteResult> =>
     ipcRenderer.invoke('morphos:pullApp', folder, id),
 
+  // Eine App ohne Gegenstelle zum ersten Mal veröffentlichen (c0083): Die
+  // Adresse eines LEEREN Repositories kommt vom Anwender; Morphos trägt sie als
+  // origin ein und schiebt die Historie hinüber. Angelegt wird dort nichts.
+  publishApp: (folder: string, id: string, url: string): Promise<RemoteResult> =>
+    ipcRenderer.invoke('morphos:publishApp', folder, id, url),
+
   listVersions: (folder: string, id: string): Promise<VersionInfo[]> =>
     ipcRenderer.invoke('morphos:listVersions', folder, id),
   revertApp: (folder: string, id: string, sha: string): Promise<SaveResult> =>

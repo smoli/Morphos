@@ -575,6 +575,54 @@ describe('useWorkspaceStore', () => {
     });
   });
 
+  describe('Veröffentlichen (c0083)', () => {
+    const published = { hasRemote: true, url: 'https://example.org/neu.git', upstream: 'origin/main', ahead: 0, behind: 0 };
+
+    it('reicht die Adresse des Anwenders weiter und liest danach neu ein', async () => {
+      const host = makeHost({ publishApp: vi.fn(async () => ({ ok: true, status: published })) });
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect(await ws.publishApp('a-1', 'https://example.org/neu.git')).toMatchObject({ ok: true });
+      expect(host.publishApp).toHaveBeenCalledWith('/apps', 'a-1', 'https://example.org/neu.git');
+      // Die Kachel trägt von nun an eine Gegenstelle — dafür wird neu eingelesen.
+      expect(host.listApps).toHaveBeenCalledTimes(2);
+      expect(ws.remoteOf('a-1')).toMatchObject({ url: 'https://example.org/neu.git' });
+    });
+
+    it('liest nicht neu ein, wenn nichts veröffentlicht wurde', async () => {
+      const host = makeHost({
+        publishApp: vi.fn(async () => ({ ok: false, error: 'Auf example.org liegt schon etwas.' })),
+      });
+      setHost(host);
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+
+      expect((await ws.publishApp('a-1', 'https://example.org/voll.git')).error).toMatch(/liegt schon/);
+      expect(host.listApps).toHaveBeenCalledTimes(1);
+      expect(ws.remoteOf('a-1')).toBe(null);
+    });
+
+    it('fängt einen geworfenen Fehler ab und verlangt Verzeichnis und Anbindung', async () => {
+      setHost(makeHost({ publishApp: vi.fn(async () => { throw new Error('Brücke weg'); }) }));
+      const ws = useWorkspaceStore();
+      await ws.openFolder('/apps');
+      expect(await ws.publishApp('a-1', 'https://example.org/neu.git')).toEqual({ ok: false, error: 'Brücke weg' });
+
+      setActivePinia(createPinia());
+      setHost(makeHost({ publishApp: vi.fn(async () => ({ ok: true, status: published })) }));
+      const ohneOrdner = useWorkspaceStore();
+      expect((await ohneOrdner.publishApp('a-1', 'https://example.org/neu.git')).ok).toBe(false);
+
+      setActivePinia(createPinia());
+      setHost(makeHost());
+      const ohneBrücke = useWorkspaceStore();
+      await ohneBrücke.openFolder('/apps');
+      expect((await ohneBrücke.publishApp('a-1', 'https://example.org/neu.git')).error).toBeTruthy();
+    });
+  });
+
   describe('Arbeitsverzeichnis öffnen (c0075)', () => {
     it('reicht den Ordner zum Dateimanager des Systems weiter', async () => {
       const host = makeHost({ revealFolder: vi.fn(async () => ({ ok: true })) });

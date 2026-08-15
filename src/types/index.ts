@@ -677,6 +677,15 @@ export interface MorphosHost {
    */
   pullApp?(folder: string, id: string): Promise<RemoteResult>;
 
+  /**
+   * Veröffentlicht eine App, die noch keine Gegenstelle hat (c0083): Die
+   * Adresse eines LEEREN Repositories wird als `origin` eingetragen und die
+   * Historie das erste Mal geschoben. Das Repository legt Morphos nicht an;
+   * liegt dort schon etwas oder scheitert der erste Push, bleibt die App ohne
+   * Gegenstelle.
+   */
+  publishApp?(folder: string, id: string, url: string): Promise<RemoteResult>;
+
   /** Liefert die Git-Versionshistorie einer App, neueste zuerst. */
   listVersions(folder: string, id: string): Promise<VersionInfo[]>;
   /** Stellt den Stand einer früheren Version als NEUEN Commit wieder her (linear, nichts geht verloren). */
