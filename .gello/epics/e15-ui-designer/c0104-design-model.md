@@ -24,27 +24,53 @@ add, remove, move, reparent, and a walk/find-by-id.
 
 ## Acceptance criteria
 
-- [ ] Types for `Block` and `Design` exist (in `src/types` or exported from
+- [x] Types for `Block` and `Design` exist (in `src/types` or exported from
       `core/design`), with `rect{x,y,w,h}`, optional `instructions` and `type`,
       and `children`.
-- [ ] `design.ui.json` filename/constant lives at the app root; load returns an
+- [x] `design.ui.json` filename/constant lives at the app root; load returns an
       empty/normalized design when the file is absent.
-- [ ] `load`/`save` round-trip a design through the app fs without loss.
-- [ ] Validation rejects/normalizes malformed JSON (missing fields, bad
+- [x] `load`/`save` round-trip a design through the app fs without loss.
+- [x] Validation rejects/normalizes malformed JSON (missing fields, bad
       geometry, cyclic ids) into a safe tree.
-- [ ] Tree helpers (add/remove/move/reparent/walk/find) are pure and covered by
+- [x] Tree helpers (add/remove/move/reparent/walk/find) are pure and covered by
       unit tests.
-- [ ] `core/design.spec.ts` covers the model, persistence, normalization, and
+- [x] `core/design.spec.ts` covers the model, persistence, normalization, and
       helpers.
 
 ## Notes
 
 Read-only for the agent — only the shell writes this file, so it is fine that it
 lives at the app root outside the agent's writable `src/` scope. Bundling only
-touches `src/`, so `design.ui.json` won't be embedded in the app.
+touches `src/`, so `design.ui.json` won't be embedded in the app. A test in
+`design.spec.ts` pins that contract: `isValidOutputPath('design.ui.json')` is
+false.
+
+**Geometry is fractions, not pixels** (decided here, affects c0107/c0109/c0110):
+`rect` holds shares of the *app window*, `0…1` in both directions, so a design
+survives a window resize and means the same in every tile. The shares are
+absolute — a child's rect refers to the window too, not to its parent. Nesting
+is therefore a pure statement about structure, and reparenting moves nothing.
+Values are rounded to four decimals so the file stays diff-stable.
+
+**API** (`src/core/design.ts`): `DESIGN_FILE`, `DESIGN_VERSION`,
+`MAX_DESIGN_DEPTH`, `MIN_BLOCK_SIZE`, `designPath`, `emptyDesign`,
+`makeBlockId`, `clampRect`, `normalizeDesign`, `readDesign`, `writeDesign`,
+`walkBlocks`, `listBlocks`, `findBlock`, `addBlock`, `removeBlock`, `moveBlock`,
+`updateBlock`, `reparentBlock`. Persistence uses `node:fs` like `core/appstore`
+(main process); the renderer will reach it through an IPC method added in c0105.
+Every tree helper returns a new design and leaves the given one untouched; an
+unknown id, a taken id or a cycle leaves the design unchanged instead of
+throwing — a stray drag can't destroy a design. Normalization re-ids duplicates
+(so `findBlock` can't hit the wrong block), drops non-blocks, caps depth at 16
+and caps name/type/instructions lengths (they go into every prompt).
+
+`updateBlock` is not in the acceptance list but is one helper of the same family
+and is what c0108 needs; it is covered by tests.
 
 ## Log
 
 - 2026-08-16 created from the e15 epic breakdown.
 - 2026-08-16 status → ready (app)
+- 2026-08-16 `core/design.ts` + `core/design.spec.ts` (49 tests); full suite
+  1781 tests green, `vue-tsc` clean.
 - 2026-08-16 status → in-progress (agent)

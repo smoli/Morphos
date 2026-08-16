@@ -14,13 +14,13 @@
       "cardId": "c0104",
       "phase": "running",
       "activity": {
-        "name": "Read",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/src/core/appfs.ts"
+        "name": "Bash",
+        "arg": "git add src/core/design.ts src/core/design.spec.ts .gello/epics/e15-ui-designer/c0104-design-model.md && git commit -q -F - <<'EOF' && git log --oneline -1\ngello c0104: Datenmodell und Ablage des UI-Entwurfs\n\ncore/design.ts: Block- und Entwurfstypen, design.ui.json im Wurzelverzeichnis\nder App (neben concept.md, für den Agenten Nur-Lesen), Lesen/Schreiben über\nnode:fs wie core/appstore, Zurechtrücken fremder Dateien und reine Baum-Helfer\n(add/remove/move/update/reparent/walk/find).\n\nDie Geometrie sind Anteile des App-Fensters (0…1), nicht Pixel: Ein Entwurf\nüberlebt eine Größenänderung und bedeutet in jeder Kachel dasselbe. Die Anteile\nsind absolut — auch die eines Kindes — das Verschachteln ist damit eine reine\nAussage über die Gliederung, ein Umhängen verschiebt nichts.\n\nFundament für e15; c0105 (Overlay) und c0106 (Prompt) bauen darauf auf.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nEOF"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-16T23:10:05",
+  "updated": "2026-08-16T23:15:20",
   "pickupDelay": 10,
   "owned": [
     "c0029",
