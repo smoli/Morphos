@@ -1,11 +1,12 @@
 ---
 id: c0104
 title: "Design model + persistence (core/design.ts)"
-status: backlog
+status: in-progress
 epic: e15
 depends: []
 created: 2026-08-16
 updated: 2026-08-16
+status-changed: 2026-08-16T23:09:56
 ---
 
 # Design model + persistence (core/design.ts)
@@ -45,3 +46,5 @@ touches `src/`, so `design.ui.json` won't be embedded in the app.
 ## Log
 
 - 2026-08-16 created from the e15 epic breakdown.
+- 2026-08-16 status → ready (app)
+- 2026-08-16 status → in-progress (agent)

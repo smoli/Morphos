@@ -1,11 +1,13 @@
 ---
 id: c0105
 title: "Overlay design mode — toggle + read-only render"
-status: backlog
+status: ready
 epic: e15
 depends: [c0104]
 created: 2026-08-16
 updated: 2026-08-16
+status-changed: 2026-08-16T23:09:40
+order: 20
 ---
 
 # Overlay design mode — toggle + read-only render
@@ -38,3 +40,4 @@ c0107 onward.
 ## Log
 
 - 2026-08-16 created from the e15 epic breakdown.
+- 2026-08-16 status → ready (app)

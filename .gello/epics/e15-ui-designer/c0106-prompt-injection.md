@@ -1,11 +1,13 @@
 ---
 id: c0106
 title: "Prompt injection — UI-LAYOUT section when design exists"
-status: backlog
+status: ready
 epic: e15
 depends: [c0104]
 created: 2026-08-16
 updated: 2026-08-16
+status-changed: 2026-08-16T23:09:41
+order: 30
 ---
 
 # Prompt injection — UI-LAYOUT section when design exists
@@ -38,3 +40,4 @@ existing `formatElementRefs`/attachments section style in `core/prompt.ts`.
 ## Log
 
 - 2026-08-16 created from the e15 epic breakdown.
+- 2026-08-16 status → ready (app)

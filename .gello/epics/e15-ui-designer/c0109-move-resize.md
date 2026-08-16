@@ -1,11 +1,13 @@
 ---
 id: c0109
 title: "Move + resize blocks"
-status: backlog
+status: ready
 epic: e15
 depends: [c0107]
 created: 2026-08-16
 updated: 2026-08-16
+status-changed: 2026-08-16T23:09:45
+order: 60
 ---
 
 # Move + resize blocks
@@ -32,3 +34,4 @@ later follow-up, not part of this card.
 ## Log
 
 - 2026-08-16 created from the e15 epic breakdown.
+- 2026-08-16 status → ready (app)

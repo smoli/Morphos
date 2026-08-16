@@ -1,11 +1,13 @@
 ---
 id: c0110
 title: "Nesting + reparent + delete"
-status: backlog
+status: ready
 epic: e15
 depends: [c0108, c0109]
 created: 2026-08-16
 updated: 2026-08-16
+status-changed: 2026-08-16T23:09:47
+order: 70
 ---
 
 # Nesting + reparent + delete
@@ -38,3 +40,4 @@ tree helpers from c0104.
 ## Log
 
 - 2026-08-16 created from the e15 epic breakdown.
+- 2026-08-16 status → ready (app)

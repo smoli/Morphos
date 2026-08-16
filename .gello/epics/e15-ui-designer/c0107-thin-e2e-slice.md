@@ -1,11 +1,13 @@
 ---
 id: c0107
 title: "Thin end-to-end slice — draw + name + persist one block"
-status: backlog
+status: ready
 epic: e15
 depends: [c0105, c0106]
 created: 2026-08-16
 updated: 2026-08-16
+status-changed: 2026-08-16T23:09:43
+order: 40
 ---
 
 # Thin end-to-end slice — draw + name + persist one block
@@ -36,3 +38,4 @@ follow-on cards (c0108–c0110). Keep this deliberately minimal to prove the loo
 ## Log
 
 - 2026-08-16 created from the e15 epic breakdown.
+- 2026-08-16 status → ready (app)

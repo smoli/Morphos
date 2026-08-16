@@ -1,9 +1,26 @@
 {
-  "status": "idle",
-  "ready": [],
+  "status": "running",
+  "ready": [
+    "c0105",
+    "c0106",
+    "c0107",
+    "c0108",
+    "c0109",
+    "c0110"
+  ],
   "waiting": [],
-  "runs": [],
-  "updated": "2026-08-16T23:08:17",
+  "runs": [
+    {
+      "cardId": "c0104",
+      "phase": "running",
+      "activity": {
+        "name": "Read",
+        "arg": "/Users/stephan/WebstormProjects/Morphos/src/core/appfs.ts"
+      },
+      "model": "claude-opus-5"
+    }
+  ],
+  "updated": "2026-08-16T23:10:05",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -63,8 +80,16 @@
     "c0080",
     "c0081",
     "c0082",
-    "c0083"
+    "c0083",
+    "c0104"
   ],
   "afk": false,
-  "firstSeen": {}
+  "firstSeen": {
+    "c0105": "2026-08-16T23:09:40",
+    "c0106": "2026-08-16T23:09:41",
+    "c0107": "2026-08-16T23:09:43",
+    "c0108": "2026-08-16T23:09:44",
+    "c0109": "2026-08-16T23:09:46",
+    "c0110": "2026-08-16T23:09:47"
+  }
 }
