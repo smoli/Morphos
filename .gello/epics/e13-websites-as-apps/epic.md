@@ -20,7 +20,7 @@ is browsable in Morphos's file explorer.
 
 ## Plan (steps + dependencies)
 
-Decisions (planned 2026-08-15): website apps are a **new app kind**, hosted in an
+Decisions (planned 2026-08-16): website apps are a **new app kind**, hosted in an
 Electron **`<webview>`** (fits the free-floating/overlapping/tiled DOM windows),
 with a **per-app isolated & persistent** partition. MVP = live site + favicon +
 small nav bar (steps 1–6). The file-explorer data view (the epic's second goal)
