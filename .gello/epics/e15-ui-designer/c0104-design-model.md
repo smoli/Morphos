@@ -1,12 +1,12 @@
 ---
 id: c0104
 title: "Design model + persistence (core/design.ts)"
-status: in-progress
+status: review
 epic: e15
 depends: []
 created: 2026-08-16
 updated: 2026-08-16
-status-changed: 2026-08-16T23:09:56
+status-changed: 2026-08-16T23:15:23
 ---
 
 # Design model + persistence (core/design.ts)
@@ -74,3 +74,4 @@ and is what c0108 needs; it is covered by tests.
 - 2026-08-16 `core/design.ts` + `core/design.spec.ts` (49 tests); full suite
   1781 tests green, `vue-tsc` clean.
 - 2026-08-16 status → in-progress (agent)
+- 2026-08-16 status → review (agent)
