@@ -7,6 +7,8 @@ depends: []
 created: 2026-08-16
 updated: 2026-08-16
 status-changed: 2026-08-16T23:15:23
+usage-tokens: 28244
+usage-cost: 1.962576
 ---
 
 # Design model + persistence (core/design.ts)
