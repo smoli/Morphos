@@ -7,6 +7,8 @@ depends: [c0105, c0106]
 created: 2026-08-16
 updated: 2026-08-17
 status-changed: 2026-08-17T07:15:50
+usage-tokens: 53639
+usage-cost: 6.086833
 ---
 
 # Thin end-to-end slice — draw + name + persist one block

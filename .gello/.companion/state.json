@@ -11,13 +11,13 @@
       "cardId": "c0107",
       "phase": "running",
       "activity": {
-        "name": "mcp__gello__set_status",
-        "arg": "review"
+        "name": "Bash",
+        "arg": "git show --stat c2cb113"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-17T07:15:51",
+  "updated": "2026-08-17T07:16:15",
   "pickupDelay": 10,
   "owned": [
     "c0029",
