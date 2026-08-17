@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import WindowFrame from './WindowFrame.vue';
 import { useDesktopStore } from '@/stores/desktop';
@@ -7,10 +8,37 @@ import { useWorkspaceStore } from '@/stores/workspace';
 import { EXPLORER_ID } from '@/core/system';
 
 /**
+ * jsdom misst nichts: Jedes Element ist dort null hoch. Für die Composer-Leiste
+ * hängt aber eine Aussage an ihrer Höhe (i0008), darum wird sie hier gesetzt —
+ * und ein ResizeObserver nachgestellt, damit ihr Wachsen auch ankommt.
+ */
+const height = {
+  set(el: HTMLElement, px: number): void {
+    Object.defineProperty(el, 'offsetHeight', { value: px, configurable: true });
+  },
+};
+
+/** Die laufenden Beobachtungen — `fire()` meldet eine Änderung. */
+const observed: { target: Element; fire: () => void }[] = [];
+
+class FakeResizeObserver {
+  constructor(private cb: () => void) {}
+  observe(target: Element): void {
+    observed.push({ target, fire: () => this.cb() });
+  }
+  unobserve(target: Element): void {
+    for (let i = observed.length - 1; i >= 0; i--) if (observed[i].target === target) observed.splice(i, 1);
+  }
+  disconnect(): void {
+    observed.length = 0;
+  }
+}
+
+/**
  * Der Rahmen für sich — ohne App und ohne Ansicht darin. Was ein Aufsatz
  * beisteuert (AppWindow, SystemWindow), steht in deren eigenen Prüfungen.
  */
-function mountFrame({ single = false } = {}) {
+function mountFrame({ single = false, composer = false, composerHeight = 0 } = {}) {
   const desktop = useDesktopStore();
   const id = desktop.openSystem(EXPLORER_ID)!;
   const win = desktop.find(id)!;
@@ -21,13 +49,25 @@ function mountFrame({ single = false } = {}) {
       title: 'Meine Ansicht',
       actions: '<button type="button" class="mein-knopf">★</button>',
       default: '<div class="mein-inhalt">Inhalt</div>',
+      ...(composer ? { composer: '<div class="mein-chat">Chat</div>' } : {}),
     },
   });
-  return { wrapper, desktop, win };
+  const bar = () => (wrapper.find('.w-composer').exists() ? wrapper.get('.w-composer').element as HTMLElement : null);
+  const el = bar();
+  if (el) height.set(el, composerHeight);
+  return { wrapper, desktop, win, bar };
 }
 
 describe('WindowFrame', () => {
-  beforeEach(() => setActivePinia(createPinia()));
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+  });
+
+  afterEach(() => {
+    observed.length = 0;
+    vi.unstubAllGlobals();
+  });
 
   it('zeigt Icon, Titel, eigene Knöpfe und den Inhalt des Aufsatzes', () => {
     const { wrapper } = mountFrame();
@@ -176,6 +216,38 @@ describe('WindowFrame', () => {
       expect(bar.get('.mein-chat').text()).toBe('Chat');
       // Er liegt im Rahmen, hinter dem Fensterkörper — nicht daneben.
       expect(wrapper.get('.w-body').element.nextElementSibling).toBe(bar.element);
+    });
+
+    /**
+     * Die Leiste liegt ÜBER dem unteren Teil des Fensterkörpers und verdeckt
+     * dort, was liegt (i0008). Wie hoch sie steht, schreibt der Rahmen darum an
+     * — wer im Körper an den unteren Rand will, liest es dort ab.
+     */
+    describe('sagt an, wie hoch sie steht (i0008)', () => {
+      it('nennt ohne Chat kein Maß — es ist nichts verdeckt', () => {
+        const { wrapper } = mountFrame();
+        expect(wrapper.attributes('style')).toContain('--composer-height: 0px');
+      });
+
+      it('nennt die Höhe der Leiste, sobald ein Chat unten hängt', async () => {
+        const { wrapper } = mountFrame({ composer: true, composerHeight: 180 });
+        await nextTick();
+
+        expect(wrapper.attributes('style')).toContain('--composer-height: 180px');
+      });
+
+      it('rückt nach, wenn die Leiste wächst', async () => {
+        // Der Verlauf wächst mit jeder Antwort — das Maß darf nicht das von
+        // vorhin bleiben.
+        const { wrapper, bar } = mountFrame({ composer: true, composerHeight: 180 });
+        await nextTick();
+
+        height.set(bar()!, 320);
+        observed.forEach((o) => o.fire());
+        await nextTick();
+
+        expect(wrapper.attributes('style')).toContain('--composer-height: 320px');
+      });
     });
   });
 

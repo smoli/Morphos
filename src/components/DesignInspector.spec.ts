@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { mount } from '@vue/test-utils';
 import DesignInspector from './DesignInspector.vue';
 import { BLOCK_ROLES, type Block } from '@/core/design';
@@ -225,6 +226,40 @@ describe('DesignInspector (c0108)', () => {
 
       expect(wrapper.findAll('.di-path .di-crumb').map((c) => c.text())).toEqual(['Rahmen']);
       expect(wrapper.findAll('.di-kid').map((k) => k.text())).toEqual(['Zeile']);
+    });
+  });
+
+  /**
+   * jsdom rechnet kein CSS einer SFC aus. Wo das Feld steht, hängt aber eine
+   * Aussage dran (i0008), darum wird sie im Quelltext nachgeschlagen: der
+   * Rumpf der Regel für diesen Wähler, ohne Kommentare.
+   */
+  function styleRule(selector: string): string {
+    const source = readFileSync('src/components/DesignInspector.vue', 'utf8');
+    // Hinter dem Etikett anfangen — sonst stünde es mit vor der ersten Klammer.
+    const styles = source
+      .slice(source.indexOf('>', source.indexOf('<style')) + 1)
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    for (const rule of styles.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      if (rule[1].split(',').some((s) => s.trim() === selector)) return rule[2];
+    }
+    throw new Error(`Keine CSS-Regel für ${selector} in DesignInspector.vue`);
+  }
+
+  describe('bleibt neben dem Chat ganz zu sehen (i0008)', () => {
+    // Die Composer-Leiste liegt über dem unteren Teil des Fensters — beim
+    // Anlegen einer App steht sie immer offen und verdeckte das halbe Feld.
+    // Wie hoch sie steht, schreibt der Rahmen an (WindowFrame).
+    it('setzt sich über die Composer-Leiste statt unter sie', () => {
+      expect(styleRule('.design-inspector')).toMatch(
+        /bottom:\s*calc\(\s*12px\s*\+\s*var\(--composer-height,\s*0px\)\s*\)/,
+      );
+    });
+
+    it('nimmt sich nur den Platz, der daneben bleibt, und rollt sonst', () => {
+      const rule = styleRule('.design-inspector');
+      expect(rule).toMatch(/max-height:\s*calc\([^;]*var\(--composer-height,\s*0px\)[^;]*\)/);
+      expect(rule).toMatch(/overflow-y:\s*auto/);
     });
   });
 

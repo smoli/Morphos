@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useDesktopStore } from '@/stores/desktop';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useAgentsStore } from '@/stores/agents';
@@ -85,10 +85,45 @@ const swapping = computed(() => desktop.tileSwap?.id === props.win.instanceId);
 // … bzw. auf dieser Kachel würde es landen (der Hinweis liegt über ihr).
 const dropTarget = computed(() => desktop.tileSwap?.targetId === props.win.instanceId);
 
+/**
+ * Wie hoch die Composer-Leiste gerade steht. Sie liegt ÜBER dem unteren Teil
+ * des Fensterkörpers (siehe `.w-composer`) und verdeckt dort, was liegt — der
+ * Entwurfs-Modus etwa hängt sein Feld an den unteren Rand (i0008). Damit sich
+ * so etwas ausweichen kann, SCHREIBT der Rahmen das Maß an
+ * (`--composer-height`), statt dass jeder im Körper die Leiste selbst suchte.
+ * Ohne Chat ist es null: Dann ist auch nichts verdeckt.
+ */
+const composer = ref<HTMLElement | null>(null);
+const composerHeight = ref(0);
+
+function measureComposer(): void {
+  composerHeight.value = composer.value?.offsetHeight ?? 0;
+}
+
+/**
+ * Die Leiste wächst mit dem Verlauf und geht ganz fort, wenn der Chat zuklappt
+ * — beobachtet wird darum beides: das Element selbst und der Wechsel des
+ * Elements. Wo der Browser kein Beobachten anbietet, bleibt es beim Maß von
+ * eben (wie auf der Bühne, DesktopView).
+ */
+let composerObserver: ResizeObserver | null = null;
+watch(composer, (el) => {
+  composerObserver?.disconnect();
+  composerObserver = null;
+  measureComposer();
+  if (el && typeof ResizeObserver === 'function') {
+    composerObserver = new ResizeObserver(measureComposer);
+    composerObserver.observe(el);
+  }
+});
+onBeforeUnmount(() => composerObserver?.disconnect());
+
 const frameStyle = computed(() => {
-  if (full.value) return { zIndex: props.win.z };
+  const vars = { '--composer-height': `${composerHeight.value}px` };
+  if (full.value) return { ...vars, zIndex: props.win.z };
   const r = tile.value ?? props.win;
   return {
+    ...vars,
     left: `${r.x}px`,
     top: `${r.y}px`,
     width: `${r.w}px`,
@@ -252,7 +287,7 @@ function stopInteraction(): void {
 
     <!-- Der Chat der App, wenn sie ihn gerade zeigt: eine Leiste am unteren
          Rand DIESES Fensters, über der App statt neben ihr. -->
-    <footer v-if="$slots.composer" class="w-composer">
+    <footer v-if="$slots.composer" ref="composer" class="w-composer">
       <slot name="composer" />
     </footer>
 

@@ -181,11 +181,23 @@ function cancel(): void {
  * Das Feld sitzt in der unteren rechten Ecke der Schicht — nicht am Kasten:
  * Ein Kasten kann winzig sein oder am Rand kleben, das Feld soll immer an
  * derselben Stelle stehen und den Entwurf nicht verdecken.
+ *
+ * Die untere Ecke gehört ihm allerdings nicht allein: Der Chat liegt als
+ * Leiste über dem unteren Teil des Fensters (WindowFrame: `.w-composer`) und
+ * verdeckte das halbe Feld — beim Anlegen einer App, wo die Leiste immer offen
+ * steht, jedes Mal (i0008). Also setzt sich das Feld ÜBER sie: Wie hoch sie
+ * steht, schreibt der Rahmen als `--composer-height` an. Ohne Leiste ist das
+ * Maß null und der Abstand der alte.
  */
 .design-inspector {
   position: absolute;
   right: 12px;
-  bottom: 12px;
+  bottom: calc(12px + var(--composer-height, 0px));
+  /* Und was dann noch bleibt, ist seine Höhe: In einem niedrigen Fenster rollt
+     das Feld lieber, als oben aus der Fläche zu wachsen — abgeschnitten wäre
+     wieder nur die Hälfte zu sehen. */
+  max-height: calc(100% - var(--composer-height, 0px) - 24px);
+  overflow-y: auto;
   z-index: 1;
   width: 260px;
   display: flex;

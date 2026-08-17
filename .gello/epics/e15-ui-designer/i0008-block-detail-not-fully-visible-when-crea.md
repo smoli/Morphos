@@ -5,6 +5,7 @@ status: review
 type: issue
 ref: c0112
 epic: e15
+commit: 8b11bda
 created: 2026-08-17
 updated: 2026-08-17
 status-changed: 2026-08-17T21:50:59
