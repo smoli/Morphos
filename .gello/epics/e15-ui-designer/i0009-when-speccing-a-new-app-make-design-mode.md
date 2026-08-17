@@ -9,8 +9,8 @@ created: 2026-08-17
 updated: 2026-08-17
 status-changed: 2026-08-17T21:59:50
 commit: 002783e
-usage-tokens: 14306
-usage-cost: 2.404145
+usage-tokens: 19149
+usage-cost: 2.889492
 ---
 
 In that scenario I want to be able to start the design mode from the „noch kein dialog“ space. Add the option to open mode there![image](../../assets/i0009/image.png)

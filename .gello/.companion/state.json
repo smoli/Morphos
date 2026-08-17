@@ -1,19 +1,9 @@
 {
-  "status": "running",
+  "status": "idle",
   "ready": [],
   "waiting": [],
-  "runs": [
-    {
-      "cardId": "i0009",
-      "phase": "running",
-      "activity": {
-        "name": "Bash",
-        "arg": "git add .gello/epics/e15-ui-designer/i0009-when-speccing-a-new-app-make-design-mode.md && git commit -q -m \"$(cat <<'EOF'\ngello i0009: Review — pass\n\nAkzeptanzkriterien gegen ChatDock/AppWindow/stores-app geprüft, Diff von\n002783e gelesen, volle Suite (2008) und vue-tsc grün. Lint gibt es im Repo\nnicht.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nEOF\n)\" && git log --oneline -1"
-      },
-      "model": "claude-opus-5"
-    }
-  ],
-  "updated": "2026-08-17T22:01:32",
+  "runs": [],
+  "updated": "2026-08-17T22:01:42",
   "pickupDelay": 10,
   "owned": [
     "c0029",
