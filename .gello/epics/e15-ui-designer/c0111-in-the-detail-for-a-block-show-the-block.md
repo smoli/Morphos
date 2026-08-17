@@ -71,6 +71,40 @@ wird höchstens ein einzelner überlanger Name.
 Nicht angefasst: `design.ui.json` und der Prompt. Diese Karte zeigt nur, was der
 Baum ohnehin sagt — geschrieben wird nichts.
 
+## Review
+
+### 2026-08-17T21:21:04 — pass
+
+Geprüft: Akzeptanzkriterien gegen den Code, Diff von `4015dd2`, volle Suite,
+`vue-tsc`, `npm run build`. Ein Lint-Skript gibt es im Repo nicht
+(`package.json` kennt nur `test`, `typecheck`, `build`) — nicht gelaufen, weil
+nicht vorhanden.
+
+- Weg von der Wurzel: `DesignInspector.vue` rendert `.di-path` als
+  `Entwurf › <Vorfahren> › <Name>`; bei leeren `ancestors` steht der Name
+  unmittelbar am Entwurf. Belegt in `DesignInspector.spec.ts` („zeigt den Weg
+  von der Wurzel bis zum Kasten“, „stellt einen Wurzelkasten unmittelbar an den
+  Entwurf“) und am echten Baum in `DesignOverlay.spec.ts`.
+- Unmittelbare Kinder: `v-if="block.children.length"` um `.di-kids` — ohne
+  Kinder fehlt der Abschnitt ganz, keine leere Liste („schweigt über die
+  Kinder, wenn es keine gibt“).
+- Wechseln: Vorfahren und Kinder sind Knöpfe, die `select` melden; der Kasten
+  selbst ist ein `span` („bietet den Kasten selbst nicht zum Wechseln an“).
+  `DesignOverlay.vue:265 onSelect` setzt `selectedId`, das Feld redet danach vom
+  neuen Kasten — nachgewiesen in beide Richtungen („wechselt über den Weg zum
+  Elter“, „wechselt über die Kinder nach unten“), samt der Falle, dass der Klick
+  im Feld die Auswahl nicht wieder aufhebt.
+- Eine Rechnung: `pathIn` steht in `src/core/design.ts:315`, das Overlay bildet
+  daraus `ancestors` (`pathIn(...).slice(0, -1)`); die Ansicht läuft den Baum
+  nicht ab. `design.spec.ts` deckt Weg, Wurzelkasten, fehlenden Kasten (leerer
+  Weg, kein halber) und die Durchreiche der Original-Kästen (`toBe`) ab.
+- Suite grün: 1984 Tests in 96 Dateien, davon 170 in den drei berührten Specs;
+  kein `.only`, `.skip` oder `todo`. `vue-tsc --noEmit` und `npm run build`
+  sauber.
+- Diff bleibt im What: sechs Dateien, nur `core/design`, `DesignInspector`,
+  `DesignOverlay` und deren Specs. `design.ui.json` und der Prompt sind
+  unberührt, wie in den Notes gefordert.
+
 ## Log
 
 - 2026-08-17 status → in-progress (agent)
