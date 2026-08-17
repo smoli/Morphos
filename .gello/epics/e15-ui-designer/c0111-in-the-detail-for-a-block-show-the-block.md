@@ -8,8 +8,8 @@ commit: 4015dd2
 created: 2026-08-17
 updated: 2026-08-17
 status-changed: 2026-08-17T21:19:29
-usage-tokens: 25255
-usage-cost: 2.978063
+usage-tokens: 30781
+usage-cost: 3.610606
 ---
 
 # In the detail for a block show the block hierarchy
