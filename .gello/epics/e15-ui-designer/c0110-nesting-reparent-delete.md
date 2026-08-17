@@ -8,8 +8,8 @@ created: 2026-08-16
 commit: f2dd7fb
 updated: 2026-08-17
 status-changed: 2026-08-17T19:34:31
-usage-tokens: 78423
-usage-cost: 9.970168
+usage-tokens: 88882
+usage-cost: 11.200422
 ---
 
 # Nesting + reparent + delete
