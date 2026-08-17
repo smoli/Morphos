@@ -10,12 +10,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "git show --stat a08d061 | head -12; npm test 2>&1 | tail -5"
+        "arg": "git show --stat a08d061 && echo \"===CARD WORKTREE DIFF===\" && git diff .gello/epics/e15-ui-designer/i0008-block-detail-not-fully-visible-when-crea.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-17T21:52:12",
+  "updated": "2026-08-17T21:52:49",
   "pickupDelay": 10,
   "owned": [
     "c0029",
