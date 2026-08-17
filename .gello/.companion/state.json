@@ -11,13 +11,13 @@
       "cardId": "c0107",
       "phase": "running",
       "activity": {
-        "name": "Bash",
-        "arg": "git add electron/main.ts electron/preload.ts src/components/AppWindow.spec.ts src/components/AppWindow.vue src/components/DesignBlock.vue src/components/DesignOverlay.spec.ts src/components/DesignOverlay.vue src/components/DesignFlow.spec.ts src/core/design.spec.ts src/core/design.ts src/core/designstore.ts src/core/designstore.spec.ts src/core/generate.spec.ts src/core/generate.ts src/stores/app.spec.ts src/stores/app.ts src/types/index.ts .gello/epics/e15-ui-designer/c0107-thin-e2e-slice.md && git status --short"
+        "name": "mcp__gello__set_status",
+        "arg": "review"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-17T07:15:37",
+  "updated": "2026-08-17T07:15:51",
   "pickupDelay": 10,
   "owned": [
     "c0029",

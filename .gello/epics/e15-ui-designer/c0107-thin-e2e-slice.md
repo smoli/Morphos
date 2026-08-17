@@ -1,12 +1,12 @@
 ---
 id: c0107
 title: "Thin end-to-end slice — draw + name + persist one block"
-status: in-progress
+status: review
 epic: e15
 depends: [c0105, c0106]
 created: 2026-08-16
 updated: 2026-08-17
-status-changed: 2026-08-17T07:04:16
+status-changed: 2026-08-17T07:15:50
 ---
 
 # Thin end-to-end slice — draw + name + persist one block
@@ -85,3 +85,4 @@ das; wenn c0109 die Kästen anfasst, lohnt ein Blick darauf.
   `renameDesignBlock` / `saveDesign` im Store, `writeDesign` über preload/main.
   Volle Suite 1845 Tests grün, `vue-tsc` sauber, `npm run build` sauber (kein
   node:fs im Renderer-Bündel).
+- 2026-08-17 status → review (agent)
