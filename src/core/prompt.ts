@@ -3,6 +3,7 @@ import { CONCEPT_FILE, USERDOC_FILE } from './docs';
 import { mcpToolId } from './mcptools';
 import { PREACT_LIB } from './framework';
 import { formatElementRefs } from './pick';
+import { DESIGN_FILE, type Block, type Design } from './design';
 
 /** Für den Prompt aufbereitete Referenzdatei: Text inline, Bild als Pfad. */
 export interface PromptAttachment {
@@ -30,6 +31,13 @@ export interface PromptContext {
    * Prompt — der Agent liest sie selbst (c0087).
    */
   hasApp?: boolean;
+  /**
+   * Der UI-Entwurf der App (core/design). Anders als die Quellen geht er sehr
+   * wohl in den Prompt — nicht als JSON, sondern als lesbarer Baum: Er ist die
+   * Vorgabe für den Aufbau, und der Agent soll ihn nicht erst suchen müssen.
+   * Gelesen wird er von der Schale (core/generate), für den Agenten ist er tabu.
+   */
+  design?: Design;
 }
 
 const MAX_CHAT_MESSAGES = 10;
@@ -162,6 +170,23 @@ export const SYSTEM_PROMPT = [
   '- Das Attribut data-morphos-src setzt erst das Bündeln; in den Quelldateien steht es',
   '  NICHT. Schreibe es niemals selbst und suche niemals danach.',
   '',
+  'DER UI-ENTWURF (optional):',
+  '- Der Anwender kann den Aufbau der Oberfläche zeichnen: benannte Kästen mit Lage,',
+  '  Rolle und Anweisungen, ineinander geschachtelt. Gibt es einen Entwurf, steht er',
+  '  unten unter "UI-LAYOUT" — und er ist VERBINDLICH: Jeder Kasten wird zu einem',
+  '  Bereich der App, an seinem Platz, in seiner Größe, mit seinen Anweisungen; die',
+  '  Schachtelung des Entwurfs wird zur Verschachtelung im Markup.',
+  '- Die Maße sind Anteile des App-Fensters (als Prozent angegeben), keine Pixel — auch',
+  '  die eines geschachtelten Kastens beziehen sich auf das ganze Fenster. Setze sie',
+  '  entsprechend relativ um (Prozent, Grid, Flexbox), damit der Aufbau jede',
+  '  Fenstergröße überlebt. Sie meinen die Gliederung, nicht den Pixel: Ränder,',
+  '  Abstände und Feinheiten des Aussehens bleiben deine Sache.',
+  `- Der Entwurf steht in ${DESIGN_FILE} im Wurzelverzeichnis. Er gehört dem Anwender und`,
+  '  ist für dich NUR ZUM LESEN: Ändere und lösche ihn NIEMALS — er liegt außerhalb von',
+  '  src/, jeder Schreibversuch würde ohnehin abgewiesen. Widerspricht er dem Wunsch,',
+  '  folge dem Wunsch und sag den Widerspruch in deiner Mitteilung.',
+  '- Steht unten kein "UI-LAYOUT", gibt es keinen Entwurf: Dann gestaltest du frei.',
+  '',
   'BIBLIOTHEKEN (optional):',
   '- Eine Bibliothek deklarierst du in src/index.html als',
   '  <meta name="morphos:lib" content="https://…"> (URL einer einzelnen JS-Datei,',
@@ -236,6 +261,56 @@ export const PREACT_GUIDE = [
   '',
 ].join('\n');
 
+/**
+ * Ein Anteil des Fensters als Prozent — auf eine Nachkommastelle, weil feiner
+ * niemand baut und „12.5%“ sich besser liest als „0.125“.
+ */
+function pct(value: number): string {
+  return `${Math.round(value * 1000) / 10}%`;
+}
+
+/**
+ * Der UI-Entwurf als lesbarer Baum für den Prompt (vgl. formatElementRefs in
+ * core/pick). Jeder Kasten steht mit Namen, Rolle, Lage und Anweisungen da,
+ * Kinder eingerückt unter ihrem Elter — die Einrückung IST die Gliederung.
+ * Ohne Entwurf (oder mit einem leeren) kommt nichts zurück: Dann soll im Prompt
+ * auch kein Wort darüber stehen.
+ */
+export function formatDesign(design?: Design): string[] {
+  const blocks = design?.blocks ?? [];
+  if (blocks.length === 0) return [];
+
+  const parts: string[] = [
+    'UI-LAYOUT (der Anwender hat den Aufbau der Oberfläche gezeichnet — er ist VERBINDLICH):',
+    '(Die Maße sind Anteile des App-Fensters, keine Pixel; auch die eines eingerückten',
+    ' Kastens beziehen sich auf das ganze Fenster. Die Einrückung sagt, was zu was gehört.',
+    ` Der Entwurf steht in ${DESIGN_FILE} und gehört dem Anwender: NUR ZUM LESEN, niemals ändern.)`,
+  ];
+
+  const step = (list: readonly Block[], depth: number): void => {
+    const pad = '  '.repeat(depth);
+    for (const b of list) {
+      parts.push(`${pad}- ${b.name || '(ohne Namen)'}${b.type ? ` [${b.type}]` : ''}`);
+      parts.push(
+        `${pad}  Fläche: waagerecht ${pct(b.rect.x)}…${pct(b.rect.x + b.rect.w)},` +
+          ` senkrecht ${pct(b.rect.y)}…${pct(b.rect.y + b.rect.h)}`,
+      );
+      if (b.instructions) {
+        // Mehrzeilige Anweisungen bleiben unter ihrem Kasten, statt wie ein
+        // neuer Punkt der obersten Ebene auszusehen.
+        const [first, ...rest] = b.instructions.split('\n');
+        parts.push(`${pad}  Anweisungen: ${first}`);
+        for (const line of rest) parts.push(`${pad}    ${line}`);
+      }
+      step(b.children, depth + 1);
+    }
+  };
+  step(blocks, 0);
+
+  parts.push('');
+  return parts;
+}
+
 /** Kürzt eine Dialognachricht für den Prompt-Kontext. */
 function clip(text: string): string {
   return text.length > MAX_CHAT_CHARS ? `${text.slice(0, MAX_CHAT_CHARS)} …` : text;
@@ -290,6 +365,10 @@ export function buildPrompt(
     }
     parts.push('');
   }
+
+  // Der gezeichnete Aufbau der Oberfläche — er gilt für den ganzen Lauf und
+  // steht deshalb vor dem, was der Anwender gerade markiert hat.
+  parts.push(...formatDesign(context.design));
 
   // Was der Anwender im Fenster markiert hat, steht dicht am Wunsch — „mach das
   // größer“ ergibt nur mit diesen Elementen einen Sinn.

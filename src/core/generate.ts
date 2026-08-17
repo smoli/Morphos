@@ -8,6 +8,7 @@ import { bundle, ENTRY_FILE } from './bundle';
 import { extractHtml, extractIcon, extractTitle } from './html';
 import { extractLibs, splitLibs } from './libs';
 import { resolveFramework } from './framework';
+import { readDesign } from './design';
 import { DEFAULT_ICON, DEFAULT_NAME, makeAppId } from './app';
 
 /**
@@ -202,6 +203,9 @@ export async function generateApp(req: GenerateRequest, deps: GenerateDeps): Pro
       ...req.context,
       hasApp: before.length > 0,
       framework: resolveFramework(before, req.context?.framework),
+      // Der Entwurf kommt von der Platte, nicht aus dem Kontext des Aufrufers:
+      // Er liegt im App-Ordner (design.ui.json) und ist damit hier zu Hause.
+      design: readDesign(dir),
     };
     const images = (req.context?.attachments ?? [])
       .filter((a) => a.kind === 'image' && a.path)

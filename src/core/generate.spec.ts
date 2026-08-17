@@ -5,6 +5,7 @@ import path from 'node:path';
 import { agentArgs, generateApp, type GenerateDeps, type GenerateRequest } from './generate';
 import { MCP_ALLOWED_TOOLS, MCP_DENIED_TOOLS, mcpToolId } from './mcp';
 import { CONCEPT_FILE, USERDOC_FILE } from './docs';
+import { DESIGN_VERSION, writeDesign } from './design';
 import { readManifest } from './appstore';
 import type { AgentResult } from '@/types';
 
@@ -155,6 +156,63 @@ describe('generateApp — der Lauf im App-Ordner', () => {
     const prompt = runAgent.mock.calls[0][0].prompt;
     expect(prompt).not.toContain('geheimer alter inhalt');
     expect(prompt).toContain('Ein Taschenrechner');
+  });
+
+  it('legt den Entwurf der App als UI-LAYOUT in den Prompt', async () => {
+    const dir = existingApp('rechner-1');
+    writeDesign(dir, {
+      version: DESIGN_VERSION,
+      blocks: [
+        {
+          id: 'b1',
+          name: 'Anzeige',
+          type: 'display',
+          instructions: 'zeigt das Ergebnis',
+          rect: { x: 0, y: 0, w: 1, h: 0.25 },
+          children: [],
+        },
+      ],
+    });
+    const runAgent = vi.fn(writingRun({ 'src/index.html': DOC('neu') }));
+    await generateApp(request({ id: 'rechner-1' }), makeDeps(runAgent));
+
+    const prompt = runAgent.mock.calls[0][0].prompt;
+    expect(prompt).toContain('UI-LAYOUT');
+    expect(prompt).toContain('Anzeige');
+    expect(prompt).toContain('zeigt das Ergebnis');
+  });
+
+  it('schweigt über den Entwurf, solange die App keinen hat', async () => {
+    existingApp('rechner-1');
+    const runAgent = vi.fn(writingRun({ 'src/index.html': DOC('neu') }));
+    await generateApp(request({ id: 'rechner-1' }), makeDeps(runAgent));
+
+    expect(runAgent.mock.calls[0][0].prompt).not.toContain('UI-LAYOUT');
+  });
+
+  it('nimmt den Entwurf von der Platte, nicht aus dem mitgegebenen Kontext', async () => {
+    const dir = existingApp('rechner-1');
+    writeDesign(dir, {
+      version: DESIGN_VERSION,
+      blocks: [{ id: 'b1', name: 'Echter Block', rect: { x: 0, y: 0, w: 1, h: 1 }, children: [] }],
+    });
+    const runAgent = vi.fn(writingRun({ 'src/index.html': DOC('neu') }));
+    await generateApp(
+      request({
+        id: 'rechner-1',
+        context: {
+          design: {
+            version: DESIGN_VERSION,
+            blocks: [{ id: 'b2', name: 'Erfundener Block', rect: { x: 0, y: 0, w: 1, h: 1 }, children: [] }],
+          },
+        },
+      }),
+      makeDeps(runAgent),
+    );
+
+    const prompt = runAgent.mock.calls[0][0].prompt;
+    expect(prompt).toContain('Echter Block');
+    expect(prompt).not.toContain('Erfundener Block');
   });
 });
 

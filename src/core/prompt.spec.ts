@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { buildPrompt, SYSTEM_PROMPT } from './prompt';
+import { buildPrompt, formatDesign, SYSTEM_PROMPT } from './prompt';
 import { mcpToolId } from './mcp';
+import { DESIGN_FILE, DESIGN_VERSION, emptyDesign, type Block, type Rect } from './design';
 import type { ChatMessage } from '@/types';
 
 describe('SYSTEM_PROMPT', () => {
@@ -90,6 +91,15 @@ describe('SYSTEM_PROMPT', () => {
   it('lässt außerhalb von src/ nur genau diese beiden Dateien zu', () => {
     expect(SYSTEM_PROMPT).toMatch(/Schreiben darfst du AUSSCHLIESSLICH unter src\//);
     expect(SYSTEM_PROMPT).toMatch(/Jeder andere Pfad wird abgewiesen/);
+  });
+
+  it('erklärt den UI-Entwurf und dass er nur zu lesen ist', () => {
+    expect(SYSTEM_PROMPT).toContain('UI-LAYOUT');
+    expect(SYSTEM_PROMPT).toContain(DESIGN_FILE);
+    // Der Entwurf gehört dem Anwender: verbindlich für den Aufbau, tabu zum Schreiben.
+    expect(SYSTEM_PROMPT).toMatch(/verbindlich/i);
+    expect(SYSTEM_PROMPT).toMatch(/NUR ZUM LESEN/i);
+    expect(SYSTEM_PROMPT).toMatch(/Anteile des App-Fensters/);
   });
 
   it('nimmt die Dokumente bei einer reinen Rückfrage ausdrücklich aus', () => {
@@ -202,5 +212,114 @@ describe('buildPrompt', () => {
 
   it('lässt den Abschnitt weg, wenn nichts markiert ist', () => {
     expect(buildPrompt('x', [], { hasApp: true })).not.toContain('REFERENZIERTE ELEMENTE');
+  });
+});
+
+/** Ein Block, wie ihn der Entwurfs-Modus zeichnet (core/design). */
+function block(name: string, rect: Rect, over: Partial<Block> = {}): Block {
+  return { id: `b-${name}`, name, rect, children: [], ...over };
+}
+
+describe('formatDesign', () => {
+  it('schweigt ohne Entwurf und bei einem leeren Entwurf', () => {
+    expect(formatDesign(undefined)).toEqual([]);
+    expect(formatDesign(emptyDesign())).toEqual([]);
+  });
+
+  it('nennt Namen, Rolle, Lage und Anweisungen eines Blocks', () => {
+    const text = formatDesign({
+      version: DESIGN_VERSION,
+      blocks: [
+        block('Kopfzeile', { x: 0, y: 0, w: 1, h: 0.125 }, { type: 'header', instructions: 'Titel links' }),
+      ],
+    }).join('\n');
+    expect(text).toContain('UI-LAYOUT');
+    expect(text).toContain('Kopfzeile');
+    expect(text).toContain('header');
+    expect(text).toContain('Titel links');
+    // Anteile werden als Prozent des Fensters gezeigt, nicht als 0…1.
+    expect(text).toMatch(/waagerecht 0%…100%/);
+    expect(text).toMatch(/senkrecht 0%…12\.5%/);
+  });
+
+  it('rückt Kinder unter ihrem Elter ein und behält die Reihenfolge', () => {
+    const lines = formatDesign({
+      version: DESIGN_VERSION,
+      blocks: [
+        block('Rumpf', { x: 0, y: 0.1, w: 1, h: 0.9 }, {
+          children: [
+            block('Liste', { x: 0, y: 0.1, w: 0.3, h: 0.9 }, {
+              children: [block('Eintrag', { x: 0, y: 0.1, w: 0.3, h: 0.1 })],
+            }),
+            block('Inhalt', { x: 0.3, y: 0.1, w: 0.7, h: 0.9 }),
+          ],
+        }),
+      ],
+    });
+    const at = (name: string): number => lines.findIndex((l) => l.includes(`- ${name}`));
+    expect(lines[at('Rumpf')]).toBe('- Rumpf');
+    expect(lines[at('Liste')]).toBe('  - Liste');
+    expect(lines[at('Eintrag')]).toBe('    - Eintrag');
+    expect(lines[at('Inhalt')]).toBe('  - Inhalt');
+    // Ein Kind steht unter seinem Elter, Geschwister in Zeichenreihenfolge.
+    expect(at('Rumpf')).toBeLessThan(at('Liste'));
+    expect(at('Liste')).toBeLessThan(at('Eintrag'));
+    expect(at('Eintrag')).toBeLessThan(at('Inhalt'));
+  });
+
+  it('rückt auch die Folgezeilen mehrzeiliger Anweisungen ein', () => {
+    const lines = formatDesign({
+      version: DESIGN_VERSION,
+      blocks: [
+        block('Rumpf', { x: 0, y: 0, w: 1, h: 1 }, {
+          children: [block('Liste', { x: 0, y: 0, w: 0.5, h: 1 }, { instructions: 'erste Zeile\nzweite Zeile' })],
+        }),
+      ],
+    });
+    expect(lines).toContain('    Anweisungen: erste Zeile');
+    expect(lines).toContain('      zweite Zeile');
+  });
+
+  it('nennt einen namenlosen Block trotzdem und lässt die Rolle weg', () => {
+    const text = formatDesign({
+      version: DESIGN_VERSION,
+      blocks: [block('', { x: 0, y: 0, w: 0.5, h: 0.5 })],
+    }).join('\n');
+    expect(text).toMatch(/- \(ohne Namen\)/);
+    expect(text).not.toContain('()');
+  });
+});
+
+describe('buildPrompt mit Entwurf', () => {
+  const design = {
+    version: DESIGN_VERSION,
+    blocks: [
+      block('Kopfzeile', { x: 0, y: 0, w: 1, h: 0.1 }, {
+        type: 'header',
+        instructions: 'Der Name der App',
+        children: [block('Suchfeld', { x: 0.6, y: 0.02, w: 0.35, h: 0.06 })],
+      }),
+    ],
+  };
+
+  it('legt den Entwurf als UI-LAYOUT vor den Wunsch', () => {
+    const p = buildPrompt('Baue die Oberfläche', [], { hasApp: true, design });
+    expect(p).toContain('UI-LAYOUT');
+    expect(p).toContain('Kopfzeile');
+    expect(p).toContain('Suchfeld');
+    expect(p).toContain('Der Name der App');
+    expect(p.indexOf('UI-LAYOUT')).toBeLessThan(p.indexOf('Baue die Oberfläche'));
+  });
+
+  it('sagt im Abschnitt selbst, dass der Entwurf verbindlich und nur zu lesen ist', () => {
+    const p = buildPrompt('x', [], { hasApp: true, design });
+    expect(p).toContain(DESIGN_FILE);
+    expect(p).toMatch(/verbindlich/i);
+    expect(p).toMatch(/NIEMALS|nicht ändern|Nur zum Lesen/i);
+  });
+
+  it('lässt den Abschnitt ohne Entwurf und bei einem leeren Entwurf weg', () => {
+    expect(buildPrompt('x', [], { hasApp: true })).not.toContain('UI-LAYOUT');
+    expect(buildPrompt('x', [], { hasApp: true, design: emptyDesign() })).not.toContain('UI-LAYOUT');
   });
 });
