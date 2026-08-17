@@ -10,12 +10,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "npm test 2>&1 | tail -30"
+        "arg": "git add .gello/epics/e15-ui-designer/c0111-in-the-detail-for-a-block-show-the-block.md && git commit -q -m \"$(cat <<'EOF'\ngello c0111: Review — pass\n\nAkzeptanzkriterien gegen den Code geprüft, Diff 4015dd2 gelesen, volle Suite\n(1984 grün), vue-tsc und Build sauber. Ein Lint-Skript gibt es nicht.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nEOF\n)\" && git log --oneline -1"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-17T21:19:47",
+  "updated": "2026-08-17T21:20:59",
   "pickupDelay": 10,
   "owned": [
     "c0029",
