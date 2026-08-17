@@ -9,6 +9,8 @@ created: 2026-08-17
 updated: 2026-08-17
 status-changed: 2026-08-17T21:59:50
 commit: 002783e
+usage-tokens: 14306
+usage-cost: 2.404145
 ---
 
 In that scenario I want to be able to start the design mode from the „noch kein dialog“ space. Add the option to open mode there![image](../../assets/i0009/image.png)
@@ -48,6 +50,32 @@ verschwindet, sobald die Schicht liegt — sonst stünde im Verlauf ein Knopf, d
 etwas verspricht, was schon da ist. Geöffnet wird darum mit `openDesign` und
 nicht mit `toggleDesign`: Der Knopf ist ein Angebot und kein Umschalter, und ein
 Umschalter, der nur im ausgeschalteten Zustand zu sehen ist, wäre keiner.
+
+## Review
+
+### 2026-08-17T22:01:16 — pass
+
+Geprüft: Akzeptanzkriterien gegen den Code, Diff von 002783e, volle Testsuite,
+Typecheck. Ein Lint gibt es im Repo nicht (kein `lint`-Skript, keine
+eslint-Abhängigkeit oder -Konfiguration) — nichts auszuführen.
+
+- Angebot im leeren Verlauf: `ChatDock.vue:265-286` zeigt „📐 Entwurf zeichnen“
+  unter `messages.length === 0` und `newApp && !designOpen`; der Klick emittiert
+  `open-design`, `AppWindow.vue:243` hängt es an `openDesign()` →
+  `store.openDesign()` (`stores/app.ts:165`, lädt und öffnet die Schicht).
+- Offen ist offen: `designOpen` kommt aus `store.designOpen`
+  (`AppWindow.vue:240`) und schaltet das Angebot ab — geprüft in ChatDock
+  („bietet nichts mehr an, sobald der Entwurf offen steht“) und im AppWindow-Test
+  nach dem Klick (`.empty-design` weg, `designOpen` true).
+- Bestehende App: `:new-app="store.isDraft"` (`AppWindow.vue:236`) — der
+  AppWindow-Test über `mountFrameForApp` sieht „Noch kein Dialog“ ohne Angebot.
+- Erste Nachricht: das Angebot steckt im `v-if="messages.length === 0"`-Block,
+  abgedeckt von „ist mit dem ersten Wortwechsel vorbei“.
+- Tests: 2008 grün in 96 Dateien (`npm test`), darunter die 11 neuen in
+  `ChatDock.spec.ts` und `AppWindow.spec.ts`; kein `.only`, kein `.skip`, keine
+  abgeschwächte Zusicherung im Diff. `npm run typecheck` (vue-tsc) sauber.
+- Diff bleibt im What: nur `ChatDock.vue`/`.spec.ts`, `AppWindow.vue`/`.spec.ts`
+  und die Karte; kein Debug-Rest.
 
 ## Log
 
