@@ -9,8 +9,8 @@ commit: a08d061
 created: 2026-08-17
 updated: 2026-08-17
 status-changed: 2026-08-17T21:50:59
-usage-tokens: 31144
-usage-cost: 3.766127
+usage-tokens: 43078
+usage-cost: 4.925661
 ---
 
 ![image](../../assets/i0008/image.png)
@@ -68,6 +68,46 @@ und hält fest, dass das Feld sich um genau dieses Maß hebt und begrenzt
       Fenster, die Anteile der Kästen bleiben, wie sie sind.
 - [x] Gesamter Testlauf grün (2002 Tests, 5 neue), `vue-tsc` sauber,
       `npm run build` sauber.
+
+## Review
+
+### 2026-08-17T21:55:29 — pass
+
+Geprüft: Abnahmekriterien gegen den Code, der Diff von `a08d061`, `npm test`,
+`npm run build` (enthält `vue-tsc --noEmit`). Ein Lint gibt es im Projekt nicht
+(kein `lint`-Skript, keine ESLint-Konfiguration) — nicht geprüft, weil nicht
+vorhanden.
+
+- Kriterium 1 erfüllt: `WindowFrame.vue` misst die `.w-composer` (Template-Ref +
+  ResizeObserver) und schreibt `--composer-height` über `frameStyle` an die
+  Wurzel — auch im `full`-Zweig. `DesignInspector.vue:195` hebt sich mit
+  `bottom: calc(12px + var(--composer-height, 0px))` darüber. Die Vererbung
+  trägt: `.design-inspector` liegt in `.design-stage` → `.design-overlay`
+  (`inset: 0`) → `.w-body` → `.window-frame`, und `.w-body` endet wie
+  `.w-composer` (`position: absolute; bottom: 0`) am unteren Rand des Rahmens —
+  das Maß entspricht also genau der Überdeckung.
+- Kriterium 2 erfüllt: gemessen statt geraten, der ResizeObserver hängt am
+  Element, der `watch` am Elementwechsel (Chat zu → Ref null → 0px). Belegt in
+  `WindowFrame.spec.ts:222–250` (kein Chat → `0px`, Chat → `180px`, wachsende
+  Leiste → `320px`, mit nachgestelltem ResizeObserver, weil jsdom keinen hat).
+- Kriterium 3 erfüllt: `max-height: calc(100% - var(--composer-height, 0px) -
+  24px)` plus `overflow-y: auto`; `100%` ist die Höhe von `.design-stage`, die
+  Rechnung lässt oben genau 12px stehen. Belegt in
+  `DesignInspector.spec.ts:258–262` — Quelltext-Nachschlag wie in
+  `DesktopView.spec.ts:166ff` für die Dock-Ränder, dieselbe Hausregel.
+- Kriterium 4 erfüllt: Der Diff rührt weder `.design-stage` noch die Anteile an
+  — nur `DesignInspector.vue` (CSS des Feldes) und `WindowFrame.vue` (Ref, Maß,
+  `frameStyle`). Kein fremder Umfang, kein Debug-Rest, kein `.only`, kein
+  übersprungener oder abgeschwächter Test; der globale ResizeObserver-Stub ist
+  auf `WindowFrame.spec` beschränkt und ersetzt nichts, was jsdom vorher hatte.
+- Kriterium 5 nachvollzogen: `npm test` → 2002 Tests in 96 Dateien grün (die 5
+  neuen darin), `npm run build` sauber inklusive `vue-tsc --noEmit`.
+
+Anmerkung ohne Folgen für den Befund: In einem Fenster nahe `MIN_H` (160px,
+`stores/desktop.ts:76`) mit voll aufgezogener Leiste (`max-height: 60%`) wird
+die `max-height` des Feldes rechnerisch null — dann ist es nicht abgeschnitten,
+sondern gar nicht zu sehen. Dort ist auch tatsächlich kein Platz mehr; falls es
+je stören sollte, wäre eine Untergrenze (`max(…, 120px)`) der Ort dafür.
 
 ## Log
 
