@@ -1,12 +1,15 @@
 ---
 id: c0110
 title: "Nesting + reparent + delete"
-status: in-progress
+status: review
 epic: e15
 depends: [c0108, c0109]
 created: 2026-08-16
+commit: f2dd7fb
 updated: 2026-08-17
-status-changed: 2026-08-17T19:14:38
+status-changed: 2026-08-17T19:34:31
+usage-tokens: 78423
+usage-cost: 9.970168
 ---
 
 # Nesting + reparent + delete
@@ -120,3 +123,4 @@ Scheibe (`DesignFlow.spec.ts`) prüft das nun über eine echte Datei mit.
   c0109 erledigt: Ein Druck auf ein nicht ausgewähltes Kind zeichnet, statt
   seinen Elter zu schieben. Volle Suite 1967 Tests grün (51 neue), `vue-tsc`
   sauber, `npm run build` sauber.
+- 2026-08-17 status → review (agent)
