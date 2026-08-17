@@ -1,13 +1,12 @@
 ---
 id: c0108
 title: "Block instructions + type/role editing"
-status: ready
+status: in-progress
 epic: e15
 depends: [c0107]
 created: 2026-08-16
-updated: 2026-08-16
-status-changed: 2026-08-16T23:09:44
-order: 50
+updated: 2026-08-17
+status-changed: 2026-08-17T07:18:43
 ---
 
 # Block instructions + type/role editing
@@ -38,3 +37,4 @@ requires it be optional and steer the agent. Builds directly on the c0107 slice.
 
 - 2026-08-16 created from the e15 epic breakdown.
 - 2026-08-16 status → ready (app)
+- 2026-08-17 status → in-progress (agent)

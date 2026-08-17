@@ -7,8 +7,8 @@ depends: [c0105, c0106]
 created: 2026-08-16
 updated: 2026-08-17
 status-changed: 2026-08-17T07:15:50
-usage-tokens: 53639
-usage-cost: 6.086833
+usage-tokens: 64220
+usage-cost: 7.314065
 ---
 
 # Thin end-to-end slice — draw + name + persist one block
@@ -76,6 +76,61 @@ liest. Damit ist der Kreis belegt, nicht nur jedes Stück für sich.
 Randnotiz: Nach dem Benennen verschwindet der Kasten für den Augenblick des
 IPC-Schreibens und kommt als gespeicherter Block zurück. Für die Scheibe reicht
 das; wenn c0109 die Kästen anfasst, lohnt ein Blick darauf.
+
+## Review
+
+### 2026-08-17T07:18:02 — pass
+
+Checked: alle sechs Akzeptanzkriterien am Code, der Diff von `c2cb113`, die
+volle Test-Suite (`npm test`), `npx vue-tsc --noEmit` und `npm run build`. Ein
+Linter ist im Projekt nicht eingerichtet (`package.json` kennt nur `test`,
+`typecheck`, `build`) — es gab also keinen zu laufen.
+
+- Kriterium „Dragging draws a new block at the dragged `rect`": belegt.
+  `DesignOverlay.vue:onPointerDown/Move/Up` misst in Anteilen der
+  `.design-stage` (`shareAt`, `span`), `DesignOverlay.spec.ts` rechnet es an
+  einer 400×200-Fläche nach (40,20 → 240,120 ergibt `{x:.1,y:.1,w:.5,h:.5}`),
+  auch rückwärts gezogen, und ein Zug unter `MIN_BLOCK_SIZE` hinterlässt nichts.
+- Kriterium „name editable inline, defaults to a placeholder": belegt.
+  `DesignBlock.vue` macht aus der Beschriftung ein Feld, `DEFAULT_BLOCK_NAME`
+  (`core/design.ts`) steht ausgewählt darin; `DesignOverlay.spec.ts` prüft
+  Platzhalter, Übernahme per Enter und per Blur, Verwerfen per Escape, Umbenennen
+  eines bestehenden und eines geschachtelten Kastens sowie „immer nur EIN Feld
+  offen".
+- Kriterium „persistiert via `core/design`": belegt, mit dem in den Notizen
+  angekündigten Schnitt — `core/design` ist reines Modell, die Platte liegt in
+  `core/designstore` (`designPath`/`readDesign`/`writeDesign`). Die sieben
+  Platten-Tests sind vollständig aus `design.spec.ts` nach `designstore.spec.ts`
+  gewandert, keiner ist unterwegs verloren gegangen, einer ist dazugekommen
+  (`gibt zurück, was tatsächlich geschrieben wurde`). Der Weg nach unten steht:
+  `stores/app.ts:saveDesign` → preload → `morphos:writeDesign` → `designstore`.
+- Kriterium „Reopening design mode shows the persisted block": belegt in
+  `DesignFlow.spec.ts` über eine echte `design.ui.json` im Wegwerf-Ordner —
+  schließen/wieder öffnen UND ein zweites Fenster sehen den Kasten.
+- Kriterium „subsequent generation includes the block in `UI-LAYOUT`": belegt.
+  `DesignFlow.spec.ts` liest den Entwurf mit derselben Funktion von der Platte,
+  die `core/generate.ts:208` benutzt, und prüft `UI-LAYOUT`, `Kopfzeile` und
+  `senkrecht 0%…20%` im `buildPrompt`-Ergebnis.
+- Kriterium „ein `.spec.ts` deckt draw → name → persist": `DesignFlow.spec.ts`,
+  142 Zeilen, drei Fälle über eine echte Datei.
+- Checks grün: 1845 Tests in 95 Dateien, `vue-tsc` ohne Befund, `npm run build`
+  ohne Befund. Kein `.only`, kein `.skip`, kein abgeschwächter Test im Diff.
+- Die Notiz zum Bündel stimmt: In `dist/assets/index-*.js` findet sich weder
+  `node:fs` noch `readFileSync` noch `design.ui.json`, nur der Host-Aufruf
+  `writeDesign` (nachgezählt: 0 Treffer für die drei, 2 für den Aufruf).
+- Der Diff bleibt beim „What": Zeichenfläche, Feld, Store, Host-Weg, der dafür
+  nötige Modell/Platte-Schnitt und die mitgewanderten Tests. Kein Nesting, kein
+  Resize, keine Instructions — die stehen wie versprochen bei c0108–c0110.
+
+Zwei Randnotizen, kein Grund zum Durchfallen:
+
+- Scheitert `writeDesign`, sagt der Store es zwar (`store.error`), aber der
+  aufgezogene Kasten ist zu dem Zeitpunkt schon verworfen — der Zug ist dann
+  wirklich weg. Zusammen mit der eigenen Randnotiz der Karte ein Punkt für
+  c0109, wenn die Kästen ohnehin angefasst werden.
+- Im Arbeitsverzeichnis liegt eine nicht eingecheckte Leerzeile in
+  `src/components/TopBar.vue`. Sie gehört nicht zu `c2cb113` und damit nicht zu
+  dieser Karte, sollte aber nicht mit der nächsten mitkommen.
 
 ## Log
 
