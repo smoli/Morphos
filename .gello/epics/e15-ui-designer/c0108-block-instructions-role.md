@@ -7,6 +7,8 @@ depends: [c0107]
 created: 2026-08-16
 updated: 2026-08-17
 status-changed: 2026-08-17T07:18:43
+usage-tokens: 30251
+usage-cost: 2.547507
 ---
 
 # Block instructions + type/role editing
