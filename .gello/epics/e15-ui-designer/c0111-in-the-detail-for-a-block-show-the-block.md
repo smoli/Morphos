@@ -1,12 +1,15 @@
 ---
 id: c0111
 title: In the detail for a block show the block hierarchy
-status: in-progress
+status: review
 ref: c0110
 epic: e15
+commit: 4015dd2
 created: 2026-08-17
 updated: 2026-08-17
-status-changed: 2026-08-17T21:13:33
+status-changed: 2026-08-17T21:19:29
+usage-tokens: 25255
+usage-cost: 2.978063
 ---
 
 # In the detail for a block show the block hierarchy
@@ -75,3 +78,4 @@ Baum ohnehin sagt — geschrieben wird nichts.
   im `DesignInspector`, beide als Wechsel (`select`); `ancestors` und die
   Weiterreichung der Auswahl im `DesignOverlay`. Volle Suite 1984 Tests grün
   (17 neue), `vue-tsc` sauber, `npm run build` sauber.
+- 2026-08-17 status → review (agent)

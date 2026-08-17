@@ -10,12 +10,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "git add src/core/design.ts src/core/design.spec.ts src/components/DesignInspector.vue src/components/DesignInspector.spec.ts src/components/DesignOverlay.vue src/components/DesignOverlay.spec.ts && git commit -q -F - <<'EOF'\ngello c0111: Im Feld eines Kastens seine Stelle im Baum\n\nDas Feld zum ausgewählten Kasten sagt jetzt nicht mehr nur, wie er heißt, sondern\nwo er steht: „Entwurf › Inhalt › Liste“, und darunter, was er unmittelbar\nenthält. Ein Klick auf einen Vorfahren oder ein Kind wechselt dorthin.\n\n- Ein Weg, eine Rechnung: pathIn in core/design läuft den Baum ab, die Ansicht\n  nicht. Die Kästen kommen unverändert aus dem Baum, also nennt der Weg stets die\n  Namen, die gerade in der Datei stehen.\n- Der Weg ist zugleich der Weg dorthin: Auf der Fläche ist das Unterste gemeint\n  (c0110) — ein Elter, den seine Kinder ganz ausfüllen, ist dort nicht mehr zu\n  treffen, im Feld schon. Ausgewählt wird darum nicht im Feld: Es bittet nur\n  (select), die Fläche entscheidet.\n- Nur eine Ebene hinunter; tiefer kommt man über die Kinder. Ein Kasten ohne\n  Kinder hat keine leere Liste, sondern gar keine.\n- Der Weg bricht um, statt abgeschnitten zu werden: Im schmalen Feld fielen sonst\n  gerade die vordersten Glieder weg.\n\nVolle Suite 1984 Tests grün (17 neue), vue-tsc und Build sauber.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nEOF\ngit log --oneline -1"
+        "arg": "npm test 2>&1 | tail -30"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-17T21:19:22",
+  "updated": "2026-08-17T21:19:47",
   "pickupDelay": 10,
   "owned": [
     "c0029",
