@@ -316,6 +316,42 @@ describe('ChatDock', () => {
     });
   });
 
+  /*
+   * i0009: Beim Anlegen einer neuen App steht der Weg zum Entwurf auch im leeren
+   * Verlauf — dort, wo man noch gar nichts gesagt hat.
+   */
+  describe('Entwurf aus dem leeren Verlauf', () => {
+    it('bietet beim Anlegen einer neuen App an, den Entwurf zu zeichnen', async () => {
+      const wrapper = mountDock({ newApp: true });
+
+      const offer = wrapper.get('.empty-design');
+      expect(offer.text()).toContain('Entwurf zeichnen');
+      expect(wrapper.get('.empty').text()).toContain('aufzeichnen');
+
+      await offer.trigger('click');
+      expect(wrapper.emitted('open-design')).toHaveLength(1);
+    });
+
+    it('bietet nichts mehr an, sobald der Entwurf offen steht', () => {
+      const wrapper = mountDock({ newApp: true, designOpen: true });
+      expect(wrapper.find('.empty-design').exists()).toBe(false);
+      // Der leere Verlauf bleibt, was er war.
+      expect(wrapper.get('.empty').text()).toContain('Noch kein Dialog');
+    });
+
+    it('zeigt es bei einer bestehenden App nicht — dort steht 📐 in der Titelleiste', () => {
+      const wrapper = mountDock();
+      expect(wrapper.get('.empty').text()).toContain('Noch kein Dialog');
+      expect(wrapper.find('.empty-design').exists()).toBe(false);
+    });
+
+    it('ist mit dem ersten Wortwechsel vorbei', () => {
+      const wrapper = mountDock({ newApp: true, messages });
+      expect(wrapper.find('.empty').exists()).toBe(false);
+      expect(wrapper.find('.empty-design').exists()).toBe(false);
+    });
+  });
+
   describe('Einfügen aus der Zwischenablage (Cmd/Ctrl+V)', () => {
     function pasteEvent(types: string[]) {
       return { clipboardData: { items: types.map((type) => ({ type })) } };

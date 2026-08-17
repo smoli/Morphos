@@ -331,6 +331,38 @@ describe('AppWindow', () => {
       expect(overlay.props('newApp')).toBe(true);
       expect(overlay.text()).toContain('geht mit dem ersten Wunsch mit');
     });
+
+    // i0009: Beim Anlegen führt auch der leere Verlauf zum Entwurf — der Chat
+    // eines Entwurfsfensters steht ja ohnehin offen, die Titelleiste nicht im
+    // Blick.
+    it('öffnet den Entwurfs-Modus auch aus dem leeren Chat eines Entwurfs', async () => {
+      setActivePinia(createPinia());
+      setHost(makeHost());
+      useWorkspaceStore().folder = '/apps';
+      const desktop = useDesktopStore();
+      const id = desktop.openDraft();
+      const win = desktop.windows.find((w) => w.instanceId === id)!;
+      const wrapper = mount(AppWindow, { props: { win } });
+      await flushPromises();
+
+      expect(wrapper.findComponent(DesignOverlay).exists()).toBe(false);
+      await wrapper.get('.empty-design').trigger('click');
+      await flushPromises();
+
+      expect(wrapper.getComponent(DesignOverlay).props('newApp')).toBe(true);
+      // Er steht offen — im Verlauf ist damit nichts mehr anzubieten.
+      expect(wrapper.getComponent(ChatDock).props('designOpen')).toBe(true);
+      expect(wrapper.find('.empty-design').exists()).toBe(false);
+    });
+
+    it('bietet ihn im Chat einer bestehenden App nicht an (dort steht 📐 oben)', async () => {
+      const { wrapper } = await mountFrameForApp({ loadApp: vi.fn(async () => appData({ chat: [] })) });
+
+      await wrapper.get('.w-chat').trigger('click');
+
+      expect(wrapper.get('.empty').text()).toContain('Noch kein Dialog');
+      expect(wrapper.find('.empty-design').exists()).toBe(false);
+    });
   });
 
   it('verschiebt das Fenster per Ziehen der Titelleiste (mit Schutzschicht)', async () => {

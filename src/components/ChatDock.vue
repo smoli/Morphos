@@ -32,6 +32,11 @@ const props = defineProps<{
   newApp?: boolean;
   /** Die aktuelle Framework-Wahl für die neue App. */
   framework?: Framework;
+  /**
+   * Der Entwurfs-Modus (e15) steht bereits offen — dann ist im leeren Verlauf
+   * nichts mehr anzubieten: Die Zeichenfläche liegt schon da.
+   */
+  designOpen?: boolean;
   /** Gibt es überhaupt eine laufende App, in der man markieren kann? */
   canPick?: boolean;
   /** Der Anwender markiert gerade Elemente in der App (🎯). */
@@ -46,6 +51,8 @@ const emit = defineEmits<{
   'update:picking': [on: boolean];
   /** Ein Kärtchen wurde weggenommen (Selektor des Elements). */
   'remove-element': [key: string];
+  /** Der Entwurfs-Modus soll aufgehen — aus dem leeren Verlauf heraus (i0009). */
+  'open-design': [];
 }>();
 
 // Preact ist die Vorgabe — der Haken ist an, bis der Anwender ihn wegnimmt.
@@ -258,7 +265,25 @@ function fmt(ts: number): string {
     <Teleport :key="placeKey" :to="teleportTarget" :disabled="!popped">
       <div class="chat-ui" :class="popped ? 'windowed' : 'docked'">
         <div v-if="popped || open" ref="panel" class="chat-panel">
-          <p v-if="messages.length === 0" class="empty">Noch kein Dialog — beschreibe unten, was die App können soll.</p>
+          <div v-if="messages.length === 0" class="empty">
+            <p class="empty-text">Noch kein Dialog — beschreibe unten, was die App können soll.</p>
+            <!-- Beim Anlegen ist die Gliederung am meisten wert (e15/i0009), und
+                 die leere Fläche ist die Stelle, an der man auf sie kommt: Wer
+                 hier steht, hat noch nichts gesagt — hier gehört der Weg zum
+                 Entwurf hin, nicht nur in die Titelleiste. Steht er schon offen,
+                 ist nichts anzubieten. -->
+            <template v-if="newApp && !designOpen">
+              <p class="empty-text">Wie sie gegliedert sein soll, lässt sich auch aufzeichnen.</p>
+              <button
+                type="button"
+                class="empty-design"
+                title="Kästen aufziehen, an die sich der Agent hält — der Entwurf geht mit dem ersten Wunsch mit"
+                @click="emit('open-design')"
+              >
+                📐 Entwurf zeichnen
+              </button>
+            </template>
+          </div>
           <template v-for="(msg, i) in messages" :key="i">
             <!-- eslint-disable-next-line vue/no-v-html — renderMarkdown escapt sämtliches HTML zuerst -->
             <div v-if="msg.role === 'assistant'" class="msg assistant md" v-html="renderMarkdown(msg.text)"></div>
@@ -441,10 +466,32 @@ function fmt(ts: number): string {
   border-color: var(--accent);
 }
 .empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   color: var(--muted);
   text-align: center;
   margin: 8px 0;
   font-size: 13px;
+}
+.empty-text {
+  margin: 0;
+}
+/* Der Weg zum Entwurf steht im leeren Verlauf — angeboten, nicht aufgedrängt. */
+.empty-design {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 5px 12px;
+  margin-top: 2px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.empty-design:hover {
+  border-color: var(--accent);
 }
 .msg {
   font-size: 13px;

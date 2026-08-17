@@ -129,6 +129,12 @@ function toggleDesign(): void {
   void store.toggleDesign();
 }
 
+// Der leere Verlauf eines Entwurfs bietet den Entwurfs-Modus mit an (i0009):
+// Wer eine neue App beschreibt, sieht dort, dass er sie auch zeichnen kann.
+function openDesign(): void {
+  void store.openDesign();
+}
+
 // Versionen und Dokumente legen sich beide über die App — es liegt also stets
 // höchstens eine der beiden Ansichten oben.
 function toggleVersions(): void {
@@ -231,9 +237,11 @@ async function onIcon(icon: string | null): Promise<void> {
         :can-pick="store.hasApp"
         :picking="picking"
         :elements="elementRefs"
+        :design-open="store.designOpen"
         @update:framework="store.newFramework = $event"
         @update:picking="picking = $event"
         @remove-element="removeRef"
+        @open-design="openDesign"
         @submit="onPrompt"
         @keydown.esc.stop="store.closeComposer()"
       />
