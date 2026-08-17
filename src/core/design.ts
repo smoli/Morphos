@@ -79,9 +79,27 @@ export const MIN_BLOCK_SIZE = 0.01;
 export const DEFAULT_BLOCK_NAME = 'Neuer Block';
 
 /** Obergrenzen für die Texte eines Blocks (sie gehen in jeden Prompt). */
-const MAX_NAME_LENGTH = 120;
-const MAX_TYPE_LENGTH = 60;
-const MAX_INSTRUCTIONS_LENGTH = 4000;
+export const MAX_NAME_LENGTH = 120;
+export const MAX_TYPE_LENGTH = 60;
+export const MAX_INSTRUCTIONS_LENGTH = 4000;
+
+/**
+ * Rollen, die zur Wahl stehen (c0108). Die Rolle ist und bleibt freier Text —
+ * das hier ist nur der Vorrat, aus dem sich das Feld bedienen lässt: Wer eine
+ * andere Rolle meint, schreibt sie hin. Der Nutzen der Liste ist die
+ * Gleichförmigkeit — „Kopfzeile“ zweimal gleich geschrieben liest der Agent
+ * auch als dasselbe.
+ */
+export const BLOCK_ROLES = [
+  'Kopfzeile',
+  'Navigation',
+  'Seitenleiste',
+  'Inhalt',
+  'Liste',
+  'Formular',
+  'Schaltfläche',
+  'Fußzeile',
+] as const;
 
 /** Noch kein Entwurf (jeder Aufruf liefert einen eigenen). */
 export function emptyDesign(): Design {
@@ -216,13 +234,24 @@ export function listBlocks(design: Design): Block[] {
   return all;
 }
 
+/**
+ * Der Block zu einer Id in einer Kästenliste — null, wenn es ihn nicht (mehr)
+ * gibt. Für alle, die den Baum haben, aber nicht den ganzen Entwurf (die
+ * Zeichenfläche etwa bekommt nur die Kästen gereicht).
+ */
+export function findBlockIn(blocks: readonly Block[], id: string): Block | null {
+  if (!id) return null;
+  for (const b of blocks) {
+    if (b.id === id) return b;
+    const found = findBlockIn(b.children, id);
+    if (found) return found;
+  }
+  return null;
+}
+
 /** Der Block zu einer Id — null, wenn es ihn nicht (mehr) gibt. */
 export function findBlock(design: Design, id: string): Block | null {
-  let found: Block | null = null;
-  if (id) walkBlocks(design, (b) => {
-    if (!found && b.id === id) found = b;
-  });
-  return found;
+  return findBlockIn(design.blocks, id);
 }
 
 /** Ein Block und alles unter ihm (für die Kreisprüfung beim Umhängen). */

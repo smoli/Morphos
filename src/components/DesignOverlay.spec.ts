@@ -224,4 +224,129 @@ describe('DesignOverlay', () => {
       expect((offen[0].element as HTMLInputElement).value).toBe('Inhalt');
     });
   });
+
+  // c0108: Ein Kasten sagt mehr als seinen Namen — wer ihn auswählt, bekommt
+  // sein Feld für Rolle und Anweisungen. Geschrieben wird auch das nicht hier.
+  describe('Auswählen und Beschreiben', () => {
+    /** Ein Overlay mit Kästen, dessen Fläche 400 × 200 Pixel groß ist. */
+    function selectable(blocks: Block[] = BLOCKS) {
+      const wrapper = mount(DesignOverlay, { props: { blocks }, attachTo: document.body });
+      const stage = wrapper.get('.design-stage');
+      (stage.element as HTMLElement).getBoundingClientRect = () =>
+        ({ left: 0, top: 0, width: 400, height: 200, right: 400, bottom: 200, x: 0, y: 0 }) as DOMRect;
+      return { wrapper, stage };
+    }
+
+    it('zeigt kein Feld, solange nichts ausgewählt ist', () => {
+      const { wrapper } = selectable();
+
+      expect(wrapper.find('.design-inspector').exists()).toBe(false);
+    });
+
+    it('öffnet mit einem Klick auf einen Kasten dessen Feld', async () => {
+      const { wrapper } = selectable();
+
+      await wrapper.findAll('.design-stage > .design-block')[0].trigger('click');
+
+      expect(wrapper.get('.di-name').text()).toBe('Kopf');
+      expect((wrapper.get('input.di-type').element as HTMLInputElement).value).toBe('');
+      // Und der ausgewählte Kasten ist auch zu sehen.
+      expect(wrapper.findAll('.design-block.selected')).toHaveLength(1);
+    });
+
+    it('hält Benennen und Auswählen auseinander', async () => {
+      // Der Name gehört dem Kasten (c0107), Rolle und Anweisungen dem Feld: Ein
+      // Klick auf den Namen benennt um und öffnet nicht auch noch das Feld.
+      const { wrapper } = selectable();
+
+      await wrapper.get('.db-name').trigger('click');
+
+      expect(wrapper.find('.design-inspector').exists()).toBe(false);
+      expect(wrapper.findAll('input.db-input')).toHaveLength(1);
+    });
+
+    it('wählt den geschachtelten Kasten aus, nicht seinen Elter', async () => {
+      const { wrapper } = selectable();
+
+      await wrapper.get('.design-block .design-block').trigger('click');
+
+      expect(wrapper.get('.di-name').text()).toBe('Liste');
+      expect((wrapper.get('input.di-type').element as HTMLInputElement).value).toBe('liste');
+    });
+
+    it('gibt Rolle und Anweisungen mit der Id des Kastens weiter', async () => {
+      const { wrapper } = selectable();
+
+      await wrapper.get('.design-block .design-block').trigger('click');
+      await wrapper.get('input.di-type').setValue('Kopfzeile');
+      await wrapper.get('textarea.di-instructions').setValue('Zeilen mit Datum');
+
+      expect(wrapper.emitted('describe')).toEqual([
+        ['b3', { type: 'Kopfzeile' }],
+        ['b3', { instructions: 'Zeilen mit Datum' }],
+      ]);
+    });
+
+    it('zeigt im Feld, was der gespeicherte Entwurf zurückmeldet', async () => {
+      const { wrapper } = selectable();
+      await wrapper.findAll('.design-stage > .design-block')[0].trigger('click');
+
+      // Der Store hat geschrieben und den Baum von der Platte übernommen.
+      await wrapper.setProps({
+        blocks: [{ ...BLOCKS[0], type: 'Kopfzeile', instructions: 'Titel links' }, BLOCKS[1]],
+      });
+
+      expect((wrapper.get('input.di-type').element as HTMLInputElement).value).toBe('Kopfzeile');
+      expect((wrapper.get('textarea.di-instructions').element as HTMLTextAreaElement).value)
+        .toBe('Titel links');
+    });
+
+    it('hebt die Auswahl auf, wenn daneben geklickt wird', async () => {
+      const { wrapper, stage } = selectable();
+      await wrapper.findAll('.design-stage > .design-block')[0].trigger('click');
+
+      await stage.trigger('click');
+
+      expect(wrapper.find('.design-inspector').exists()).toBe(false);
+      expect(wrapper.find('.design-block.selected').exists()).toBe(false);
+    });
+
+    it('schließt das Feld auf Wunsch, ohne den Entwurfs-Modus zu schließen', async () => {
+      const { wrapper } = selectable();
+      await wrapper.findAll('.design-stage > .design-block')[0].trigger('click');
+
+      await wrapper.get('.di-close').trigger('click');
+
+      expect(wrapper.find('.design-inspector').exists()).toBe(false);
+      expect(wrapper.emitted('close')).toBeUndefined();
+    });
+
+    it('macht aus einem Zeichenzug keine Auswahl', async () => {
+      // Wer über einem Kasten einen neuen aufzieht, wählt den alten nicht aus —
+      // sonst stünde das Feld im Weg, während der neue seinen Namen bekommt.
+      const { wrapper, stage } = selectable();
+
+      await stage.trigger('pointerdown', { button: 0, clientX: 10, clientY: 5 });
+      await stage.trigger('pointermove', { clientX: 210, clientY: 25 });
+      await stage.trigger('pointerup', { clientX: 210, clientY: 25 });
+      await wrapper.findAll('.design-stage > .design-block')[0].trigger('click');
+
+      expect(wrapper.find('.design-inspector').exists()).toBe(false);
+      expect(wrapper.get('input.db-input')).toBeTruthy();
+    });
+
+    it('zeichnet keinen Kasten, wenn im Feld gezogen wird', async () => {
+      const { wrapper, stage } = selectable();
+      await wrapper.findAll('.design-stage > .design-block')[0].trigger('click');
+
+      const feld = wrapper.get('.design-inspector');
+      await feld.trigger('pointerdown', { button: 0, clientX: 300, clientY: 150 });
+      await stage.trigger('pointermove', { clientX: 380, clientY: 190 });
+      await stage.trigger('pointerup', { clientX: 380, clientY: 190 });
+
+      expect(wrapper.find('.design-band').exists()).toBe(false);
+      expect(wrapper.emitted('draw')).toBeUndefined();
+      expect(wrapper.find('.design-inspector').exists()).toBe(true);
+    });
+  });
 });

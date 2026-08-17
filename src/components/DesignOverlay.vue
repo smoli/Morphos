@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import DesignBlock from './DesignBlock.vue';
-import { DEFAULT_BLOCK_NAME, MIN_BLOCK_SIZE, type Block, type Rect } from '@/core/design';
+import DesignInspector from './DesignInspector.vue';
+import { DEFAULT_BLOCK_NAME, MIN_BLOCK_SIZE, findBlockIn, type Block, type Rect } from '@/core/design';
 
 /**
  * Der Entwurfs-Modus des UI-Designers (e15): eine durchscheinende Schicht über
@@ -16,11 +17,16 @@ import { DEFAULT_BLOCK_NAME, MIN_BLOCK_SIZE, type Block, type Rect } from '@/cor
  * eines bestehenden Kastens benennt ihn um (`rename`). Geschrieben wird hier
  * nichts: Das tut das Fenster über den Store, und maßgeblich bleibt die Datei.
  *
+ * Seit c0108 hat ein Kasten mehr zu sagen als seinen Namen: Ein Klick auf ihn
+ * WÄHLT ihn aus und öffnet sein Feld (DesignInspector) für Rolle und
+ * Anweisungen; ein Klick daneben hebt die Auswahl auf. Ausgewählt ist immer nur
+ * einer — das Feld redet stets von einem Kasten.
+ *
  * Die Anteile beziehen sich auf die Fläche (`.design-stage`) — dieselbe Fläche,
  * auf der auch gezeichnet wird. Was gezeichnet ist und was zu sehen ist, meint
  * damit dasselbe.
  */
-defineProps<{ blocks: Block[] }>();
+const props = defineProps<{ blocks: Block[] }>();
 
 const emit = defineEmits<{
   close: [];
@@ -28,6 +34,8 @@ const emit = defineEmits<{
   draw: [rect: Rect, name: string];
   /** Ein bestehender Kasten heißt fortan anders. */
   rename: [id: string, name: string];
+  /** Ein Kasten bekommt (oder verliert) seine Rolle bzw. seine Anweisungen. */
+  describe: [id: string, patch: { instructions?: string; type?: string }];
 }>();
 
 /** Die Id des noch ungeborenen Kastens — er steht in keinem Entwurf. */
@@ -44,6 +52,16 @@ const draft = ref<Rect | null>(null);
 
 /** Welcher Kasten gerade seinen Namen bekommt (auch der Entwurf). */
 const editingId = ref<string | null>(null);
+
+/** Welcher Kasten ausgewählt ist — sein Feld steht offen (c0108). */
+const selectedId = ref<string | null>(null);
+
+/**
+ * Der ausgewählte Kasten, stets frisch aus den Kästen des Fensters gesucht: Nach
+ * dem Speichern kommt ein neuer Baum von der Platte, und das Feld soll DEN
+ * zeigen und nicht einen alten Abzug.
+ */
+const selected = computed<Block | null>(() => findBlockIn(props.blocks, selectedId.value ?? ''));
 
 /** Das Gummiband während des Zugs. */
 const band = computed<Rect | null>(() => (from.value && to.value ? span(from.value, to.value) : null));
@@ -99,6 +117,22 @@ function onPointerUp(event: PointerEvent): void {
   editingId.value = DRAFT_ID;
 }
 
+/**
+ * Ein Klick auf einen Kasten wählt ihn aus. Solange ein aufgezogener Kasten auf
+ * seinen Namen wartet, bleibt der Klick unbeachtet: Er ist das Ende des
+ * Zeichenzugs und meint keine Auswahl.
+ */
+function onSelect(id: string): void {
+  if (draft.value || id === DRAFT_ID) return;
+  selectedId.value = id;
+}
+
+/** Ein Klick auf die freie Fläche hebt die Auswahl auf. */
+function onStageClick(): void {
+  if (draft.value) return;
+  selectedId.value = null;
+}
+
 /** Der Name steht: der Entwurf wird ein Kasten, ein Kasten heißt fortan anders. */
 function onCommit(id: string, name: string): void {
   const rect = draft.value;
@@ -122,7 +156,9 @@ function onCancel(): void {
   <div class="design-overlay">
     <div class="design-head">
       <span class="design-title">Entwurf</span>
-      <span class="design-hint">Ziehen zeichnet einen Kasten — an ihn hält sich der Agent</span>
+      <span class="design-hint">
+        Ziehen zeichnet einen Kasten, ein Klick wählt ihn aus — an ihn hält sich der Agent
+      </span>
       <button type="button" class="design-close" @click="emit('close')">Schließen</button>
     </div>
 
@@ -132,6 +168,7 @@ function onCancel(): void {
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
+      @click="onStageClick"
     >
       <p v-if="!blocks.length && !draftBlock" class="design-empty">
         Für diese App gibt es noch keinen Entwurf — zieh einen Kasten auf.
@@ -141,7 +178,9 @@ function onCancel(): void {
         :key="block.id"
         :block="block"
         :editing-id="editingId"
+        :selected-id="selectedId"
         @edit="editingId = $event"
+        @select="onSelect"
         @commit="onCommit"
         @cancel="onCancel"
       />
@@ -157,6 +196,14 @@ function onCancel(): void {
         :editing-id="editingId"
         @commit="onCommit"
         @cancel="onCancel"
+      />
+      <!-- Das Feld zum ausgewählten Kasten: Rolle und Anweisungen. Es liegt in
+           der Fläche, fängt aber jeden Zeiger ab (DesignInspector). -->
+      <DesignInspector
+        v-if="selected"
+        :block="selected"
+        @update="(patch) => selected && emit('describe', selected.id, patch)"
+        @close="selectedId = null"
       />
     </div>
   </div>

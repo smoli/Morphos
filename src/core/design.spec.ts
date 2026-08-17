@@ -1,12 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
   addBlock,
+  BLOCK_ROLES,
   DESIGN_FILE,
   DESIGN_VERSION,
   MAX_DESIGN_DEPTH,
+  MAX_TYPE_LENGTH,
   MIN_BLOCK_SIZE,
   emptyDesign,
   findBlock,
+  findBlockIn,
   listBlocks,
   makeBlockId,
   moveBlock,
@@ -185,6 +188,29 @@ describe('walkBlocks / listBlocks / findBlock', () => {
     expect(findBlock(d, 'b')!.id).toBe('b');
     expect(findBlock(d, 'weg')).toBeNull();
     expect(findBlock(d, '')).toBeNull();
+  });
+
+  it('findet ihn auch in einer blanken Kästenliste (ohne Entwurf drumherum)', () => {
+    // Die Zeichenfläche bekommt nur die Kästen gereicht, nicht den Entwurf.
+    expect(findBlockIn(d.blocks, 'a2')!.id).toBe('a2');
+    expect(findBlockIn(d.blocks, 'weg')).toBeNull();
+    expect(findBlockIn([], 'a')).toBeNull();
+    expect(findBlockIn(d.blocks, '')).toBeNull();
+  });
+});
+
+describe('BLOCK_ROLES', () => {
+  it('sind ein Vorrat lesbarer Rollen, keine Vorschrift', () => {
+    // Frei wählbar bleibt die Rolle (updateBlock nimmt jeden Text an) — die
+    // Liste ist nur da, damit dasselbe zweimal gleich geschrieben wird.
+    expect(BLOCK_ROLES.length).toBeGreaterThan(2);
+    expect(new Set(BLOCK_ROLES).size).toBe(BLOCK_ROLES.length);
+    for (const role of BLOCK_ROLES) {
+      expect(role.trim()).toBe(role);
+      expect(role.length).toBeLessThanOrEqual(MAX_TYPE_LENGTH);
+    }
+    expect(updateBlock(design(block('a')), 'a', { type: 'ganz was anderes' }).blocks[0].type)
+      .toBe('ganz was anderes');
   });
 });
 

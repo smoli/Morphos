@@ -994,6 +994,56 @@ describe('useAppStore', () => {
         expect(store.error).toContain('nicht gespeichert');
       });
 
+      // c0108: Ein Kasten sagt mehr als seinen Namen — Rolle und Anweisungen
+      // gehen denselben Weg auf die Platte.
+      it('schreibt Rolle und Anweisungen eines Kastens', async () => {
+        const { written, writeDesign } = writingHost();
+        const store = await openedStore({ writeDesign, readDesign: vi.fn(async () => DESIGN) });
+        await store.openDesign();
+
+        await store.describeDesignBlock('b1', { type: 'Kopfzeile' });
+        await store.describeDesignBlock('b1', { instructions: 'Titel links, Suche rechts' });
+
+        expect(written[1].blocks[0]).toMatchObject({
+          type: 'Kopfzeile',
+          instructions: 'Titel links, Suche rechts',
+        });
+        // Der Name bleibt, wovon hier nicht die Rede war.
+        expect(written[1].blocks[0].name).toBe(DESIGN.blocks[0].name);
+        expect(store.designBlocks[0]).toMatchObject({ type: 'Kopfzeile' });
+      });
+
+      it('nimmt einen geleerten Text wieder weg, statt ihn leer zu speichern', async () => {
+        const { written, writeDesign } = writingHost();
+        const store = await openedStore({
+          writeDesign,
+          readDesign: vi.fn(async () => ({
+            version: 1,
+            blocks: [{
+              id: 'b1', name: 'Kopf', type: 'Kopfzeile', instructions: 'weg damit',
+              rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [],
+            }],
+          })),
+        });
+        await store.openDesign();
+
+        await store.describeDesignBlock('b1', { type: '  ' });
+        await store.describeDesignBlock('b1', { instructions: '' });
+
+        expect('type' in written[1].blocks[0]).toBe(false);
+        expect('instructions' in written[1].blocks[0]).toBe(false);
+      });
+
+      it('beschreibt keinen Kasten ohne Entwurf', async () => {
+        const { writeDesign } = writingHost();
+        const store = await openedStore({ writeDesign, readDesign: vi.fn(async () => emptyDesign()) });
+
+        await store.describeDesignBlock('b1', { type: 'Kopfzeile' });
+
+        expect(writeDesign).not.toHaveBeenCalled();
+        expect(store.error).toBeNull();
+      });
+
       it('zeichnet nicht in einen Entwurf ohne App', async () => {
         const { writeDesign } = writingHost();
         setHost(makeHost({ writeDesign }));

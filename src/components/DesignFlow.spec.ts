@@ -26,6 +26,9 @@ import type { AppData, MorphosHost, SourceFile } from '@/types';
 const HTML = '<!DOCTYPE html><html><head><title>Notizen</title></head><body>x</body></html>';
 const FILES: SourceFile[] = [{ path: 'src/index.html', content: HTML }];
 
+/** Was das Feld zu einem Kasten meldet (c0108). */
+type Patch = { instructions?: string; type?: string };
+
 describe('Entwurf zeichnen, speichern, wiederfinden (c0107)', () => {
   let root: string;
   let dir: string;
@@ -126,6 +129,63 @@ describe('Entwurf zeichnen, speichern, wiederfinden (c0107)', () => {
     await zweites.renameDesignBlock(id, neu);
 
     expect(readDesign(dir).blocks[0].name).toBe('Titelzeile');
+  });
+
+  it('gibt einem Kasten Rolle und Anweisungen — bis in den Prompt (c0108)', async () => {
+    const store = await openWindow('flow');
+    await store.addDesignBlock({ x: 0, y: 0, w: 1, h: 0.2 }, 'Kopfzeile');
+
+    // Auswählen: Ein Klick auf den Kasten öffnet sein Feld.
+    const { wrapper } = overlay(() => store.designBlocks);
+    await wrapper.get('.design-stage > .design-block').trigger('click');
+    expect(wrapper.get('.di-name').text()).toBe('Kopfzeile');
+
+    // Beschreiben: Rolle und Anweisungen, jedes fertige Feld für sich.
+    await wrapper.get('input.di-type').setValue('Kopfzeile');
+    await wrapper.get('textarea.di-instructions').setValue('Links das Logo, rechts die Suche');
+    for (const [id, patch] of wrapper.emitted('describe') as [string, Patch][]) {
+      await store.describeDesignBlock(id, patch);
+    }
+
+    // Speichern: beides steht in der Datei — und nur dort, wo es hingehört.
+    const onDisk = readDesign(dir);
+    expect(onDisk.blocks[0]).toMatchObject({
+      name: 'Kopfzeile',
+      type: 'Kopfzeile',
+      instructions: 'Links das Logo, rechts die Suche',
+    });
+    expect(store.error).toBeNull();
+
+    // Weitergeben: Der Agent sieht beides an seinem Kasten.
+    const prompt = buildPrompt('Bau die Kopfzeile aus', [], { design: onDisk });
+    expect(prompt).toContain('- Kopfzeile [Kopfzeile]');
+    expect(prompt).toContain('Anweisungen: Links das Logo, rechts die Suche');
+  });
+
+  it('nimmt geleerte Angaben wieder weg — aus der Datei und aus dem Prompt (c0108)', async () => {
+    const store = await openWindow('flow');
+    const id = await store.addDesignBlock({ x: 0, y: 0, w: 1, h: 0.2 }, 'Kopfzeile');
+    await store.describeDesignBlock(id!, { type: 'Kopfzeile' });
+    await store.describeDesignBlock(id!, { instructions: 'weg damit' });
+
+    // Das Feld zeigt, was gespeichert ist — und der Anwender leert beides.
+    const { wrapper } = overlay(() => store.designBlocks);
+    await wrapper.get('.design-stage > .design-block').trigger('click');
+    expect((wrapper.get('input.di-type').element as HTMLInputElement).value).toBe('Kopfzeile');
+    await wrapper.get('input.di-type').setValue('   ');
+    await wrapper.get('textarea.di-instructions').setValue('');
+    for (const [blockId, patch] of wrapper.emitted('describe') as [string, Patch][]) {
+      await store.describeDesignBlock(blockId, patch);
+    }
+
+    // In der Datei steht kein leeres Feld — auch nicht als "".
+    const raw = fs.readFileSync(designPath(dir), 'utf8');
+    expect(raw).not.toContain('instructions');
+    expect(raw).not.toContain('type');
+    const prompt = buildPrompt('Mach weiter', [], { design: readDesign(dir) });
+    expect(prompt).toContain('- Kopfzeile\n');
+    expect(prompt).not.toContain('Anweisungen:');
+    expect(prompt).not.toContain('[]');
   });
 
   it('gibt den gezeichneten Kasten an den Agenten weiter (UI-LAYOUT, c0106)', async () => {

@@ -210,6 +210,17 @@ export function useAppWindow(instanceId: string) {
     },
 
     /**
+     * Gibt einem Kasten seine Anweisungen bzw. seine Rolle (c0108) — beides
+     * freiwillig: Leerer Text nimmt das Feld wieder weg (updateBlock), damit
+     * weder in der Datei noch im Prompt leeres Zeug steht. Anders als beim Namen
+     * gibt es hier keinen Platzhalter — nichts zu sagen ist der Normalfall.
+     */
+    async describeDesignBlock(id: string, patch: { instructions?: string; type?: string }): Promise<void> {
+      if (!this.design) return;
+      await this.saveDesign(updateBlock(this.design, id, patch));
+    },
+
+    /**
      * Schreibt den Entwurf über den Host in den App-Ordner und übernimmt, was
      * dabei tatsächlich auf der Platte gelandet ist — maßgeblich ist die Datei,
      * nicht die Rechnung des Fensters. Anders als beim Lesen wird ein Fehlschlag

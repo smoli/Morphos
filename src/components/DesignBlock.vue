@@ -13,16 +13,27 @@ import type { Block, Rect } from '@/core/design';
  * ganzen Baum, damit immer nur EIN Feld offen ist. Geschrieben wird hier nichts:
  * Der fertige Name geht als Ereignis nach oben.
  *
+ * Ein Klick auf den Kasten selbst WÄHLT ihn aus (c0108) — auch das entscheidet
+ * die Fläche (`selectedId`), und auch das gilt für den ganzen Baum: Ein Klick in
+ * ein Kind meint das Kind und nicht seinen Elter, darum bleibt er dort stehen.
+ *
  * Die Geometrie des Entwurfs sind Anteile des APP-FENSTERS (c0104) — auch die
  * eines Kindes. Gezeichnet wird ein Kind aber im Kasten seines Elters, darum
  * rechnet `style` die Anteile einmal auf dessen Kasten um. Das Verschachteln
  * bleibt so eine reine Aussage über die Gliederung, ist im Baum aber zu sehen.
  */
-const props = defineProps<{ block: Block; parent?: Rect; editingId?: string | null }>();
+const props = defineProps<{
+  block: Block;
+  parent?: Rect;
+  editingId?: string | null;
+  selectedId?: string | null;
+}>();
 
 const emit = defineEmits<{
   /** Dieser Kasten möchte umbenannt werden (Klick auf den Namen). */
   edit: [id: string];
+  /** Dieser Kasten ist angeklickt worden — er möchte ausgewählt sein. */
+  select: [id: string];
   /** Der Name steht fest (Eingabetaste oder Verlassen des Feldes). */
   commit: [id: string, name: string];
   /**
@@ -34,6 +45,7 @@ const emit = defineEmits<{
 }>();
 
 const editing = computed(() => !!props.editingId && props.editingId === props.block.id);
+const selected = computed(() => !!props.selectedId && props.selectedId === props.block.id);
 
 const input = ref<HTMLInputElement | null>(null);
 
@@ -90,7 +102,7 @@ const style = computed(() => {
 </script>
 
 <template>
-  <div class="design-block" :class="{ editing }" :style="style">
+  <div class="design-block" :class="{ editing, selected }" :style="style" @click.stop="emit('select', block.id)">
     <span class="db-label">
       <input
         v-if="editing"
@@ -112,7 +124,9 @@ const style = computed(() => {
       :block="child"
       :parent="block.rect"
       :editing-id="editingId"
+      :selected-id="selectedId"
       @edit="emit('edit', $event)"
+      @select="emit('select', $event)"
       @commit="(id, name) => emit('commit', id, name)"
       @cancel="emit('cancel')"
     />
@@ -155,9 +169,15 @@ const style = computed(() => {
   cursor: text;
 }
 /* Der gerade bearbeitete Kasten tritt hervor — man soll sehen, wovon man redet. */
-.design-block.editing {
+.design-block.editing,
+.design-block.selected {
   border-color: var(--accent, rgba(108, 140, 255, 1));
   background: rgba(108, 140, 255, 0.18);
+}
+/* Der ausgewählte Kasten zusätzlich mit einem kräftigeren Rand: Sein Feld steht
+   offen, und man soll auf einen Blick wissen, welchen Kasten es meint. */
+.design-block.selected {
+  box-shadow: 0 0 0 1px var(--accent, rgba(108, 140, 255, 1));
 }
 /* Das Feld sitzt an der Stelle der Beschriftung und sieht aus wie sie. */
 .db-input {
