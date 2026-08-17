@@ -10,13 +10,13 @@
       "cardId": "c0108",
       "phase": "running",
       "activity": {
-        "name": "Bash",
-        "arg": "npm test 2>&1 | tail -6; git status --short"
+        "name": "mcp__gello__set_status",
+        "arg": "review"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-17T18:55:22",
+  "updated": "2026-08-17T18:56:08",
   "pickupDelay": 10,
   "owned": [
     "c0029",

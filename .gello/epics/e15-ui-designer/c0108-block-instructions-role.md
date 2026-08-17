@@ -1,12 +1,13 @@
 ---
 id: c0108
 title: "Block instructions + type/role editing"
-status: in-progress
+status: review
 epic: e15
 depends: [c0107]
 created: 2026-08-16
+commit: d08a622
 updated: 2026-08-17
-status-changed: 2026-08-17T07:18:43
+status-changed: 2026-08-17T18:56:08
 usage-tokens: 30251
 usage-cost: 2.547507
 ---
@@ -83,3 +84,4 @@ schon an jedem Kasten. Neu ist bloß, dass jemand sie eintragen kann.
   `BLOCK_ROLES` + `findBlockIn` in `core/design`, `describeDesignBlock` im Store,
   `@describe` im `AppWindow`. Volle Suite 1874 Tests grün (29 neue),
   `vue-tsc` sauber, `npm run build` sauber.
+- 2026-08-17 status → review (agent)
