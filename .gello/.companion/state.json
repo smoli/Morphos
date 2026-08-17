@@ -14,12 +14,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "git add src/components/DesignOverlay.vue src/components/DesignOverlay.spec.ts src/components/DesignBlock.vue src/components/DesignBlock.spec.ts src/components/AppWindow.vue src/components/AppWindow.spec.ts src/views/DesktopView.vue src/views/DesktopView.spec.ts src/stores/app.ts src/stores/app.spec.ts src/core/shortcuts.ts src/core/shortcuts.spec.ts src/types/index.ts electron/main.ts electron/preload.ts .gello/epics/e15-ui-designer/c0105-overlay-mode.md && git status --short"
+        "arg": "git diff -- src/components/TopBar.vue .gello/epics/e15-ui-designer/c0105-overlay-mode.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-17T06:54:39",
+  "updated": "2026-08-17T06:55:14",
   "pickupDelay": 10,
   "owned": [
     "c0029",

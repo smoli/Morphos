@@ -7,6 +7,8 @@ depends: [c0104]
 created: 2026-08-16
 updated: 2026-08-17
 status-changed: 2026-08-17T06:54:35
+usage-tokens: 41995
+usage-cost: 6.798597
 ---
 
 # Overlay design mode — toggle + read-only render
