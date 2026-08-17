@@ -1,7 +1,6 @@
 {
   "status": "running",
   "ready": [
-    "c0107",
     "c0108",
     "c0109",
     "c0110"
@@ -9,16 +8,16 @@
   "waiting": [],
   "runs": [
     {
-      "cardId": "c0106",
+      "cardId": "c0107",
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "git show --stat ec0ae6b && echo \"=== CARD WT DIFF ===\" && git diff .gello/epics/e15-ui-designer/c0106-prompt-injection.md && echo \"=== TOPBAR WT DIFF ===\" && git diff --stat src/components/TopBar.vue"
+        "arg": "cat .gello/epics/e15-ui-designer/epic.md && echo \"=== c0104 ===\" && cat .gello/epics/e15-ui-designer/c0104-design-model.md && echo \"=== c0105 ===\" && cat .gello/epics/e15-ui-designer/c0105-overlay-mode.md && echo \"=== c0106 ===\" && cat .gello/epics/e15-ui-designer/c0106-prompt-injection.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-17T07:02:47",
+  "updated": "2026-08-17T07:04:23",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -81,11 +80,11 @@
     "c0083",
     "c0104",
     "c0105",
-    "c0106"
+    "c0106",
+    "c0107"
   ],
   "afk": true,
   "firstSeen": {
-    "c0107": "2026-08-16T23:09:43",
     "c0108": "2026-08-16T23:09:44",
     "c0109": "2026-08-16T23:09:46",
     "c0110": "2026-08-16T23:09:47"

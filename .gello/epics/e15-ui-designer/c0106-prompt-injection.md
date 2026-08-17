@@ -7,8 +7,8 @@ depends: [c0104]
 created: 2026-08-16
 updated: 2026-08-17
 status-changed: 2026-08-17T07:02:18
-usage-tokens: 30199
-usage-cost: 2.397228
+usage-tokens: 37226
+usage-cost: 3.167691
 ---
 
 # Prompt injection — UI-LAYOUT section when design exists
@@ -71,6 +71,45 @@ Entwurf ist verbindlich, die Maße sind Anteile (relativ umsetzen: Prozent,
 Grid, Flexbox — Ränder und Feinschliff bleiben Sache des Agenten), und
 `design.ui.json` ist NUR ZUM LESEN. Bei Widerspruch zum Wunsch gilt der Wunsch,
 und der Agent sagt es in seiner Mitteilung.
+
+## Review
+
+### 2026-08-17T07:03:44 — pass
+
+Checked: alle fünf Akzeptanzkriterien gegen den Code, Diff von `ec0ae6b`,
+`npm test`, `npm run typecheck`.
+
+- „UI-LAYOUT nur bei vorhandenem, nicht leerem Entwurf": `formatDesign`
+  (`src/core/prompt.ts:275`) gibt bei `design?.blocks ?? []` mit Länge 0 ein
+  leeres Array zurück, `buildPrompt` pusht nichts. Belegt durch
+  `prompt.spec.ts` („schweigt ohne Entwurf und bei einem leeren Entwurf",
+  „lässt den Abschnitt ohne Entwurf und bei einem leeren Entwurf weg") — und
+  der Abschnitt ist kein Teil von `SYSTEM_PROMPT`, die Negativ-Assertions
+  greifen also wirklich.
+- „Lesbarer, eingerückter Baum": Name (`(ohne Namen)` als Rückfall), Rolle in
+  eckigen Klammern nur wenn gesetzt, Fläche als Prozent auf eine
+  Nachkommastelle (`pct`), Anweisungen inkl. mitgerückter Folgezeilen, Kinder
+  über `step(b.children, depth + 1)`. Vier Tests decken Felder, Schachtelung,
+  Geschwisterreihenfolge, Mehrzeiligkeit und den namenlosen Block ab.
+- „Systemprompt erklärt Bedeutung und Nur-Lesen": Abschnitt „DER UI-ENTWURF
+  (optional)" in `prompt.ts:173` nennt Verbindlichkeit, Anteile des Fensters
+  und `design.ui.json` NUR ZUM LESEN. Die dort behauptete Durchsetzung stimmt:
+  `isValidOutputPath` (`core/files.ts:30`) lässt nur `src/` plus die beiden
+  Dokumente zu, geprüft im MCP-Server — `design.ui.json` liegt außerhalb.
+- „`core/generate` liest den Entwurf": `generate.ts:208` setzt
+  `design: readDesign(dir)` in den `PromptContext`, der in `generate.ts:215`
+  an `buildPrompt` geht; das ist die einzige `buildPrompt`-Aufrufstelle im
+  Quellbaum. Drei Tests in `generate.spec.ts`, inkl. „nimmt den Entwurf von
+  der Platte, nicht aus dem mitgegebenen Kontext".
+- Diff bleibt im What: nur `prompt.ts`, `generate.ts` und deren Specs. Kein
+  Debug-Code, kein `.only`, kein abgeschwächter Test (das einzige `skipIf` in
+  `gitstore.spec.ts:463` ist vorbestehend und fremd).
+- `npm test`: 1820 Tests in 93 Dateien grün. `npm run typecheck` (`vue-tsc
+  --noEmit`): sauber. Lint gibt es in diesem Repo nicht (kein Lint-Skript in
+  `package.json`), also nichts zu laufen.
+- Nebenbefund, nicht kartenrelevant: im Arbeitsbaum liegt eine ungetrackte
+  Änderung an `src/components/TopBar.vue` (eine Leerzeile) — nicht Teil des
+  Commits zu dieser Karte.
 
 ## Log
 
