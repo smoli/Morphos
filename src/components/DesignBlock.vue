@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
-import type { Block, Rect } from '@/core/design';
+import { BLOCK_HANDLES, type Block, type Handle, type Rect } from '@/core/design';
 
 /**
  * Ein Kasten des UI-Entwurfs (e15) — samt seiner Kinder, die er wiederum als
@@ -16,6 +16,12 @@ import type { Block, Rect } from '@/core/design';
  * Ein Klick auf den Kasten selbst WÄHLT ihn aus (c0108) — auch das entscheidet
  * die Fläche (`selectedId`), und auch das gilt für den ganzen Baum: Ein Klick in
  * ein Kind meint das Kind und nicht seinen Elter, darum bleibt er dort stehen.
+ *
+ * Der ausgewählte Kasten lässt sich anfassen (c0109): am Rumpf zum Schieben, an
+ * einem seiner acht Griffe zum Größerziehen. Der Kasten MELDET das nur (`grab`)
+ * — gemessen und gerechnet wird auf der Fläche, die als Einzige weiß, wie groß
+ * sie ist. Der Zeiger läuft dabei absichtlich weiter nach oben: Die Fläche
+ * bekommt denselben Druck und macht daraus einen Zug (und keinen neuen Kasten).
  *
  * Die Geometrie des Entwurfs sind Anteile des APP-FENSTERS (c0104) — auch die
  * eines Kindes. Gezeichnet wird ein Kind aber im Kasten seines Elters, darum
@@ -34,6 +40,11 @@ const emit = defineEmits<{
   edit: [id: string];
   /** Dieser Kasten ist angeklickt worden — er möchte ausgewählt sein. */
   select: [id: string];
+  /**
+   * Dieser Kasten ist angefasst worden: an einem Griff (dann steht dort die
+   * Kante) oder am Rumpf (dann `null`, und gemeint ist Schieben).
+   */
+  grab: [id: string, handle: Handle | null];
   /** Der Name steht fest (Eingabetaste oder Verlassen des Feldes). */
   commit: [id: string, name: string];
   /**
@@ -102,7 +113,13 @@ const style = computed(() => {
 </script>
 
 <template>
-  <div class="design-block" :class="{ editing, selected }" :style="style" @click.stop="emit('select', block.id)">
+  <div
+    class="design-block"
+    :class="{ editing, selected }"
+    :style="style"
+    @click.stop="emit('select', block.id)"
+    @pointerdown="emit('grab', block.id, null)"
+  >
     <span class="db-label">
       <input
         v-if="editing"
@@ -118,6 +135,15 @@ const style = computed(() => {
       <span v-else class="db-name" @pointerdown.stop @click.stop="emit('edit', block.id)">{{ block.name }}</span>
       <span v-if="block.type" class="db-type">{{ block.type }}</span>
     </span>
+    <!-- Die Griffe hat nur der ausgewählte Kasten: Acht Punkte an jedem Kasten
+         wären ein Nadelkissen statt eines Entwurfs. -->
+    <span
+      v-for="handle in selected ? BLOCK_HANDLES : []"
+      :key="handle"
+      class="db-handle"
+      :class="`db-${handle}`"
+      @pointerdown="emit('grab', block.id, handle)"
+    />
     <DesignBlock
       v-for="child in block.children"
       :key="child.id"
@@ -127,6 +153,7 @@ const style = computed(() => {
       :selected-id="selectedId"
       @edit="emit('edit', $event)"
       @select="emit('select', $event)"
+      @grab="(id, handle) => emit('grab', id, handle)"
       @commit="(id, name) => emit('commit', id, name)"
       @cancel="emit('cancel')"
     />
@@ -197,4 +224,30 @@ const style = computed(() => {
   font-size: 10px;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
 }
+/* Der ausgewählte Kasten lässt sich schieben — das sagt schon der Zeiger. */
+.design-block.selected {
+  cursor: move;
+}
+/*
+ * Die Griffe sitzen auf den Kanten und Ecken, je zur Hälfte innen und außen:
+ * So lässt sich auch ein Kasten anfassen, der dicht an einem anderen klebt.
+ */
+.db-handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -5px 0 0 -5px;
+  box-sizing: border-box;
+  background: var(--accent, rgba(108, 140, 255, 1));
+  border: 1px solid rgba(15, 17, 21, 0.85);
+  border-radius: 2px;
+}
+.db-nw { left: 0; top: 0; cursor: nwse-resize; }
+.db-n { left: 50%; top: 0; cursor: ns-resize; }
+.db-ne { left: 100%; top: 0; cursor: nesw-resize; }
+.db-e { left: 100%; top: 50%; cursor: ew-resize; }
+.db-se { left: 100%; top: 100%; cursor: nwse-resize; }
+.db-s { left: 50%; top: 100%; cursor: ns-resize; }
+.db-sw { left: 0; top: 100%; cursor: nesw-resize; }
+.db-w { left: 0; top: 50%; cursor: ew-resize; }
 </style>

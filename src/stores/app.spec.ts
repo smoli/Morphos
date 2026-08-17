@@ -1054,6 +1054,55 @@ describe('useAppStore', () => {
         expect(writeDesign).not.toHaveBeenCalled();
         expect(store.error).toBeNull();
       });
+
+      // c0109: Anfassen geht denselben Weg auf die Platte — Schieben nimmt die
+      // Kinder mit, Ziehen betrifft nur den einen Kasten.
+      describe('Schieben und Größe ändern (c0109)', () => {
+        /** Ein Kopf mit einem Kasten darin, beide im oberen Fünftel. */
+        const VERSCHACHTELT = {
+          version: 1,
+          blocks: [{
+            id: 'b1', name: 'Kopf', rect: { x: 0.1, y: 0.1, w: 0.4, h: 0.2 },
+            children: [{
+              id: 'b2', name: 'Titel', rect: { x: 0.15, y: 0.15, w: 0.1, h: 0.1 }, children: [],
+            }],
+          }],
+        };
+
+        it('schiebt einen Kasten samt seiner Kinder und schreibt ihn', async () => {
+          const { written, writeDesign } = writingHost();
+          const store = await openedStore({ writeDesign, readDesign: vi.fn(async () => VERSCHACHTELT) });
+          await store.openDesign();
+
+          await store.moveDesignBlock('b1', { x: 0.5, y: 0.1 });
+
+          expect(written[0].blocks[0].rect).toEqual({ x: 0.5, y: 0.1, w: 0.4, h: 0.2 });
+          expect(written[0].blocks[0].children[0].rect).toEqual({ x: 0.55, y: 0.15, w: 0.1, h: 0.1 });
+          expect(store.designBlocks[0].rect.x).toBe(0.5);
+        });
+
+        it('zieht einen Kasten größer, ohne die Kinder anzufassen', async () => {
+          const { written, writeDesign } = writingHost();
+          const store = await openedStore({ writeDesign, readDesign: vi.fn(async () => VERSCHACHTELT) });
+          await store.openDesign();
+
+          await store.resizeDesignBlock('b1', { x: 0.1, y: 0.1, w: 0.8, h: 0.5 });
+
+          expect(written[0].blocks[0].rect).toEqual({ x: 0.1, y: 0.1, w: 0.8, h: 0.5 });
+          expect(written[0].blocks[0].children[0].rect).toEqual(VERSCHACHTELT.blocks[0].children[0].rect);
+        });
+
+        it('fasst ohne Entwurf nichts an', async () => {
+          const { writeDesign } = writingHost();
+          const store = await openedStore({ writeDesign, readDesign: vi.fn(async () => emptyDesign()) });
+
+          await store.moveDesignBlock('b1', { x: 0.5, y: 0.5 });
+          await store.resizeDesignBlock('b1', { w: 0.5 });
+
+          expect(writeDesign).not.toHaveBeenCalled();
+          expect(store.error).toBeNull();
+        });
+      });
     });
   });
 

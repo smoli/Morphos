@@ -48,6 +48,57 @@ describe('DesignBlock', () => {
     expect(style).toContain('height: 25%');
   });
 
+  // c0109: Angefasst wird nur der ausgewählte Kasten — an seinem Rumpf zum
+  // Schieben, an seinen acht Griffen zum Ziehen. Gerechnet wird hier nichts:
+  // Der Kasten meldet bloß, dass (und woran) er angefasst wurde.
+  describe('Anfassen (c0109)', () => {
+    it('zeigt seine Griffe erst, wenn er ausgewählt ist', () => {
+      const ohne = mount(DesignBlock, { props: { block: block() } });
+      expect(ohne.findAll('.db-handle')).toHaveLength(0);
+
+      const mit = mount(DesignBlock, { props: { block: block(), selectedId: 'b1' } });
+      expect(mit.findAll('.db-handle')).toHaveLength(8);
+      expect(mit.find('.db-handle.db-se').exists()).toBe(true);
+    });
+
+    it('meldet einen Griff am Rumpf ohne Kante', async () => {
+      const wrapper = mount(DesignBlock, { props: { block: block(), selectedId: 'b1' } });
+
+      await wrapper.get('.design-block').trigger('pointerdown');
+
+      expect(wrapper.emitted('grab')).toEqual([['b1', null]]);
+    });
+
+    it('meldet an einem Griff dessen Kante — und den Rumpf gleich mit', async () => {
+      const wrapper = mount(DesignBlock, { props: { block: block(), selectedId: 'b1' } });
+
+      await wrapper.get('.db-handle.db-nw').trigger('pointerdown');
+
+      // Der Griff meldet sich zuerst, der Rumpf darunter hinterher: Welcher
+      // gemeint ist, entscheidet die Fläche (der erste gewinnt).
+      expect(wrapper.emitted('grab')).toEqual([['b1', 'nw'], ['b1', null]]);
+    });
+
+    it('meldet keinen Griff, wenn am Namen angesetzt wird', async () => {
+      const wrapper = mount(DesignBlock, { props: { block: block(), selectedId: 'b1' } });
+
+      await wrapper.get('.db-name').trigger('pointerdown');
+
+      expect(wrapper.emitted('grab')).toBeUndefined();
+    });
+
+    it('reicht den Griff eines Kindes weiter', async () => {
+      const kind = block({ id: 'b2', name: 'Liste', rect: { x: 0.2, y: 0.3, w: 0.1, h: 0.1 } });
+      const wrapper = mount(DesignBlock, {
+        props: { block: block({ children: [kind] }), selectedId: 'b2' },
+      });
+
+      await wrapper.get('.design-block .design-block').trigger('pointerdown');
+
+      expect(wrapper.emitted('grab')).toEqual([['b2', null], ['b1', null]]);
+    });
+  });
+
   it('trägt auch tiefere Verschachtelungen (Kind im Kind)', () => {
     const enkel = block({ id: 'b3', name: 'Zeile', rect: { x: 0.25, y: 0.35, w: 0.05, h: 0.05 } });
     const kind = block({ id: 'b2', name: 'Liste', rect: { x: 0.2, y: 0.3, w: 0.1, h: 0.1 }, children: [enkel] });

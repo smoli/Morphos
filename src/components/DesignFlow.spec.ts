@@ -188,6 +188,43 @@ describe('Entwurf zeichnen, speichern, wiederfinden (c0107)', () => {
     expect(prompt).not.toContain('[]');
   });
 
+  it('schiebt und zieht einen Kasten — und findet ihn so wieder (c0109)', async () => {
+    const store = await openWindow('flow');
+    await store.addDesignBlock({ x: 0.1, y: 0.1, w: 0.4, h: 0.2 }, 'Kopfzeile');
+
+    // Auswählen: Erst der ausgewählte Kasten lässt sich anfassen.
+    const { wrapper, stage } = overlay(() => store.designBlocks);
+    const kasten = wrapper.get('.design-stage > .design-block');
+    await kasten.trigger('click');
+
+    // Schieben: 40 Pixel nach rechts und 20 nach unten sind auf 400 × 200 je 0.1.
+    await kasten.trigger('pointerdown', { button: 0, clientX: 60, clientY: 30 });
+    await stage.trigger('pointermove', { clientX: 100, clientY: 50 });
+    await stage.trigger('pointerup', { clientX: 100, clientY: 50 });
+    const [id, to] = wrapper.emitted('move')![0] as [string, { x: number; y: number }];
+    await store.moveDesignBlock(id, to);
+
+    expect(readDesign(dir).blocks[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.4, h: 0.2 });
+
+    // Größe ändern: Die Fläche bekommt den Kasten so, wie er nun in der Datei
+    // steht, und zieht ihn an der rechten unteren Ecke auf.
+    await wrapper.setProps({ blocks: store.designBlocks });
+    await wrapper.get('.db-handle.db-se').trigger('pointerdown', { button: 0, clientX: 240, clientY: 80 });
+    await stage.trigger('pointermove', { clientX: 280, clientY: 100 });
+    await stage.trigger('pointerup', { clientX: 280, clientY: 100 });
+    const [gleicheId, rect] = wrapper.emitted('resize')![0] as [string, Rect];
+    expect(gleicheId).toBe(id);
+    await store.resizeDesignBlock(gleicheId, rect);
+
+    expect(readDesign(dir).blocks[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.5, h: 0.3 });
+
+    // Und wiederfinden: Der Entwurfs-Modus geht zu und wieder auf.
+    store.closeDesign();
+    await store.openDesign();
+    expect(store.designBlocks[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.5, h: 0.3 });
+    expect(store.error).toBeNull();
+  });
+
   it('gibt den gezeichneten Kasten an den Agenten weiter (UI-LAYOUT, c0106)', async () => {
     const store = await openWindow('flow');
     await store.addDesignBlock({ x: 0, y: 0, w: 1, h: 0.2 }, 'Kopfzeile');

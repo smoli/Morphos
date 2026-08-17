@@ -256,6 +256,8 @@ async function onIcon(icon: string | null): Promise<void> {
       @draw="(rect, name) => store.addDesignBlock(rect, name)"
       @rename="(id, name) => store.renameDesignBlock(id, name)"
       @describe="(id, patch) => store.describeDesignBlock(id, patch)"
+      @move="(id, to) => store.moveDesignBlock(id, to)"
+      @resize="(id, rect) => store.resizeDesignBlock(id, rect)"
     />
 
     <div v-if="store.busy || runningElsewhere" class="w-loading">

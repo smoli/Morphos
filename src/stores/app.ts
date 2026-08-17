@@ -9,6 +9,8 @@ import {
   clampRect,
   emptyDesign,
   makeBlockId,
+  moveBlock,
+  placeBlock,
   updateBlock,
   type Block,
   type Design,
@@ -218,6 +220,26 @@ export function useAppWindow(instanceId: string) {
     async describeDesignBlock(id: string, patch: { instructions?: string; type?: string }): Promise<void> {
       if (!this.design) return;
       await this.saveDesign(updateBlock(this.design, id, patch));
+    },
+
+    /**
+     * Schiebt einen Kasten an eine neue Stelle (c0109) — samt seiner Kinder:
+     * Ihre Anteile beziehen sich aufs Fenster (c0104), also müssen sie
+     * mitwandern, sonst rutschten sie aus ihrem Elter.
+     */
+    async moveDesignBlock(id: string, to: { x: number; y: number }): Promise<void> {
+      if (!this.design) return;
+      await this.saveDesign(placeBlock(this.design, id, to.x, to.y));
+    },
+
+    /**
+     * Zieht einen Kasten an einer seiner Kanten größer oder kleiner (c0109).
+     * Anders als beim Schieben bleiben die Kinder, wo sie sind — gemeint ist
+     * dieser eine Kasten.
+     */
+    async resizeDesignBlock(id: string, rect: Partial<Rect>): Promise<void> {
+      if (!this.design) return;
+      await this.saveDesign(moveBlock(this.design, id, rect));
     },
 
     /**

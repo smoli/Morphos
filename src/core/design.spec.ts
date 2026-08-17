@@ -1,21 +1,26 @@
 import { describe, it, expect } from 'vitest';
 import {
   addBlock,
+  BLOCK_HANDLES,
   BLOCK_ROLES,
   DESIGN_FILE,
   DESIGN_VERSION,
   MAX_DESIGN_DEPTH,
   MAX_TYPE_LENGTH,
   MIN_BLOCK_SIZE,
+  blockBounds,
   emptyDesign,
   findBlock,
   findBlockIn,
   listBlocks,
   makeBlockId,
   moveBlock,
+  moveRect,
   normalizeDesign,
+  placeBlock,
   removeBlock,
   reparentBlock,
+  resizeRect,
   updateBlock,
   walkBlocks,
   type Block,
@@ -297,6 +302,152 @@ describe('moveBlock', () => {
   it('verändert den übergebenen Entwurf nicht', () => {
     const before = JSON.parse(JSON.stringify(d)) as Design;
     moveBlock(d, 'a', { x: 0.9 });
+    expect(d).toEqual(before);
+  });
+});
+
+// c0109: Anfassen — schieben und an den Kanten ziehen. Die Rechnung dazu ist
+// rein und steht hier, nicht in der Zeichenfläche: Dieselben Funktionen zeigen
+// den Zug an (das Gummiband) und führen ihn aus (der Entwurf).
+describe('blockBounds', () => {
+  it('umschließt einen Kasten ohne Kinder genau', () => {
+    expect(blockBounds(block('a', { x: 0.1, y: 0.2, w: 0.3, h: 0.4 }))).toEqual({
+      x: 0.1, y: 0.2, w: 0.3, h: 0.4,
+    });
+  });
+
+  it('nimmt Kinder mit hinein, die über ihren Elter hinausragen', () => {
+    const kind = block('a1', { x: 0.25, y: 0.1, w: 0.2, h: 0.1 });
+    const b = block('a', { x: 0.1, y: 0.2, w: 0.2, h: 0.2 }, { children: [kind] });
+    // waagerecht 0.1…0.45, senkrecht 0.1…0.4
+    expect(blockBounds(b)).toEqual({ x: 0.1, y: 0.1, w: 0.35, h: 0.3 });
+  });
+
+  it('reicht bis ins tiefste Kind', () => {
+    const enkel = block('a2', { x: 0.5, y: 0.5, w: 0.1, h: 0.1 });
+    const kind = block('a1', { x: 0.2, y: 0.2, w: 0.1, h: 0.1 }, { children: [enkel] });
+    const b = block('a', { x: 0.1, y: 0.1, w: 0.1, h: 0.1 }, { children: [kind] });
+    expect(blockBounds(b)).toEqual({ x: 0.1, y: 0.1, w: 0.5, h: 0.5 });
+  });
+});
+
+describe('moveRect', () => {
+  const r = { x: 0.2, y: 0.2, w: 0.3, h: 0.3 };
+
+  it('verschiebt, ohne die Größe anzutasten', () => {
+    expect(moveRect(r, 0.1, -0.1)).toEqual({ x: 0.3, y: 0.1, w: 0.3, h: 0.3 });
+  });
+
+  it('bleibt am Rand stehen, statt zu schrumpfen', () => {
+    // Der Unterschied zu moveBlock/clampRect: Ein Zug nach rechts hört am Rand
+    // auf — er macht den Kasten nicht schmaler.
+    expect(moveRect(r, 5, 5)).toEqual({ x: 0.7, y: 0.7, w: 0.3, h: 0.3 });
+    expect(moveRect(r, -5, -5)).toEqual({ x: 0, y: 0, w: 0.3, h: 0.3 });
+  });
+
+  it('hält die mitgereichte Fläche im Fenster, nicht nur den Kasten', () => {
+    // Der Kasten kommt mit seinen Kindern: Was am weitesten ragt, gibt die Grenze.
+    const bounds = { x: 0.2, y: 0.2, w: 0.5, h: 0.5 };
+    expect(moveRect(r, 5, 5, bounds)).toEqual({ x: 0.5, y: 0.5, w: 0.3, h: 0.3 });
+  });
+
+  it('rundet auf vier Stellen und übersteht Unfug', () => {
+    expect(moveRect({ x: 0.1, y: 0.1, w: 0.2, h: 0.2 }, 0.100005, 0)).toEqual({
+      x: 0.2, y: 0.1, w: 0.2, h: 0.2,
+    });
+    expect(moveRect(r, Number.NaN, Number.NaN)).toEqual(r);
+  });
+});
+
+describe('resizeRect', () => {
+  const r = { x: 0.2, y: 0.2, w: 0.4, h: 0.4 };
+
+  it('zieht an der rechten unteren Ecke — die linke obere bleibt', () => {
+    expect(resizeRect(r, 'se', 0.2, 0.1)).toEqual({ x: 0.2, y: 0.2, w: 0.6, h: 0.5 });
+  });
+
+  it('zieht an der linken oberen Ecke — die rechte untere bleibt', () => {
+    expect(resizeRect(r, 'nw', -0.1, -0.1)).toEqual({ x: 0.1, y: 0.1, w: 0.5, h: 0.5 });
+  });
+
+  it('lässt eine Kante die andere Richtung in Ruhe', () => {
+    expect(resizeRect(r, 'n', 0.5, 0.1)).toEqual({ x: 0.2, y: 0.3, w: 0.4, h: 0.3 });
+    expect(resizeRect(r, 'e', 0.1, 0.5)).toEqual({ x: 0.2, y: 0.2, w: 0.5, h: 0.4 });
+    expect(resizeRect(r, 'w', 0.1, 0.5)).toEqual({ x: 0.3, y: 0.2, w: 0.3, h: 0.4 });
+    expect(resizeRect(r, 's', 0.5, 0.1)).toEqual({ x: 0.2, y: 0.2, w: 0.4, h: 0.5 });
+  });
+
+  it('wird nicht kleiner als MIN_BLOCK_SIZE und klappt nicht um', () => {
+    // Über die gegenüberliegende Kante hinaus: Der Kasten bleibt ein Kasten.
+    expect(resizeRect(r, 'se', -1, -1)).toEqual({
+      x: 0.2, y: 0.2, w: MIN_BLOCK_SIZE, h: MIN_BLOCK_SIZE,
+    });
+    expect(resizeRect(r, 'nw', 1, 1)).toEqual({
+      x: 0.6 - MIN_BLOCK_SIZE, y: 0.6 - MIN_BLOCK_SIZE, w: MIN_BLOCK_SIZE, h: MIN_BLOCK_SIZE,
+    });
+  });
+
+  it('geht nicht über den Rand des Fensters hinaus', () => {
+    expect(resizeRect(r, 'se', 5, 5)).toEqual({ x: 0.2, y: 0.2, w: 0.8, h: 0.8 });
+    expect(resizeRect(r, 'nw', -5, -5)).toEqual({ x: 0, y: 0, w: 0.6, h: 0.6 });
+  });
+
+  it('kennt acht Griffe — vier Ecken und vier Kanten', () => {
+    expect([...BLOCK_HANDLES].sort()).toEqual(['e', 'n', 'ne', 'nw', 's', 'se', 'sw', 'w']);
+  });
+});
+
+describe('placeBlock', () => {
+  // Das Kind ragt rechts über seinen Elter hinaus (bis 0.35) — daran zeigt sich,
+  // dass beim Schieben der ganze Zweig gemeint ist.
+  const d = design(
+    block('a', { x: 0.1, y: 0.1, w: 0.2, h: 0.2 }, {
+      children: [block('a1', { x: 0.25, y: 0.15, w: 0.1, h: 0.1 })],
+    }),
+    block('b', { x: 0.5, y: 0.5, w: 0.2, h: 0.2 }),
+  );
+
+  it('setzt einen Kasten an eine neue Stelle, ohne seine Größe zu ändern', () => {
+    expect(placeBlock(d, 'b', 0.1, 0.2).blocks[1].rect).toEqual({ x: 0.1, y: 0.2, w: 0.2, h: 0.2 });
+  });
+
+  it('nimmt die Kinder mit — der Baum bleibt, wie er aussieht', () => {
+    const next = placeBlock(d, 'a', 0.5, 0.1);
+    expect(findBlock(next, 'a')!.rect).toEqual({ x: 0.5, y: 0.1, w: 0.2, h: 0.2 });
+    // Das Kind lag 0.15 rechts vom Elter — und liegt es hinterher wieder.
+    expect(findBlock(next, 'a1')!.rect).toEqual({ x: 0.65, y: 0.15, w: 0.1, h: 0.1 });
+  });
+
+  it('bleibt am Rand stehen, statt am Rand zu schrumpfen', () => {
+    const next = placeBlock(d, 'b', 5, 5);
+    expect(next.blocks[1].rect).toEqual({ x: 0.8, y: 0.8, w: 0.2, h: 0.2 });
+  });
+
+  it('lässt nichts ins Negative rutschen', () => {
+    expect(placeBlock(d, 'b', -5, -5).blocks[1].rect).toEqual({ x: 0, y: 0, w: 0.2, h: 0.2 });
+  });
+
+  it('hält auch die Kinder im Fenster', () => {
+    // Das Kind ragt 0.05 über seinen Elter hinaus (bis 0.35) — um so viel früher
+    // ist Schluss.
+    const next = placeBlock(d, 'a', 5, 0.1);
+    expect(findBlock(next, 'a')!.rect.x).toBe(0.75);
+    expect(findBlock(next, 'a1')!.rect.x).toBe(0.9);
+  });
+
+  it('erreicht auch ein Kind — dann zieht nur dessen Zweig um', () => {
+    const next = placeBlock(d, 'a1', 0.5, 0.5);
+    expect(findBlock(next, 'a1')!.rect).toEqual({ x: 0.5, y: 0.5, w: 0.1, h: 0.1 });
+    expect(findBlock(next, 'a')!.rect).toEqual(d.blocks[0].rect);
+  });
+
+  it('lässt den Entwurf unverändert, wenn es die Id nicht gibt', () => {
+    expect(placeBlock(d, 'weg', 0.5, 0.5)).toEqual(d);
+  });
+
+  it('verändert den übergebenen Entwurf nicht', () => {
+    const before = JSON.parse(JSON.stringify(d)) as Design;
+    placeBlock(d, 'a', 0.9, 0.9);
     expect(d).toEqual(before);
   });
 });

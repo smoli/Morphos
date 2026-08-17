@@ -59,6 +59,16 @@ export interface Design {
   blocks: Block[];
 }
 
+/**
+ * Die Kanten und Ecken, an denen sich ein Kasten anfassen und größer ziehen
+ * lässt (c0109) — benannt nach der Himmelsrichtung: `nw` ist die linke obere
+ * Ecke, `s` die untere Kante.
+ */
+export type Handle = 'n' | 'e' | 's' | 'w' | 'nw' | 'ne' | 'se' | 'sw';
+
+/** Alle acht Griffe, im Uhrzeigersinn ab der linken oberen Ecke. */
+export const BLOCK_HANDLES: readonly Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+
 /** Der Entwurf liegt im Wurzelverzeichnis der App, neben concept.md. */
 export const DESIGN_FILE = 'design.ui.json';
 
@@ -148,6 +158,49 @@ export function clampRect(raw: unknown, base: Rect = { x: 0, y: 0, w: MIN_BLOCK_
     w: round(clamp(num(r.w, base.w), MIN_BLOCK_SIZE, round(1 - x))),
     h: round(clamp(num(r.h, base.h), MIN_BLOCK_SIZE, round(1 - y))),
   };
+}
+
+/**
+ * Verschiebt eine Fläche um (dx, dy) — ihre Größe bleibt, wie sie ist. Am Rand
+ * des Fensters ist Schluss: Der Kasten bleibt stehen, statt schmaler zu werden
+ * (das ist der Unterschied zu `clampRect`, das eine gelesene Geometrie
+ * zurechtrückt, ohne einen Zug zu kennen).
+ *
+ * `bounds` ist die Fläche, die dabei im Fenster bleiben muss — beim Schieben
+ * eines Kastens mit Kindern ist das nicht er selbst, sondern was sein ganzer
+ * Zweig einnimmt (`blockBounds`). Ohne Angabe ist es der Kasten selbst.
+ */
+export function moveRect(rect: Rect, dx: number, dy: number, bounds: Rect = rect): Rect {
+  const ax = clamp(num(dx, 0), -bounds.x, round(1 - (bounds.x + bounds.w)));
+  const ay = clamp(num(dy, 0), -bounds.y, round(1 - (bounds.y + bounds.h)));
+  return { ...rect, x: round(rect.x + ax), y: round(rect.y + ay) };
+}
+
+/**
+ * Die Fläche, die entsteht, wenn ein Kasten an einem seiner Griffe um (dx, dy)
+ * gezogen wird: Die angefasste Kante wandert, die gegenüberliegende bleibt
+ * stehen. Über sie hinaus geht es nicht — ein Kasten klappt nicht um, sondern
+ * bleibt bei `MIN_BLOCK_SIZE` stehen; über den Rand des Fensters ebenso wenig.
+ */
+export function resizeRect(rect: Rect, handle: Handle, dx: number, dy: number): Rect {
+  const ax = num(dx, 0);
+  const ay = num(dy, 0);
+  let { x, y, w, h } = rect;
+  if (handle.includes('w')) {
+    const right = x + w;
+    x = clamp(x + ax, 0, round(right - MIN_BLOCK_SIZE));
+    w = right - x;
+  } else if (handle.includes('e')) {
+    w = clamp(w + ax, MIN_BLOCK_SIZE, round(1 - x));
+  }
+  if (handle.includes('n')) {
+    const bottom = y + h;
+    y = clamp(y + ay, 0, round(bottom - MIN_BLOCK_SIZE));
+    h = bottom - y;
+  } else if (handle.includes('s')) {
+    h = clamp(h + ay, MIN_BLOCK_SIZE, round(1 - y));
+  }
+  return { x: round(x), y: round(y), w: round(w), h: round(h) };
 }
 
 /** Ein gelesener Text: beschnitten und gekappt, alles andere wird leer. */
@@ -254,6 +307,28 @@ export function findBlock(design: Design, id: string): Block | null {
   return findBlockIn(design.blocks, id);
 }
 
+/**
+ * Die kleinste Fläche, die einen Kasten SAMT seiner Kinder umschließt. Ein Kind
+ * darf über seinen Elter hinausragen (die Anteile sind absolut, c0104) — wer
+ * einen Kasten schiebt, schiebt aber den ganzen Zweig, und der soll im Fenster
+ * bleiben.
+ */
+export function blockBounds(block: Block): Rect {
+  let left = block.rect.x;
+  let top = block.rect.y;
+  let right = left + block.rect.w;
+  let bottom = top + block.rect.h;
+  const step = (b: Block): void => {
+    left = Math.min(left, b.rect.x);
+    top = Math.min(top, b.rect.y);
+    right = Math.max(right, b.rect.x + b.rect.w);
+    bottom = Math.max(bottom, b.rect.y + b.rect.h);
+    b.children.forEach(step);
+  };
+  block.children.forEach(step);
+  return { x: round(left), y: round(top), w: round(right - left), h: round(bottom - top) };
+}
+
 /** Ein Block und alles unter ihm (für die Kreisprüfung beim Umhängen). */
 function subtreeIds(block: Block): Set<string> {
   const ids = new Set<string>();
@@ -319,6 +394,35 @@ export function moveBlock(design: Design, id: string, rect: Partial<Rect>): Desi
   const block = findBlock(design, id);
   if (!block) return design;
   return withBlock(design, id, (b) => ({ ...b, rect: clampRect({ ...b.rect, ...rect }, b.rect) }));
+}
+
+/**
+ * Schiebt einen Block an eine neue Stelle — samt seiner Kinder (c0109). Seine
+ * Größe bleibt dabei, wie sie war, und am Rand des Fensters ist Schluss.
+ *
+ * Anders als `moveBlock`, das eine Geometrie schlicht setzt (und darum beim
+ * Ziehen an einer Kante die richtige Wahl ist), ist Schieben eine Aussage über
+ * den ganzen Zweig: Die Anteile eines Kindes beziehen sich aufs Fenster
+ * (c0104), also müssen sie mitwandern — sonst rutschte das Kind aus seinem
+ * Elter, und der Baum sagte etwas anderes als das Bild.
+ */
+export function placeBlock(design: Design, id: string, x: number, y: number): Design {
+  const block = findBlock(design, id);
+  if (!block) return design;
+  const moved = moveRect(
+    block.rect,
+    num(x, block.rect.x) - block.rect.x,
+    num(y, block.rect.y) - block.rect.y,
+    blockBounds(block),
+  );
+  const dx = moved.x - block.rect.x;
+  const dy = moved.y - block.rect.y;
+  const shift = (b: Block): Block => ({
+    ...b,
+    rect: { ...b.rect, x: round(b.rect.x + dx), y: round(b.rect.y + dy) },
+    children: b.children.map(shift),
+  });
+  return withBlock(design, id, shift);
 }
 
 /**

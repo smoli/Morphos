@@ -349,4 +349,179 @@ describe('DesignOverlay', () => {
       expect(wrapper.find('.design-inspector').exists()).toBe(true);
     });
   });
+
+  // c0109: Ein ausgewählter Kasten lässt sich schieben und an seinen Griffen
+  // größer ziehen. Gerechnet wird in core/design (moveRect/resizeRect); hier
+  // steht, was ein Zug bedeutet und was er NICHT bedeutet.
+  describe('Schieben und Größe ändern', () => {
+    /** Ein Overlay mit Kästen, dessen Fläche 400 × 200 Pixel groß ist. */
+    function movable(blocks: Block[] = BLOCKS) {
+      const wrapper = mount(DesignOverlay, { props: { blocks }, attachTo: document.body });
+      const stage = wrapper.get('.design-stage');
+      (stage.element as HTMLElement).getBoundingClientRect = () =>
+        ({ left: 0, top: 0, width: 400, height: 200, right: 400, bottom: 200, x: 0, y: 0 }) as DOMRect;
+      return { wrapper, stage };
+    }
+
+    /** Wählt den ersten Kasten (Kopf: 0,0 — 1 × 0.15) aus und gibt ihn zurück. */
+    async function selectHead(wrapper: ReturnType<typeof movable>['wrapper']) {
+      const kopf = wrapper.findAll('.design-stage > .design-block')[0];
+      await kopf.trigger('click');
+      return kopf;
+    }
+
+    /** Ein Zug, der an `griff` (oder am Rumpf) ansetzt und auf der Fläche endet. */
+    async function pull(
+      { wrapper, stage }: ReturnType<typeof movable>,
+      griff: string,
+      a: [number, number],
+      b: [number, number],
+    ): Promise<void> {
+      await wrapper.get(griff).trigger('pointerdown', { button: 0, clientX: a[0], clientY: a[1] });
+      await stage.trigger('pointermove', { clientX: b[0], clientY: b[1] });
+      await stage.trigger('pointerup', { clientX: b[0], clientY: b[1] });
+    }
+
+    it('schiebt den ausgewählten Kasten an eine neue Stelle', async () => {
+      const parts = movable();
+      await selectHead(parts.wrapper);
+
+      // 20 Pixel nach unten sind auf 200 Pixel Höhe ein Zehntel.
+      await pull(parts, '.design-stage > .design-block', [40, 10], [40, 30]);
+
+      expect(parts.wrapper.emitted('move')).toEqual([['b1', { x: 0, y: 0.1 }]]);
+      expect(parts.wrapper.emitted('draw')).toBeUndefined();
+      expect(parts.wrapper.emitted('resize')).toBeUndefined();
+    });
+
+    it('zeigt während des Schiebens, wo der Kasten landet', async () => {
+      const { wrapper, stage } = movable();
+      await selectHead(wrapper);
+
+      const kopf = wrapper.get('.design-stage > .design-block');
+      await kopf.trigger('pointerdown', { button: 0, clientX: 40, clientY: 10 });
+      await stage.trigger('pointermove', { clientX: 40, clientY: 30 });
+
+      const band = wrapper.get('.design-band');
+      expect(band.attributes('style')).toContain('top: 10%');
+      expect(band.attributes('style')).toContain('height: 15%');
+      expect(wrapper.emitted('move')).toBeUndefined();
+    });
+
+    it('bleibt am Rand stehen, statt zu schrumpfen', async () => {
+      const parts = movable();
+      await selectHead(parts.wrapper);
+
+      await pull(parts, '.design-stage > .design-block', [40, 10], [40, 400]);
+
+      // 1 − 0.15 = 0.85; die Höhe bleibt, wovon nicht die Rede war.
+      expect(parts.wrapper.emitted('move')).toEqual([['b1', { x: 0, y: 0.85 }]]);
+    });
+
+    it('lässt einen Kasten nicht aus dem Fenster hinaus', async () => {
+      const parts = movable([{ ...BLOCKS[0], rect: { x: 0.2, y: 0.2, w: 0.2, h: 0.2 } }]);
+      await selectHead(parts.wrapper);
+
+      await pull(parts, '.design-stage > .design-block', [100, 50], [-200, -200]);
+
+      expect(parts.wrapper.emitted('move')).toEqual([['b1', { x: 0, y: 0 }]]);
+    });
+
+    it('zieht einen Kasten an seiner Ecke größer', async () => {
+      const parts = movable();
+      await selectHead(parts.wrapper);
+
+      // Die rechte untere Ecke 200 Pixel nach links: aus voller Breite wird halbe.
+      await pull(parts, '.db-handle.db-se', [400, 30], [200, 30]);
+
+      expect(parts.wrapper.emitted('resize')).toEqual([['b1', { x: 0, y: 0, w: 0.5, h: 0.15 }]]);
+      expect(parts.wrapper.emitted('move')).toBeUndefined();
+    });
+
+    it('zieht an einer Kante nur diese eine', async () => {
+      const parts = movable();
+      await selectHead(parts.wrapper);
+
+      // Die untere Kante 20 Pixel nach unten — waagerecht ändert sich nichts,
+      // auch wenn der Zeiger dabei zur Seite wandert.
+      await pull(parts, '.db-handle.db-s', [200, 30], [100, 50]);
+
+      expect(parts.wrapper.emitted('resize')).toEqual([['b1', { x: 0, y: 0, w: 1, h: 0.25 }]]);
+    });
+
+    it('macht einen Kasten nicht kleiner als das Kleinste', async () => {
+      const parts = movable();
+      await selectHead(parts.wrapper);
+
+      await pull(parts, '.db-handle.db-se', [400, 30], [-400, -400]);
+
+      expect(parts.wrapper.emitted('resize')).toEqual([['b1', { x: 0, y: 0, w: 0.01, h: 0.01 }]]);
+    });
+
+    it('sagt nichts, wenn sich nichts geändert hat', async () => {
+      // Ein Klick auf den ausgewählten Kasten ist kein Zug: Er darf die Datei
+      // nicht neu schreiben.
+      const parts = movable();
+      await selectHead(parts.wrapper);
+
+      await pull(parts, '.design-stage > .design-block', [40, 10], [40, 10]);
+
+      expect(parts.wrapper.emitted('move')).toBeUndefined();
+      expect(parts.wrapper.emitted('draw')).toBeUndefined();
+      expect(parts.wrapper.find('input.db-input').exists()).toBe(false);
+    });
+
+    it('zeichnet über einem Kasten, der nicht ausgewählt ist', async () => {
+      // Anfassen setzt Auswählen voraus — sonst ließe sich in einem Kasten kein
+      // zweiter mehr aufziehen.
+      const parts = movable();
+
+      await pull(parts, '.design-stage > .design-block', [40, 10], [240, 60]);
+
+      expect(parts.wrapper.emitted('move')).toBeUndefined();
+      expect(parts.wrapper.get('input.db-input')).toBeTruthy();
+    });
+
+    it('behält den geschobenen Kasten ausgewählt', async () => {
+      // Der Zeiger endet neben dem Kasten (der DOM-Kasten wandert erst mit der
+      // Antwort von der Platte) — das ist kein Klick daneben.
+      const parts = movable();
+      await selectHead(parts.wrapper);
+
+      await pull(parts, '.design-stage > .design-block', [40, 10], [40, 150]);
+      await parts.stage.trigger('click');
+
+      expect(parts.wrapper.emitted('move')).toHaveLength(1);
+      expect(parts.wrapper.find('.design-inspector').exists()).toBe(true);
+
+      // Der nächste Klick daneben hebt die Auswahl wie eh und je auf.
+      await parts.stage.trigger('pointerdown', { button: 0, clientX: 40, clientY: 150 });
+      await parts.stage.trigger('pointerup', { clientX: 40, clientY: 150 });
+      await parts.stage.trigger('click');
+      expect(parts.wrapper.find('.design-inspector').exists()).toBe(false);
+    });
+
+    it('schiebt auch einen geschachtelten Kasten', async () => {
+      const parts = movable();
+      await parts.wrapper.get('.design-block .design-block').trigger('click');
+
+      await pull(parts, '.design-block .design-block', [40, 60], [80, 60]);
+
+      // 40 Pixel auf 400 Pixel Breite sind ein Zehntel: 0.05 + 0.1 = 0.15.
+      expect(parts.wrapper.emitted('move')).toEqual([['b3', { x: 0.15, y: 0.25 }]]);
+    });
+
+    it('lässt sich mit der rechten Maustaste nicht anfassen', async () => {
+      const { wrapper, stage } = movable();
+      await selectHead(wrapper);
+
+      const kopf = wrapper.get('.design-stage > .design-block');
+      await kopf.trigger('pointerdown', { button: 2, clientX: 40, clientY: 10 });
+      await stage.trigger('pointermove', { clientX: 40, clientY: 30 });
+      await stage.trigger('pointerup', { clientX: 40, clientY: 30 });
+
+      expect(wrapper.emitted('move')).toBeUndefined();
+      expect(wrapper.find('.design-band').exists()).toBe(false);
+    });
+  });
 });

@@ -2,7 +2,17 @@
 import { computed, ref } from 'vue';
 import DesignBlock from './DesignBlock.vue';
 import DesignInspector from './DesignInspector.vue';
-import { DEFAULT_BLOCK_NAME, MIN_BLOCK_SIZE, findBlockIn, type Block, type Rect } from '@/core/design';
+import {
+  DEFAULT_BLOCK_NAME,
+  MIN_BLOCK_SIZE,
+  blockBounds,
+  findBlockIn,
+  moveRect,
+  resizeRect,
+  type Block,
+  type Handle,
+  type Rect,
+} from '@/core/design';
 
 /**
  * Der Entwurfs-Modus des UI-Designers (e15): eine durchscheinende Schicht über
@@ -22,6 +32,14 @@ import { DEFAULT_BLOCK_NAME, MIN_BLOCK_SIZE, findBlockIn, type Block, type Rect 
  * Anweisungen; ein Klick daneben hebt die Auswahl auf. Ausgewählt ist immer nur
  * einer — das Feld redet stets von einem Kasten.
  *
+ * Seit c0109 lässt sich der ausgewählte Kasten ANFASSEN: am Rumpf schieben
+ * (`move`), an einem seiner Griffe größer ziehen (`resize`). Beides ist
+ * derselbe Zug wie beim Zeichnen — nur bedeutet er etwas anderes, und was er
+ * bedeutet, entscheidet der Anfang: Ein Druck auf den ausgewählten Kasten
+ * meldet sich als Griff (DesignBlock: `grab`), jeder andere zeichnet. Auswählen
+ * geht dem Anfassen also voraus — sonst ließe sich in einem Kasten nie ein
+ * zweiter aufziehen.
+ *
  * Die Anteile beziehen sich auf die Fläche (`.design-stage`) — dieselbe Fläche,
  * auf der auch gezeichnet wird. Was gezeichnet ist und was zu sehen ist, meint
  * damit dasselbe.
@@ -36,6 +54,10 @@ const emit = defineEmits<{
   rename: [id: string, name: string];
   /** Ein Kasten bekommt (oder verliert) seine Rolle bzw. seine Anweisungen. */
   describe: [id: string, patch: { instructions?: string; type?: string }];
+  /** Ein Kasten ist samt seiner Kinder an eine neue Stelle geschoben worden. */
+  move: [id: string, to: { x: number; y: number }];
+  /** Ein Kasten ist an einer seiner Kanten größer (oder kleiner) gezogen worden. */
+  resize: [id: string, rect: Rect];
 }>();
 
 /** Die Id des noch ungeborenen Kastens — er steht in keinem Entwurf. */
@@ -57,14 +79,41 @@ const editingId = ref<string | null>(null);
 const selectedId = ref<string | null>(null);
 
 /**
+ * Der laufende Zug an einem Kasten (c0109): welcher, woran, und wie er dalag,
+ * als er angefasst wurde. `null` heißt: Dieser Zug zeichnet einen neuen Kasten.
+ */
+const gesture = ref<{ id: string; handle: Handle | null; rect: Rect; bounds: Rect } | null>(null);
+
+/**
+ * Was ein Kasten für den GERADE laufenden Druck gemeldet hat. Kein `ref`: Der
+ * Wert lebt nur von `grab` bis `onPointerDown` — beides geschieht in einem
+ * Zuge, denn der Druck läuft vom Kasten weiter auf die Fläche.
+ */
+let grabbed: { id: string; handle: Handle | null } | null = null;
+
+/**
+ * Ob der letzte Zug ein Kasten-Zug war. Er endet neben dem Kasten (im Baum
+ * wandert der Kasten erst mit der Antwort von der Platte), und der Klick, der
+ * darauf folgt, gilt der Fläche — er darf die Auswahl nicht aufheben.
+ */
+let dragged = false;
+
+/**
  * Der ausgewählte Kasten, stets frisch aus den Kästen des Fensters gesucht: Nach
  * dem Speichern kommt ein neuer Baum von der Platte, und das Feld soll DEN
  * zeigen und nicht einen alten Abzug.
  */
 const selected = computed<Block | null>(() => findBlockIn(props.blocks, selectedId.value ?? ''));
 
-/** Das Gummiband während des Zugs. */
-const band = computed<Rect | null>(() => (from.value && to.value ? span(from.value, to.value) : null));
+/**
+ * Das Gummiband während des Zugs: beim Zeichnen die aufgezogene Fläche, beim
+ * Anfassen der Platz, an dem der Kasten landet. Der Kasten selbst bleibt so
+ * lange liegen — maßgeblich ist, was von der Platte zurückkommt.
+ */
+const band = computed<Rect | null>(() => {
+  if (!from.value || !to.value) return null;
+  return gesture.value ? shaped(gesture.value, from.value, to.value) : span(from.value, to.value);
+});
 
 /** Der Kasten, in dem der Name des neuen eingetragen wird. */
 const draftBlock = computed<Block | null>(() =>
@@ -89,12 +138,39 @@ function span(a: { x: number; y: number }, b: { x: number; y: number }): Rect {
   return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
 }
 
+/**
+ * Wohin ein angefasster Kasten kommt: geschoben (samt seiner Kinder, darum die
+ * Grenzen des ganzen Zweigs) oder an einer Kante gezogen. Gerechnet wird in
+ * core/design — dieselben Funktionen zeigen den Zug an und führen ihn aus.
+ */
+function shaped(g: NonNullable<typeof gesture.value>, a: { x: number; y: number }, b: { x: number; y: number }): Rect {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  return g.handle ? resizeRect(g.rect, g.handle, dx, dy) : moveRect(g.rect, dx, dy, g.bounds);
+}
+
+/**
+ * Ein Kasten meldet, dass er angefasst wurde. Der erste gewinnt: Ein Druck auf
+ * einen Griff läuft über den Kasten weiter (und ein Kind über seinen Elter),
+ * gemeint ist aber, was zuunterst liegt. Anfassen lässt sich nur der
+ * ausgewählte Kasten — jeder andere Druck zeichnet.
+ */
+function onGrab(id: string, handle: Handle | null): void {
+  if (grabbed || draft.value || id !== selectedId.value) return;
+  grabbed = { id, handle };
+}
+
 function onPointerDown(event: PointerEvent): void {
   // Ein noch offenes Namensfeld schließt sich von selbst (Verlassen des Feldes)
   // — erst danach beginnt der neue Zug.
+  const grab = grabbed;
+  grabbed = null;
+  dragged = false;
   if (event.button !== undefined && event.button !== 0) return;
   from.value = shareAt(event);
   to.value = from.value;
+  const block = grab ? findBlockIn(props.blocks, grab.id) : null;
+  if (grab && block) gesture.value = { ...grab, rect: block.rect, bounds: blockBounds(block) };
   (event.target as Element | null)?.setPointerCapture?.(event.pointerId);
 }
 
@@ -109,12 +185,34 @@ function onPointerMove(event: PointerEvent): void {
  */
 function onPointerUp(event: PointerEvent): void {
   if (!from.value) return;
-  const rect = span(from.value, shareAt(event));
+  const at = shareAt(event);
+  const start = from.value;
+  const g = gesture.value;
   from.value = null;
   to.value = null;
+  gesture.value = null;
+  if (g) {
+    dragged = true;
+    finish(g, shaped(g, start, at));
+    return;
+  }
+  const rect = span(start, at);
   if (rect.w < MIN_BLOCK_SIZE || rect.h < MIN_BLOCK_SIZE) return;
   draft.value = rect;
   editingId.value = DRAFT_ID;
+}
+
+/**
+ * Das Ende eines Zugs an einem Kasten. Liegt er, wo er lag, geht nichts nach
+ * oben: Ein Klick auf den ausgewählten Kasten ist kein Zug und soll die Datei
+ * nicht neu schreiben. (Beide Rechnungen runden auf vier Stellen, ein Vergleich
+ * auf Gleichheit genügt also.)
+ */
+function finish(g: NonNullable<typeof gesture.value>, rect: Rect): void {
+  const was = g.rect;
+  if (rect.x === was.x && rect.y === was.y && rect.w === was.w && rect.h === was.h) return;
+  if (g.handle) emit('resize', g.id, rect);
+  else emit('move', g.id, { x: rect.x, y: rect.y });
 }
 
 /**
@@ -127,9 +225,12 @@ function onSelect(id: string): void {
   selectedId.value = id;
 }
 
-/** Ein Klick auf die freie Fläche hebt die Auswahl auf. */
+/**
+ * Ein Klick auf die freie Fläche hebt die Auswahl auf — der Klick am Ende eines
+ * Zugs aber nicht: Wer einen Kasten schiebt, wählt ihn damit nicht ab.
+ */
 function onStageClick(): void {
-  if (draft.value) return;
+  if (draft.value || dragged) return;
   selectedId.value = null;
 }
 
@@ -157,7 +258,8 @@ function onCancel(): void {
     <div class="design-head">
       <span class="design-title">Entwurf</span>
       <span class="design-hint">
-        Ziehen zeichnet einen Kasten, ein Klick wählt ihn aus — an ihn hält sich der Agent
+        Ziehen zeichnet einen Kasten, ein Klick wählt ihn aus — den ausgewählten schiebt
+        und zieht man zurecht
       </span>
       <button type="button" class="design-close" @click="emit('close')">Schließen</button>
     </div>
@@ -181,6 +283,7 @@ function onCancel(): void {
         :selected-id="selectedId"
         @edit="editingId = $event"
         @select="onSelect"
+        @grab="onGrab"
         @commit="onCommit"
         @cancel="onCancel"
       />
