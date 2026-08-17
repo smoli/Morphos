@@ -9,6 +9,7 @@ import {
   containerIn,
   findBlockIn,
   moveRect,
+  pathIn,
   resizeRect,
   type Block,
   type Handle,
@@ -47,6 +48,11 @@ import {
  * um es zu tun — das tut der Store —, sondern um es zu ZEIGEN: Der künftige
  * Elter leuchtet auf, solange der Zug läuft. Und das Löschen sitzt im Feld des
  * ausgewählten Kastens (DesignInspector) und geht als `delete` nach oben.
+ *
+ * Seit c0111 zeigt das Feld die Gliederung um seinen Kasten — den Weg von der
+ * Wurzel zu ihm (`pathIn`) und seine Kinder. Über beides wird auch AUSGEWÄHLT:
+ * Auf der Fläche ist stets das Unterste gemeint, ein Elter unter lauter Kindern
+ * ist dort also nicht mehr zu treffen — im Feld schon.
  *
  * Die Anteile beziehen sich auf die Fläche (`.design-stage`) — dieselbe Fläche,
  * auf der auch gezeichnet wird. Was gezeichnet ist und was zu sehen ist, meint
@@ -114,6 +120,14 @@ let dragged = false;
  * zeigen und nicht einen alten Abzug.
  */
 const selected = computed<Block | null>(() => findBlockIn(props.blocks, selectedId.value ?? ''));
+
+/**
+ * Die Vorfahren des ausgewählten Kastens, von der Wurzel bis zu seinem Elter
+ * (c0111): der Weg zu ihm ohne ihn selbst. Gerechnet wird er in core/design
+ * (`pathIn`) und ebenfalls frisch aus den Kästen des Fensters — was das Feld
+ * über die Gliederung sagt, kommt so aus derselben Quelle wie der Kasten.
+ */
+const ancestors = computed<Block[]>(() => pathIn(props.blocks, selectedId.value ?? '').slice(0, -1));
 
 /**
  * Das Gummiband während des Zugs: beim Zeichnen die aufgezogene Fläche, beim
@@ -334,8 +348,10 @@ function onCancel(): void {
       <DesignInspector
         v-if="selected"
         :block="selected"
+        :ancestors="ancestors"
         @update="(patch) => selected && emit('describe', selected.id, patch)"
         @delete="selected && emit('delete', selected.id)"
+        @select="onSelect"
         @close="selectedId = null"
       />
     </div>

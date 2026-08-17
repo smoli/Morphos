@@ -23,6 +23,7 @@ import {
   nestBlock,
   normalizeDesign,
   parentOf,
+  pathIn,
   placeBlock,
   removeBlock,
   reparentBlock,
@@ -595,6 +596,33 @@ describe('parentOf', () => {
     expect(parentOf(d, 'a1')!.id).toBe('a');
     expect(parentOf(d, 'a')).toBeNull();
     expect(parentOf(d, 'weg')).toBeNull();
+  });
+});
+
+describe('pathIn', () => {
+  const d = design(
+    block('a', {}, { children: [block('a1', {}, { children: [block('a2')] })] }),
+    block('b'),
+  );
+
+  it('nennt den Weg zu einem Kasten — von der Wurzel bis zu ihm selbst', () => {
+    expect(pathIn(d.blocks, 'a2').map((b) => b.id)).toEqual(['a', 'a1', 'a2']);
+    expect(pathIn(d.blocks, 'a1').map((b) => b.id)).toEqual(['a', 'a1']);
+  });
+
+  it('gibt für einen Wurzelkasten nur ihn selbst', () => {
+    expect(pathIn(d.blocks, 'b').map((b) => b.id)).toEqual(['b']);
+  });
+
+  it('gibt keinen halben Weg zu einem Kasten, den es nicht gibt', () => {
+    expect(pathIn(d.blocks, 'weg')).toEqual([]);
+    expect(pathIn(d.blocks, '')).toEqual([]);
+    expect(pathIn([], 'a')).toEqual([]);
+  });
+
+  it('reicht die Kästen des Entwurfs durch, nicht Abzüge von ihnen', () => {
+    // Das Feld zeigt damit den Namen, der gerade in der Datei steht.
+    expect(pathIn(d.blocks, 'a2')[1]).toBe(d.blocks[0].children[0]);
   });
 });
 

@@ -656,4 +656,69 @@ describe('DesignOverlay', () => {
       expect(wrapper.emitted('close')).toBeUndefined();
     });
   });
+
+  // c0111: Das Feld sagt auch, WO der ausgewählte Kasten steht — den Weg zu ihm
+  // rechnet core/design (pathIn), und über ihn kommt man auch dorthin.
+  describe('Gliederung im Feld', () => {
+    /** Ein Overlay mit Kästen, dessen Fläche 400 × 200 Pixel groß ist. */
+    function selectable(blocks: Block[] = BLOCKS) {
+      const wrapper = mount(DesignOverlay, { props: { blocks }, attachTo: document.body });
+      const stage = wrapper.get('.design-stage');
+      (stage.element as HTMLElement).getBoundingClientRect = () =>
+        ({ left: 0, top: 0, width: 400, height: 200, right: 400, bottom: 200, x: 0, y: 0 }) as DOMRect;
+      return { wrapper, stage };
+    }
+
+    it('zeigt den Weg zum ausgewählten Kasten', async () => {
+      const { wrapper } = selectable();
+
+      await wrapper.get('.design-block .design-block').trigger('click');
+
+      expect(wrapper.findAll('.di-path .di-crumb').map((c) => c.text())).toEqual(['Inhalt']);
+      expect(wrapper.get('.di-name').text()).toBe('Liste');
+    });
+
+    it('zeigt am Wurzelkasten keinen Vorfahren, aber seine Kinder', async () => {
+      const { wrapper } = selectable();
+
+      await wrapper.findAll('.design-stage > .design-block')[1].trigger('click');
+
+      expect(wrapper.findAll('.di-path .di-crumb')).toHaveLength(0);
+      expect(wrapper.findAll('.di-kid').map((k) => k.text())).toEqual(['Liste']);
+    });
+
+    it('wechselt über den Weg zum Elter', async () => {
+      // Ein Elter, den seine Kinder ganz ausfüllen, ist auf der Fläche sonst
+      // nicht mehr zu treffen: Gemeint ist dort stets das Unterste (c0110).
+      const { wrapper } = selectable();
+      await wrapper.get('.design-block .design-block').trigger('click');
+
+      await wrapper.get('.di-path .di-crumb').trigger('click');
+
+      expect(wrapper.get('.di-name').text()).toBe('Inhalt');
+      expect(wrapper.get('.design-block.selected .db-name').text()).toBe('Inhalt');
+    });
+
+    it('wechselt über die Kinder nach unten', async () => {
+      const { wrapper } = selectable();
+      await wrapper.findAll('.design-stage > .design-block')[1].trigger('click');
+
+      await wrapper.get('.di-kid').trigger('click');
+
+      expect(wrapper.get('.di-name').text()).toBe('Liste');
+      expect((wrapper.get('input.di-type').element as HTMLInputElement).value).toBe('liste');
+    });
+
+    it('hebt beim Wechseln die Auswahl nicht auf', async () => {
+      // Der Klick im Feld darf die Fläche nicht erreichen — sonst wählte er im
+      // selben Zuge wieder ab.
+      const { wrapper } = selectable();
+      await wrapper.get('.design-block .design-block').trigger('click');
+
+      await wrapper.get('.di-path .di-crumb').trigger('click');
+
+      expect(wrapper.find('.design-inspector').exists()).toBe(true);
+      expect(wrapper.emitted('describe')).toBeUndefined();
+    });
+  });
 });

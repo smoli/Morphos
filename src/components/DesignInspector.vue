@@ -27,14 +27,27 @@ import {
  * wird dabei nur der Rahmen — seine Kinder rücken an seine Stelle (core/design:
  * deleteBlock). Darum wird auch nicht nachgefragt: Zu verlieren ist ein Kasten,
  * nicht ein halber Entwurf.
+ *
+ * Seit c0111 sagt das Feld auch, WO dieser Kasten steht: der Weg von der Wurzel
+ * bis zu ihm (`ancestors`, gerechnet in core/design: pathIn) und die Kästen, die
+ * er unmittelbar enthält. Beides ist zugleich der Weg dorthin — ein Klick bittet
+ * um die Auswahl jenes Kastens (`select`). Auf der Fläche ist stets das Unterste
+ * gemeint (c0110); einen Elter, den seine Kinder ganz ausfüllen, trifft man dort
+ * gar nicht mehr, hier aber schon.
  */
-const props = defineProps<{ block: Block }>();
+const props = defineProps<{
+  block: Block;
+  /** Die Vorfahren des Kastens, von der Wurzel bis zu seinem Elter. */
+  ancestors: Block[];
+}>();
 
 const emit = defineEmits<{
   /** Rolle bzw. Anweisungen dieses Kastens sind fortan andere. */
   update: [patch: { instructions?: string; type?: string }];
   /** Dieser Kasten soll weg (c0110) — seine Kinder rücken an seine Stelle. */
   delete: [];
+  /** Fortan soll von jenem Kasten die Rede sein (c0111). */
+  select: [id: string];
   close: [];
 }>();
 
@@ -78,8 +91,44 @@ function cancel(): void {
        nicht erreichen, sonst zöge jedes Anklicken einen Kasten auf. -->
   <div class="design-inspector" @pointerdown.stop @click.stop>
     <div class="di-head">
-      <span class="di-name">{{ block.name }}</span>
+      <!-- Der Weg zu diesem Kasten: „Entwurf › Inhalt › Liste“. Die Vorfahren
+           sind Knöpfe — über sie kommt man dorthin; der Kasten selbst ist
+           keiner, denn bei ihm ist man schon. -->
+      <nav class="di-path" aria-label="Gliederung">
+        <span class="di-root">Entwurf</span>
+        <template v-for="up in ancestors" :key="up.id">
+          <span class="di-sep" aria-hidden="true">›</span>
+          <button
+            type="button"
+            class="di-crumb"
+            :title="`Zu „${up.name}“ wechseln`"
+            @click="emit('select', up.id)"
+          >
+            {{ up.name }}
+          </button>
+        </template>
+        <span class="di-sep" aria-hidden="true">›</span>
+        <span class="di-name">{{ block.name }}</span>
+      </nav>
       <button type="button" class="di-close" title="Schließen" @click="emit('close')">✕</button>
+    </div>
+
+    <!-- Und was er enthält — nur die unmittelbaren Kinder: Tiefer kommt man
+         über sie, ein ganzer Baum im Feld wäre der Entwurf ein zweites Mal. -->
+    <div v-if="block.children.length" class="di-kids">
+      <span class="di-label">Enthält</span>
+      <div class="di-kid-list">
+        <button
+          v-for="child in block.children"
+          :key="child.id"
+          type="button"
+          class="di-kid"
+          :title="`Zu „${child.name}“ wechseln`"
+          @click="emit('select', child.id)"
+        >
+          {{ child.name }}
+        </button>
+      </div>
     </div>
 
     <label class="di-field">
@@ -155,15 +204,59 @@ function cancel(): void {
 }
 .di-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
 }
-.di-name {
+/* Der Weg darf umbrechen: Das Feld ist schmal, ein tief geschachtelter Kasten
+   hat aber viele Vorfahren — abgeschnitten wäre die Gliederung wertlos. */
+.di-path {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+}
+.di-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 600;
+}
+.di-root,
+.di-sep {
+  color: var(--muted);
+}
+/* Vorfahren und Kinder sind Wege, keine Schalter: Sie sehen aus wie Text und
+   geben sich erst unter dem Zeiger zu erkennen. */
+.di-crumb,
+.di-kid {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.di-crumb:hover,
+.di-kid:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+.di-kids {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.di-kid-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
 }
 .di-close {
   background: none;

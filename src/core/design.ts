@@ -313,6 +313,25 @@ export function findBlock(design: Design, id: string): Block | null {
 }
 
 /**
+ * Der Weg zu einem Kasten: von der Wurzel bis zu ihm selbst, er steht zuletzt
+ * (c0111). Was davor steht, sind seine Vorfahren — das Feld zeigt damit, WO ein
+ * Kasten liegt, ohne den Baum ein zweites Mal ablaufen zu müssen.
+ *
+ * Einen Kasten, den es nicht gibt, gibt es auch nicht halb: Dann ist der Weg
+ * leer. Die Kästen kommen unverändert aus dem Baum (keine Abzüge), also nennt
+ * der Weg stets die Namen, die gerade in der Datei stehen.
+ */
+export function pathIn(blocks: readonly Block[], id: string): Block[] {
+  if (!id) return [];
+  for (const b of blocks) {
+    if (b.id === id) return [b];
+    const below = pathIn(b.children, id);
+    if (below.length) return [b, ...below];
+  }
+  return [];
+}
+
+/**
  * Die kleinste Fläche, die einen Kasten SAMT seiner Kinder umschließt. Ein Kind
  * darf über seinen Elter hinausragen (die Anteile sind absolut, c0104) — wer
  * einen Kasten schiebt, schiebt aber den ganzen Zweig, und der soll im Fenster

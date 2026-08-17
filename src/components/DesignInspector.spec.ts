@@ -17,8 +17,8 @@ async function typing(field: ReturnType<typeof inspector>['type'], value: string
   await field.trigger('input');
 }
 
-function inspector(b: Block = block()) {
-  const wrapper = mount(DesignInspector, { props: { block: b } });
+function inspector(b: Block = block(), ancestors: Block[] = []) {
+  const wrapper = mount(DesignInspector, { props: { block: b, ancestors } });
   return {
     wrapper,
     type: wrapper.get('input.di-type'),
@@ -150,6 +150,82 @@ describe('DesignInspector (c0108)', () => {
     // Geschrieben wird hier nichts, und geschlossen wird auch nicht: Das
     // entscheidet, was von der Platte zurückkommt.
     expect(wrapper.emitted('close')).toBeUndefined();
+  });
+
+  // c0111: Ein Kasten ist nicht nur er selbst, sondern eine Stelle im Baum —
+  // das Feld zeigt den Weg zu ihm und das, was er enthält.
+  describe('Gliederung', () => {
+    /** Kopf › Inhalt › Liste — die Liste ist ausgewählt und hat zwei Kinder. */
+    function nested() {
+      const kinder = [block({ id: 'b4', name: 'Zeile' }), block({ id: 'b5', name: 'Fuß' })];
+      const liste = block({ id: 'b3', name: 'Liste', children: kinder });
+      return inspector(liste, [block({ id: 'b1', name: 'Rahmen' }), block({ id: 'b2', name: 'Inhalt' })]);
+    }
+
+    it('zeigt den Weg von der Wurzel bis zum Kasten', () => {
+      const { wrapper } = nested();
+
+      const weg = wrapper.findAll('.di-path .di-crumb, .di-path .di-root, .di-path .di-name');
+      expect(weg.map((c) => c.text())).toEqual(['Entwurf', 'Rahmen', 'Inhalt', 'Liste']);
+    });
+
+    it('stellt einen Wurzelkasten unmittelbar an den Entwurf', () => {
+      const { wrapper } = inspector(block({ name: 'Kopf' }));
+
+      expect(wrapper.findAll('.di-path .di-crumb')).toHaveLength(0);
+      expect(wrapper.get('.di-root').text()).toBe('Entwurf');
+      expect(wrapper.get('.di-name').text()).toBe('Kopf');
+    });
+
+    it('wechselt mit einem Klick zu einem Vorfahren', async () => {
+      const { wrapper } = nested();
+
+      await wrapper.findAll('.di-path .di-crumb')[1].trigger('click');
+
+      expect(wrapper.emitted('select')).toEqual([['b2']]);
+      // Gewechselt wird nicht hier: Welcher Kasten ausgewählt ist, weiß die
+      // Fläche — das Feld bittet nur darum.
+      expect(wrapper.emitted('close')).toBeUndefined();
+    });
+
+    it('bietet den Kasten selbst nicht zum Wechseln an', () => {
+      const { wrapper } = nested();
+
+      expect(wrapper.get('.di-name').element.tagName).not.toBe('BUTTON');
+    });
+
+    it('zeigt, was der Kasten unmittelbar enthält', () => {
+      const { wrapper } = nested();
+
+      expect(wrapper.findAll('.di-kid').map((k) => k.text())).toEqual(['Zeile', 'Fuß']);
+    });
+
+    it('wechselt mit einem Klick zu einem Kind', async () => {
+      const { wrapper } = nested();
+
+      await wrapper.findAll('.di-kid')[0].trigger('click');
+
+      expect(wrapper.emitted('select')).toEqual([['b4']]);
+    });
+
+    it('schweigt über die Kinder, wenn es keine gibt', () => {
+      const { wrapper } = inspector();
+
+      expect(wrapper.find('.di-kids').exists()).toBe(false);
+    });
+
+    it('übernimmt die Gliederung, die der gespeicherte Entwurf zurückmeldet', async () => {
+      // Maßgeblich ist die Datei — auch für den Weg und die Kinder.
+      const { wrapper } = nested();
+
+      await wrapper.setProps({
+        block: block({ id: 'b3', name: 'Liste', children: [block({ id: 'b4', name: 'Zeile' })] }),
+        ancestors: [block({ id: 'b1', name: 'Rahmen' })],
+      });
+
+      expect(wrapper.findAll('.di-path .di-crumb').map((c) => c.text())).toEqual(['Rahmen']);
+      expect(wrapper.findAll('.di-kid').map((k) => k.text())).toEqual(['Zeile']);
+    });
   });
 
   it('sagt, dass die Kinder des Kastens bleiben', async () => {
