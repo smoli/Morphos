@@ -9,13 +9,13 @@
       "cardId": "c0111",
       "phase": "running",
       "activity": {
-        "name": "Read",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/src/components/DesignOverlay.spec.ts"
+        "name": "Edit",
+        "arg": "/Users/stephan/WebstormProjects/Morphos/src/core/design.spec.ts"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-17T21:14:40",
+  "updated": "2026-08-17T21:15:48",
   "pickupDelay": 10,
   "owned": [
     "c0029",
