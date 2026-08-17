@@ -1,13 +1,14 @@
 ---
 id: i0009
 title: When speccing a new app make design mode. more accessible
-status: in-progress
+status: review
 type: issue
 ref: c0112
 epic: e15
 created: 2026-08-17
 updated: 2026-08-17
-status-changed: 2026-08-17T21:56:07
+status-changed: 2026-08-17T21:59:50
+commit: 002783e
 ---
 
 In that scenario I want to be able to start the design mode from the „noch kein dialog“ space. Add the option to open mode there![image](../../assets/i0009/image.png)
@@ -55,3 +56,4 @@ Umschalter, der nur im ausgeschalteten Zustand zu sehen ist, wäre keiner.
   (`newApp && !designOpen`), im `AppWindow` an `store.openDesign()` gehängt.
   Volle Suite 2008 Tests grün (11 neue), `vue-tsc` sauber, `npm run build`
   sauber.
+- 2026-08-17 status → review (agent)
