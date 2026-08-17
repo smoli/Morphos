@@ -1,7 +1,6 @@
 {
-  "status": "idle",
+  "status": "running",
   "ready": [
-    "c0105",
     "c0106",
     "c0107",
     "c0108",
@@ -9,8 +8,18 @@
     "c0110"
   ],
   "waiting": [],
-  "runs": [],
-  "updated": "2026-08-16T23:15:34",
+  "runs": [
+    {
+      "cardId": "c0105",
+      "phase": "running",
+      "activity": {
+        "name": "Bash",
+        "arg": "git add src/components/DesignOverlay.vue src/components/DesignOverlay.spec.ts src/components/DesignBlock.vue src/components/DesignBlock.spec.ts src/components/AppWindow.vue src/components/AppWindow.spec.ts src/views/DesktopView.vue src/views/DesktopView.spec.ts src/stores/app.ts src/stores/app.spec.ts src/core/shortcuts.ts src/core/shortcuts.spec.ts src/types/index.ts electron/main.ts electron/preload.ts .gello/epics/e15-ui-designer/c0105-overlay-mode.md && git status --short"
+      },
+      "model": "claude-opus-5"
+    }
+  ],
+  "updated": "2026-08-17T06:54:39",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -71,11 +80,11 @@
     "c0081",
     "c0082",
     "c0083",
-    "c0104"
+    "c0104",
+    "c0105"
   ],
-  "afk": false,
+  "afk": true,
   "firstSeen": {
-    "c0105": "2026-08-16T23:09:40",
     "c0106": "2026-08-16T23:09:41",
     "c0107": "2026-08-16T23:09:43",
     "c0108": "2026-08-16T23:09:44",

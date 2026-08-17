@@ -7,8 +7,8 @@ depends: []
 created: 2026-08-16
 updated: 2026-08-16
 status-changed: 2026-08-16T23:15:23
-usage-tokens: 28244
-usage-cost: 1.962576
+usage-tokens: 39764
+usage-cost: 3.220551
 ---
 
 # Design model + persistence (core/design.ts)
@@ -68,6 +68,49 @@ and caps name/type/instructions lengths (they go into every prompt).
 
 `updateBlock` is not in the acceptance list but is one helper of the same family
 and is what c0108 needs; it is covered by tests.
+
+## Review
+
+### 2026-08-17T06:43:30 — pass
+
+Checked: acceptance criteria, diff (0dcce3e), full test suite, typecheck; lint
+not run — the repo has no lint script or eslint/prettier/biome config.
+
+- Types: `Rect`/`Block`/`Design` exported from `src/core/design.ts:33-57` with
+  `rect{x,y,w,h}`, optional `instructions`/`type` and `children` — the criterion
+  allows `core/design` instead of `src/types`.
+- `DESIGN_FILE = 'design.ui.json'` + `designPath` (design.ts:60,77) put the file
+  in the app root; `readDesign` returns `emptyDesign()` on a missing or corrupt
+  file and writes nothing (design.ts:198-204, tests „liefert einen leeren
+  Entwurf, solange keine Datei da ist" / „überlebt eine beschädigte Datei").
+- Round-trip verified by „schreibt und liest denselben Entwurf zurück"
+  (design.spec.ts:193) including nested children, instructions and type.
+- Normalization: non-objects → empty design, non-blocks dropped, bad/NaN/±∞
+  geometry clamped into 0…1 with `MIN_BLOCK_SIZE`, shares rounded to 4 decimals,
+  texts trimmed and capped, duplicate/unusable ids re-issued, depth capped at
+  `MAX_DESIGN_DEPTH` — design.spec.ts:75-176. Cycles are covered on both sides:
+  duplicate ids can't collide after normalization, and `reparentBlock` refuses a
+  move into a block's own subtree (`subtreeIds`, design.ts:350-356, test
+  „verweigert einen Kreis").
+- Helpers are pure: every mutating helper goes through `withChildren`/`withBlock`
+  and returns a new design; add/remove/move/reparent each have a „verändert den
+  übergebenen Entwurf nicht" test, and an unknown id, a taken id or a missing
+  parent leaves the design unchanged rather than throwing.
+- `core/design.spec.ts`: 49 tests, all green in isolation. The read-only contract
+  is pinned and non-vacuous — `isValidOutputPath('design.ui.json')` is false
+  because `core/files` admits only `src/**` plus the two doc files.
+- Diff is exactly the two new files (773 lines added), no other file touched, no
+  console/debug leftovers, no `.only`/`.skip`, no existing test weakened.
+- `npm test`: 1781 passed at HEAD, `npm run typecheck` (`vue-tsc --noEmit`)
+  clean. Noted: one run showed 2 intermittent failures in
+  `src/views/DesktopView.spec.ts` (tiling/frame-rect timing); they passed on
+  rerun and in isolation, DesktopView does not touch `core/design`, and the
+  parent commit a5657b5 in a separate worktree ran 1732/1732 green — a flake,
+  not this card.
+- Observation for c0109 (not a defect): `moveBlock` clamps `w`/`h` against the
+  new `x`/`y`, so dragging a block towards the right/bottom edge shrinks it
+  instead of stopping it. That follows from „nie über den Rand hinaus", but the
+  drag card should decide whether that is the wanted feel.
 
 ## Log
 

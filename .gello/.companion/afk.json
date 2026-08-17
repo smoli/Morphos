@@ -1,3 +1,4 @@
 {
-  "afk": false
+  "afk": true,
+  "paused": false
 }
