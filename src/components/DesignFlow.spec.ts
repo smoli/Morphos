@@ -10,6 +10,7 @@ import { setHost } from '@/services/host';
 import { readDesign, writeDesign, designPath } from '@/core/designstore';
 import { DEFAULT_BLOCK_NAME, type Design, type Rect } from '@/core/design';
 import { buildPrompt } from '@/core/prompt';
+import { generateApp } from '@/core/generate';
 import type { AppData, MorphosHost, SourceFile } from '@/types';
 
 /**
@@ -276,6 +277,78 @@ describe('Entwurf zeichnen, speichern, wiederfinden (c0107)', () => {
     store.closeDesign();
     await store.openDesign();
     expect(store.designBlocks.map((b) => b.name)).toEqual(['Liste']);
+  });
+
+  /**
+   * c0112: Dieselbe Scheibe, aber VOR der App — gezeichnet wird im Fenster eines
+   * Entwurfs, und der erste Wunsch nimmt den Entwurf mit. Der Host ruft dafür
+   * denselben `generateApp` auf wie der Hauptprozess (nur der Agent ist
+   * nachgestellt): Was der Prompt dieses ersten Laufs trägt und was hinterher im
+   * Ordner der neuen App liegt, entscheidet damit der echte Weg.
+   */
+  it('nimmt den Entwurf einer neuen App mit dem ersten Wunsch mit (c0112)', async () => {
+    const prompts: string[] = [];
+    const journal = path.join(root, '..', `morphos-flow-journal-${path.basename(root)}.jsonl`);
+    const host = {
+      ...diskHost(),
+      generate: vi.fn(async (
+        wish: string, folder: string, id: string | null,
+        _chat: unknown, _atts: unknown, _runId?: string, _fw?: unknown, _els?: unknown, design?: Design,
+      ) => generateApp(
+        { folder, id, wish, context: { design }, execPath: '/morphos', server: '/mcp.js', journal },
+        {
+          runAgent: async ({ prompt, cwd }) => {
+            prompts.push(prompt);
+            fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });
+            fs.writeFileSync(path.join(cwd, 'src', 'index.html'), HTML, 'utf8');
+            fs.appendFileSync(journal, `${JSON.stringify({ kind: 'write', path: 'src/index.html' })}\n`, 'utf8');
+            return { ok: true as const, text: 'Fertig.' };
+          },
+          resolveLibs: async () => ({ ok: true as const, libs: {} }),
+          builtinLib: () => '',
+          ensureRepo: async () => {},
+          commitAll: async () => {},
+          now: () => 1_000,
+        },
+      )),
+    };
+    setHost(host as unknown as MorphosHost);
+    fs.rmSync(dir, { recursive: true, force: true }); // es gibt noch keine App
+
+    // Ein Fenster ohne App: Der Entwurfs-Modus geht auf und der Anwender zeichnet.
+    const store = useAppWindow('neu');
+    store.newDraft(root);
+    await store.openDesign();
+    const { wrapper, stage } = overlay(() => store.designBlocks);
+    await stage.trigger('pointerdown', { button: 0, clientX: 0, clientY: 0 });
+    await stage.trigger('pointermove', { clientX: 400, clientY: 40 });
+    await stage.trigger('pointerup', { clientX: 400, clientY: 40 });
+    const input = wrapper.get('input.db-input');
+    (input.element as HTMLInputElement).value = 'Kopfzeile';
+    await input.trigger('keydown.enter');
+    const [rect, name] = wrapper.emitted('draw')![0] as [Rect, string];
+    await store.addDesignBlock(rect, name);
+
+    // Nichts auf der Platte — die App gibt es ja noch nicht.
+    expect(fs.readdirSync(root)).toEqual([]);
+    expect(store.designBlocks.map((b) => b.name)).toEqual(['Kopfzeile']);
+
+    // Der erste Wunsch: Der Entwurf reist mit.
+    await store.generate('Eine App für Notizen');
+
+    expect(prompts[0]).toContain('UI-LAYOUT');
+    expect(prompts[0]).toContain('Kopfzeile');
+    expect(prompts[0]).toContain('senkrecht 0%…20%');
+
+    // Und er liegt fortan im Ordner der neuen App — das Fenster liest ihn von dort.
+    const appDir = path.join(root, store.id!);
+    expect(readDesign(appDir).blocks[0]).toMatchObject({ name: 'Kopfzeile', rect: { x: 0, y: 0, w: 1, h: 0.2 } });
+    expect(store.designBlocks.map((b) => b.name)).toEqual(['Kopfzeile']);
+
+    // Von hier an ist es der Entwurf einer ganz gewöhnlichen App.
+    await store.renameDesignBlock(store.designBlocks[0].id, 'Titelzeile');
+    expect(readDesign(appDir).blocks[0].name).toBe('Titelzeile');
+    fs.rmSync(journal, { force: true });
   });
 
   it('gibt den gezeichneten Kasten an den Agenten weiter (UI-LAYOUT, c0106)', async () => {

@@ -44,6 +44,24 @@ describe('DesignOverlay', () => {
     expect(wrapper.get('.design-empty').text()).toContain('noch keinen Entwurf');
   });
 
+  // c0112: Vor der App liegt der Entwurf in keinem Ordner — die Schicht sagt
+  // darum, wohin er stattdessen geht.
+  it('sagt bei einer App, die es noch nicht gibt, wohin der Entwurf geht', () => {
+    const leer = mount(DesignOverlay, { props: { blocks: [], newApp: true } });
+    expect(leer.get('.design-goes').text()).toBe('geht mit dem ersten Wunsch mit');
+    expect(leer.get('.design-empty').text()).toContain('Zieh die Kästen auf');
+
+    // Steht schon ein Kasten, bleibt der Hinweis in der Kopfzeile.
+    const voll = mount(DesignOverlay, { props: { blocks: BLOCKS, newApp: true } });
+    expect(voll.find('.design-empty').exists()).toBe(false);
+    expect(voll.find('.design-goes').exists()).toBe(true);
+
+    // Bei einer bestehenden App ist davon keine Rede.
+    const app = mount(DesignOverlay, { props: { blocks: [] } });
+    expect(app.find('.design-goes').exists()).toBe(false);
+    expect(app.get('.design-empty').text()).toContain('noch keinen Entwurf');
+  });
+
   it('bittet auf Wunsch ums Schließen', async () => {
     const wrapper = mount(DesignOverlay, { props: { blocks: BLOCKS } });
 

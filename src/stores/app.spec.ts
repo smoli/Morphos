@@ -105,7 +105,8 @@ describe('useAppStore', () => {
 
     await store.generate('Ein Taschenrechner');
 
-    // Ein Entwurf hat noch keine Id — der Ordner entsteht erst im Lauf.
+    // Ein Entwurf hat noch keine Id — der Ordner entsteht erst im Lauf. Und ohne
+    // gezeichneten UI-Entwurf geht auch keiner mit (c0112).
     expect(host.generate).toHaveBeenCalledWith(
       'Ein Taschenrechner',
       '/apps',
@@ -115,6 +116,7 @@ describe('useAppStore', () => {
       expect.any(String),
       'preact',
       [],
+      undefined,
     );
     expect(store.name).toBe('Taschenrechner');
     expect(store.icon).toBe('🧮');
@@ -1044,16 +1046,8 @@ describe('useAppStore', () => {
         expect(store.error).toBeNull();
       });
 
-      it('zeichnet nicht in einen Entwurf ohne App', async () => {
-        const { writeDesign } = writingHost();
-        setHost(makeHost({ writeDesign }));
-        const store = useAppStore();
-        store.newDraft('/apps');
-
-        expect(await store.addDesignBlock({ x: 0, y: 0, w: 0.5, h: 0.5 }, 'Kopf')).toBeNull();
-        expect(writeDesign).not.toHaveBeenCalled();
-        expect(store.error).toBeNull();
-      });
+      // Ein Entwurf ohne App zeichnet ins Fenster statt auf die Platte — siehe
+      // „Der Entwurf einer neuen App (c0112)“ weiter unten.
 
       // c0109: Anfassen geht denselben Weg auf die Platte — Schieben nimmt die
       // Kinder mit, Ziehen betrifft nur den einen Kasten.
@@ -1261,6 +1255,152 @@ describe('useAppStore', () => {
         });
       });
     });
+
+    // c0112: Eine App, die es noch nicht gibt, hat auch keinen Ordner — ihr
+    // Entwurf lebt darum im Fenster und reist mit dem ersten Wunsch mit.
+    describe('Der Entwurf einer neuen App (c0112)', () => {
+      /** Ein Fenster mit einem Entwurf (ohne App) und ein Host, der zusieht. */
+      function draftStore(over: Partial<MorphosHost> = {}) {
+        const host = makeHost({
+          writeDesign: vi.fn(async (_f: string, _i: string, d: Design) => d),
+          readDesign: vi.fn(async () => emptyDesign()),
+          ...over,
+        });
+        setHost(host);
+        const store = useAppStore();
+        store.newDraft('/apps');
+        return { host, store };
+      }
+
+      /** Der Entwurf, den der letzte generate-Aufruf mitgenommen hat. */
+      const designOf = (host: MorphosHost): unknown =>
+        (host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls.at(-1)![8];
+
+      it('zeichnet ins Fenster statt auf die Platte', async () => {
+        const { host, store } = draftStore();
+
+        const id = await store.addDesignBlock({ x: 0, y: 0, w: 1, h: 0.2 }, 'Kopfzeile');
+
+        expect(id).toBeTruthy();
+        expect(host.writeDesign).not.toHaveBeenCalled();
+        expect(store.designBlocks).toEqual([
+          { id, name: 'Kopfzeile', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [] },
+        ]);
+        expect(store.error).toBeNull();
+      });
+
+      it('rückt auch ohne Platte zurecht — im Fenster steht kein krummer Baum', async () => {
+        const { store } = draftStore();
+
+        await store.addDesignBlock({ x: 0.5, y: 0.5, w: 2, h: 2 }, '   ');
+
+        expect(store.designBlocks[0].name).toBe(DEFAULT_BLOCK_NAME);
+        expect(store.designBlocks[0].rect).toEqual({ x: 0.5, y: 0.5, w: 0.5, h: 0.5 });
+      });
+
+      it('lässt sich weiterbearbeiten wie der Entwurf einer App', async () => {
+        const { store } = draftStore();
+        const id = (await store.addDesignBlock({ x: 0.1, y: 0.1, w: 0.6, h: 0.6 }, 'Inhalt'))!;
+        const kind = (await store.addDesignBlock({ x: 0.2, y: 0.2, w: 0.2, h: 0.2 }, 'Liste'))!;
+
+        await store.describeDesignBlock(kind, { type: 'Liste', instructions: 'Ein Eintrag je Zeile' });
+        await store.renameDesignBlock(id, 'Hauptteil');
+
+        expect(store.designBlocks.map((b) => b.name)).toEqual(['Hauptteil']);
+        expect(store.designBlocks[0].children[0]).toMatchObject({
+          name: 'Liste', type: 'Liste', instructions: 'Ein Eintrag je Zeile',
+        });
+
+        await store.deleteDesignBlock(kind);
+        expect(store.designBlocks[0].children).toEqual([]);
+      });
+
+      it('behält ihn beim Zu- und Aufmachen des Entwurfs-Modus — es gibt nichts nachzulesen', async () => {
+        const { host, store } = draftStore();
+        await store.addDesignBlock({ x: 0, y: 0, w: 1, h: 0.2 }, 'Kopfzeile');
+
+        await store.openDesign();
+        store.closeDesign();
+        await store.openDesign();
+
+        expect(host.readDesign).not.toHaveBeenCalled();
+        expect(store.designOpen).toBe(true);
+        expect(store.designBlocks.map((b) => b.name)).toEqual(['Kopfzeile']);
+      });
+
+      it('schickt ihn mit dem ersten Wunsch mit', async () => {
+        const { host, store } = draftStore();
+        await store.addDesignBlock({ x: 0, y: 0, w: 1, h: 0.2 }, 'Kopfzeile');
+
+        await store.generate('Eine Notiz-App');
+
+        expect(designOf(host)).toEqual({
+          version: 1,
+          blocks: [{
+            id: expect.any(String), name: 'Kopfzeile', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [],
+          }],
+        });
+      });
+
+      it('schickt einen leeren Entwurf nicht mit', async () => {
+        const { host, store } = draftStore();
+
+        await store.generate('Eine Notiz-App');
+
+        expect(designOf(host)).toBeUndefined();
+      });
+
+      it('schickt bei einer bestehenden App nichts mit — dort ist die Datei maßgeblich', async () => {
+        const host = makeHost({
+          loadApp: vi.fn(async (): Promise<AppData> => ({
+            id: 'rechner-1', name: 'Rechner', icon: '🧮', createdAt: 1, updatedAt: 2,
+            files: FILES(DOC('calc')), html: DOC('calc'), chat: [],
+          })),
+          readDesign: vi.fn(async () => DESIGN),
+        });
+        setHost(host);
+        const store = useAppStore();
+        await store.open('/apps', 'rechner-1');
+        await store.openDesign();
+
+        await store.generate('Mach die Anzeige größer');
+
+        expect(designOf(host)).toBeUndefined();
+      });
+
+      it('liest ihn von der Platte, sobald die App entstanden ist', async () => {
+        const readDesign = vi.fn(async (): Promise<Design> => ({
+          version: 1,
+          blocks: [{ id: 'geschrieben', name: 'Kopfzeile', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [] }],
+        }));
+        const { store } = draftStore({ readDesign });
+        await store.addDesignBlock({ x: 0, y: 0, w: 1, h: 0.2 }, 'Kopfzeile');
+
+        await store.generate('Eine Notiz-App');
+
+        expect(store.id).toBe('test-abc12');
+        expect(readDesign).toHaveBeenCalledWith('/apps', 'test-abc12');
+        expect(store.designBlocks).toEqual([
+          { id: 'geschrieben', name: 'Kopfzeile', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [] },
+        ]);
+      });
+
+      it('lässt ihn im Fenster stehen, wenn der Lauf keine App angelegt hat', async () => {
+        const { host, store } = draftStore({
+          generate: vi.fn(async (): Promise<GenerateResult> => ({ ok: true, question: 'Welche Farbe?' })),
+        });
+        await store.addDesignBlock({ x: 0, y: 0, w: 1, h: 0.2 }, 'Kopfzeile');
+
+        await store.generate('Eine Notiz-App');
+        expect(store.isDraft).toBe(true);
+        expect(store.designBlocks.map((b) => b.name)).toEqual(['Kopfzeile']);
+        expect(host.readDesign).not.toHaveBeenCalled();
+
+        // Und der nächste Wunsch nimmt ihn erneut mit.
+        await store.generate('Doch lieber blau');
+        expect(designOf(host)).toMatchObject({ blocks: [{ name: 'Kopfzeile' }] });
+      });
+    });
   });
 
   describe('Framework-Wahl', () => {
@@ -1319,7 +1459,7 @@ describe('useAppWindow — markierte Elemente', () => {
     await store.generate('mach das größer', [], [REF]);
 
     const call = (host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[0];
-    expect(call[call.length - 1]).toEqual([REF]);
+    expect(call[7]).toEqual([REF]);
     expect(store.chat[0].elements).toEqual(['<button> „Los“']);
   });
 });

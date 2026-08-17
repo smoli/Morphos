@@ -566,7 +566,10 @@ export interface MorphosHost {
    * Fortschrittsereignisse gemeldet werden. `framework` ist die im Composer
    * getroffene Wahl für eine NEUE App — eine bestehende bringt ihre eigene mit
    * (siehe core/framework). `elements` sind die in der laufenden App markierten
-   * Elemente, auf die sich der Wunsch bezieht (siehe core/pick).
+   * Elemente, auf die sich der Wunsch bezieht (siehe core/pick). `design` ist
+   * der UI-Entwurf, den ein Entwurf mitbringt (c0112): Er hat noch keinen
+   * Ordner, in dem er läge, und wird vom Lauf in den der neuen App gelegt —
+   * eine bestehende App schickt ihn nicht mit, dort ist die Datei maßgeblich.
    */
   generate(
     prompt: string,
@@ -577,6 +580,7 @@ export interface MorphosHost {
     runId?: string,
     framework?: Framework,
     elements?: ElementRef[],
+    design?: Design,
   ): Promise<GenerateResult>;
 
   /**

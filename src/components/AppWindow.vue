@@ -118,7 +118,9 @@ const chatTitle = computed(
 
 // ---- Entwurfs-Modus (e15/c0105): Der UI-Entwurf der App liegt als
 //      durchscheinende Schicht über ihr — die Kästen, an die sich der Agent
-//      beim Bauen hält. Hier nur zum Ansehen; gezeichnet wird ab c0107.
+//      beim Bauen hält. Gezeichnet wird darauf seit c0107, und seit c0112 auch
+//      schon, bevor es die App gibt: Der Entwurf geht dann mit dem ersten
+//      Wunsch mit.
 const designTitle = computed(
   () => `${store.designOpen ? 'Entwurf schließen' : 'Entwurf öffnen'} (${shortcutKeys('design')})`,
 );
@@ -180,8 +182,9 @@ async function onIcon(icon: string | null): Promise<void> {
       >
         💬
       </button>
+      <!-- Der Entwurf steht auch einer App offen, die es noch nicht gibt
+           (c0112): Gerade beim Anlegen ist die Gliederung etwas wert. -->
       <button
-        v-if="!store.isDraft"
         type="button"
         class="w-design"
         :class="{ on: store.designOpen }"
@@ -252,6 +255,7 @@ async function onIcon(icon: string | null): Promise<void> {
     <DesignOverlay
       v-if="store.designOpen"
       :blocks="store.designBlocks"
+      :new-app="store.isDraft"
       @close="store.closeDesign()"
       @draw="(rect, name) => store.addDesignBlock(rect, name)"
       @rename="(id, name) => store.renameDesignBlock(id, name)"

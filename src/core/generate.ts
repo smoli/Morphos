@@ -8,7 +8,7 @@ import { bundle, ENTRY_FILE } from './bundle';
 import { extractHtml, extractIcon, extractTitle } from './html';
 import { extractLibs, splitLibs } from './libs';
 import { resolveFramework } from './framework';
-import { readDesign } from './designstore';
+import { readDesign, writeDesign } from './designstore';
 import { DEFAULT_ICON, DEFAULT_NAME, makeAppId } from './app';
 
 /**
@@ -198,6 +198,16 @@ export async function generateApp(req: GenerateRequest, deps: GenerateDeps): Pro
   fs.rmSync(req.journal, { force: true });
 
   try {
+    // Ein Entwurf bringt seinen UI-Entwurf mit (c0112): Eine App, die es noch
+    // nicht gibt, hat keine design.ui.json — was der Anwender vor dem ersten
+    // Wunsch gezeichnet hat, lebt in seinem Fenster und kommt darum im Kontext
+    // mit. Geschrieben wird er hier, VOR dem Lauf: Von da an gilt wieder die
+    // Regel, dass der Entwurf im App-Ordner zu Hause ist — er geht mit in den
+    // ersten Commit, und wird aus dem Entwurf nichts, verschwindet er mit
+    // seinem Ordner (discardDraft).
+    const brought = draft ? req.context?.design : undefined;
+    if (brought?.blocks.length) writeDesign(dir, brought);
+
     const before = readSourceFiles(dir);
     const context: PromptContext = {
       ...req.context,
@@ -205,6 +215,8 @@ export async function generateApp(req: GenerateRequest, deps: GenerateDeps): Pro
       framework: resolveFramework(before, req.context?.framework),
       // Der Entwurf kommt von der Platte, nicht aus dem Kontext des Aufrufers:
       // Er liegt im App-Ordner (design.ui.json) und ist damit hier zu Hause.
+      // Auch der mitgebrachte — er steht eine Zeile weiter oben schon in der
+      // Datei, und was der Agent liest, ist stets das, was dort steht.
       design: readDesign(dir),
     };
     const images = (req.context?.attachments ?? [])

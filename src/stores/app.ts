@@ -14,6 +14,7 @@ import {
   makeBlockId,
   moveBlock,
   nestBlock,
+  normalizeDesign,
   placeBlock,
   updateBlock,
   type Block,
@@ -175,13 +176,15 @@ export function useAppWindow(instanceId: string) {
 
     /**
      * Liest den Entwurf der App (design.ui.json) über den Host. Ein Entwurf,
-     * der noch keine App ist, hat keinen; scheitert das Lesen oder fehlt die
-     * Anbindung, bleibt es beim leeren Entwurf — der Entwurfs-Modus ist keine
-     * Stelle, an der eine Fehlermeldung stünde.
+     * der noch keine App ist, hat keine Datei: Sein Entwurf lebt im Fenster und
+     * bleibt genau so stehen (c0112) — es gibt nichts nachzulesen. Scheitert das
+     * Lesen oder fehlt die Anbindung, bleibt es beim leeren Entwurf — der
+     * Entwurfs-Modus ist keine Stelle, an der eine Fehlermeldung stünde.
      */
     async loadDesign(): Promise<void> {
+      if (this.id === null) return;
       this.design = null;
-      if (!this.folder || this.id === null) return;
+      if (!this.folder) return;
       try {
         const design = await getHost().readDesign?.(this.folder, this.id);
         // Was über die Brücke kommt, wird hier nur noch als Baum angenommen,
@@ -279,9 +282,17 @@ export function useAppWindow(instanceId: string) {
      * verloren. Ohne Anbindung (Renderer-Test) bleibt es beim eigenen Stand.
      */
     async saveDesign(design: Design): Promise<boolean> {
-      if (!this.folder || this.id === null) return false;
+      if (!this.folder) return false;
       // Reine Werte übergeben (kein reaktiver Proxy) — Electron-IPC nutzt structured clone.
       const plain = JSON.parse(JSON.stringify(design)) as Design;
+      // Ein Entwurf ohne App hat keinen Ordner, in den etwas geschrieben werden
+      // könnte (c0112): Sein Entwurf bleibt im Fenster und geht mit dem ersten
+      // Wunsch mit. Zurechtgerückt wird er trotzdem — sonst stünde im Fenster
+      // etwas anderes, als hinterher in der Datei stünde.
+      if (this.id === null) {
+        this.design = normalizeDesign(plain);
+        return true;
+      }
       const host = getHost();
       if (!host.writeDesign) {
         this.design = plain;
@@ -428,10 +439,18 @@ export function useAppWindow(instanceId: string) {
         });
         this.pendingQuestion = null;
 
+        // Der gezeichnete UI-Entwurf geht nur bei einer NEUEN App mit (c0112):
+        // Sie hat noch keinen Ordner, in dem er läge. Eine bestehende App hat
+        // ihre design.ui.json — dort liest der Lauf ihn selbst, und was das
+        // Fenster mitschickte, wäre bestenfalls dasselbe.
+        const plainDesign = this.id === null && this.design?.blocks.length
+          ? (JSON.parse(JSON.stringify(this.design)) as Design)
+          : undefined;
+
         // Die Framework-Wahl geht immer mit; für eine bestehende App entscheidet
         // ohnehin deren eigener Quelltext (siehe core/framework).
         const res = await getHost().generate(
-          text, this.folder, this.id, priorChat, plainAtts, runId, this.newFramework, plainRefs,
+          text, this.folder, this.id, priorChat, plainAtts, runId, this.newFramework, plainRefs, plainDesign,
         );
         // Abgebrochen: Das (Teil-)Ergebnis wird verworfen und der Wunsch aus dem
         // Dialog genommen — die App bleibt, wie sie war, und der Abbruch selbst
@@ -444,6 +463,11 @@ export function useAppWindow(instanceId: string) {
           this.error = res.error;
           return;
         }
+
+        // Aus dem Entwurf ist eine App geworden: Ihr UI-Entwurf liegt nun in
+        // ihrem Ordner (der Lauf hat den mitgebrachten dort abgelegt, c0112).
+        // Von hier an ist die Datei maßgeblich, also wird sie gelesen.
+        const born = this.id === null && !!res.app;
 
         // Hat der Lauf etwas geschrieben, steht der neue Stand schon auf der
         // Platte und ist committet — hier wird er nur übernommen.
@@ -470,6 +494,7 @@ export function useAppWindow(instanceId: string) {
         }
 
         if (res.app) await this.loadVersions();
+        if (born) await this.loadDesign();
         await this.persistChat();
       } catch (err) {
         if (this.aborted) this.chat.splice(chatMark);

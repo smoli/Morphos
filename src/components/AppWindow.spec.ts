@@ -306,9 +306,12 @@ describe('AppWindow', () => {
       expect(wrapper.findComponent(DesignOverlay).exists()).toBe(false);
     });
 
-    it('bietet einem Entwurf (noch ohne App) keinen Entwurfs-Modus an', async () => {
+    // c0112: Auch eine App, die es noch nicht gibt, darf einen Entwurf haben —
+    // er geht dann mit ihrem ersten Wunsch mit.
+    it('öffnet den Entwurfs-Modus auch für einen Entwurf (noch ohne App)', async () => {
       setActivePinia(createPinia());
-      setHost(makeHost());
+      const host = makeHost({ readDesign: vi.fn(async () => DESIGN) });
+      setHost(host);
       useWorkspaceStore().folder = '/apps';
       const desktop = useDesktopStore();
       const id = desktop.openDraft();
@@ -316,7 +319,17 @@ describe('AppWindow', () => {
       const wrapper = mount(AppWindow, { props: { win } });
       await flushPromises();
 
-      expect(wrapper.find('.w-design').exists()).toBe(false);
+      expect(wrapper.find('.w-design').exists()).toBe(true);
+      await wrapper.get('.w-design').trigger('click');
+      await flushPromises();
+
+      const overlay = wrapper.getComponent(DesignOverlay);
+      // Nichts nachzulesen — es gibt noch keinen Ordner; die Schicht sagt, wohin
+      // der Entwurf stattdessen geht.
+      expect(host.readDesign).not.toHaveBeenCalled();
+      expect(overlay.props('blocks')).toEqual([]);
+      expect(overlay.props('newApp')).toBe(true);
+      expect(overlay.text()).toContain('geht mit dem ersten Wunsch mit');
     });
   });
 

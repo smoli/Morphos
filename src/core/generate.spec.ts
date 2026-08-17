@@ -5,8 +5,8 @@ import path from 'node:path';
 import { agentArgs, generateApp, type GenerateDeps, type GenerateRequest } from './generate';
 import { MCP_ALLOWED_TOOLS, MCP_DENIED_TOOLS, mcpToolId } from './mcp';
 import { CONCEPT_FILE, USERDOC_FILE } from './docs';
-import { DESIGN_VERSION } from './design';
-import { writeDesign } from './designstore';
+import { DESIGN_VERSION, type Design } from './design';
+import { designPath, readDesign, writeDesign } from './designstore';
 import { readManifest } from './appstore';
 import type { AgentResult } from '@/types';
 
@@ -214,6 +214,53 @@ describe('generateApp — der Lauf im App-Ordner', () => {
     const prompt = runAgent.mock.calls[0][0].prompt;
     expect(prompt).toContain('Echter Block');
     expect(prompt).not.toContain('Erfundener Block');
+  });
+
+  // c0112: Eine neue App hat noch keine Datei — was der Anwender vor dem ersten
+  // Wunsch gezeichnet hat, bringt der Entwurf darum mit.
+  describe('Der Entwurf einer neuen App (c0112)', () => {
+    const KOPF: Design = {
+      version: DESIGN_VERSION,
+      blocks: [{
+        id: 'b1', name: 'Kopfzeile', instructions: 'Titel links',
+        rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [],
+      }],
+    };
+
+    /** Der Ordner, den der Lauf angelegt hat (die neue App). */
+    const onlyApp = (): string => path.join(folder, fs.readdirSync(folder)[0]);
+
+    it('legt den mitgebrachten Entwurf in den Ordner der neuen App — schon für diesen Lauf', async () => {
+      const runAgent = vi.fn(writingRun({ 'src/index.html': DOC('neu') }));
+      await generateApp(request({ context: { design: KOPF } }), makeDeps(runAgent));
+
+      // Der Agent sieht ihn im Prompt seines ERSTEN Laufs …
+      const prompt = runAgent.mock.calls[0][0].prompt;
+      expect(prompt).toContain('UI-LAYOUT');
+      expect(prompt).toContain('Kopfzeile');
+      expect(prompt).toContain('Titel links');
+
+      // … und die App führt ihn von da an mit sich, unter ihrem eigenen Namen.
+      expect(readDesign(onlyApp()).blocks[0]).toMatchObject({ name: 'Kopfzeile', instructions: 'Titel links' });
+    });
+
+    it('schreibt keine Datei, wenn nichts gezeichnet wurde', async () => {
+      const runAgent = vi.fn(writingRun({ 'src/index.html': DOC('neu') }));
+      await generateApp(
+        request({ context: { design: { version: DESIGN_VERSION, blocks: [] } } }),
+        makeDeps(runAgent),
+      );
+
+      expect(runAgent.mock.calls[0][0].prompt).not.toContain('UI-LAYOUT');
+      expect(fs.existsSync(designPath(onlyApp()))).toBe(false);
+    });
+
+    it('nimmt ihn mit dem verworfenen Entwurfsordner wieder weg', async () => {
+      const deps = makeDeps(askingRun('Welche Farbe?'));
+      await generateApp(request({ context: { design: KOPF } }), deps);
+
+      expect(fs.readdirSync(folder)).toEqual([]);
+    });
   });
 });
 

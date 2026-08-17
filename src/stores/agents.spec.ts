@@ -132,7 +132,7 @@ describe('useAgentsStore', () => {
     await flush();
 
     const call = (host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[0];
-    expect(call[call.length - 1]).toEqual([ref]);
+    expect(call[7]).toEqual([ref]);
   });
 
   describe('Deckel und Warteschlange', () => {

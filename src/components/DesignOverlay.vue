@@ -58,7 +58,17 @@ import {
  * auf der auch gezeichnet wird. Was gezeichnet ist und was zu sehen ist, meint
  * damit dasselbe.
  */
-const props = defineProps<{ blocks: Block[] }>();
+const props = defineProps<{
+  blocks: Block[];
+  /**
+   * Es entsteht gerade eine NEUE App (c0112): Ihr Entwurf liegt dann nicht in
+   * einem Ordner, sondern im Fenster, und geht mit dem ersten Wunsch mit.
+   * Gezeichnet wird genau wie sonst — nur gesagt werden muss es. (Heißt wie im
+   * ChatDock `newApp` und nicht `draft`: Ein „Entwurf“ ist hier schon der
+   * aufgezogene, noch namenlose Kasten.)
+   */
+  newApp?: boolean;
+}>();
 
 const emit = defineEmits<{
   close: [];
@@ -299,6 +309,8 @@ function onCancel(): void {
   <div class="design-overlay">
     <div class="design-head">
       <span class="design-title">Entwurf</span>
+      <!-- Vor der App gehört dazu, wohin er geht: mit dem ersten Wunsch. -->
+      <span v-if="newApp" class="design-goes">geht mit dem ersten Wunsch mit</span>
       <span class="design-hint">
         Ziehen zeichnet, ein Klick wählt aus — den ausgewählten Kasten schiebt und zieht
         man zurecht; in einen Kasten hinein heißt hinein
@@ -315,7 +327,9 @@ function onCancel(): void {
       @click="onStageClick"
     >
       <p v-if="!blocks.length && !draftBlock" class="design-empty">
-        Für diese App gibt es noch keinen Entwurf — zieh einen Kasten auf.
+        {{ newApp
+          ? 'Zieh die Kästen auf, die diese App haben soll — der Agent baut danach.'
+          : 'Für diese App gibt es noch keinen Entwurf — zieh einen Kasten auf.' }}
       </p>
       <DesignBlock
         v-for="block in blocks"
@@ -384,6 +398,11 @@ function onCancel(): void {
 }
 .design-title {
   font-weight: 600;
+}
+/* Wohin der Entwurf einer noch nicht vorhandenen App geht (c0112). */
+.design-goes {
+  flex-shrink: 0;
+  color: var(--accent);
 }
 .design-hint {
   flex: 1;

@@ -39,7 +39,7 @@ import {
 } from '../src/core/remote';
 import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeChat } from '../src/core/appstore';
 import { isSafeAppId } from '../src/core/app';
-import { emptyDesign } from '../src/core/design';
+import { emptyDesign, normalizeDesign } from '../src/core/design';
 import { readDesign, writeDesign } from '../src/core/designstore';
 import { IMPORT_DIR, repoUrlError, resolveImport, startImport } from '../src/core/appimport';
 import { validateIcon } from '../src/core/icon';
@@ -445,6 +445,7 @@ async function generate(
   requestedFramework?: Framework,
   onEvent: (event: AgentEvent) => void = () => {},
   runId = '',
+  design?: Design,
 ): Promise<GenerateResult> {
   const whitelist = readSettings().libWhitelist ?? [];
 
@@ -465,6 +466,9 @@ async function generate(
     attachments: prepared.atts,
     elements,
     framework: requestedFramework,
+    // Nur ein Entwurf bringt einen mit; eine bestehende App hat ihre Datei, und
+    // die liest der Lauf selbst (core/generate).
+    design,
   };
 
   return generateApp(
@@ -548,6 +552,7 @@ ipcMain.handle('morphos:generate', async (
     runId?: string;
     framework?: Framework;
     elements?: ElementRef[];
+    design?: Design;
   },
 ): Promise<GenerateResult> => {
   if (!payload?.prompt?.trim()) return { ok: false, error: 'Bitte gib einen Wunsch ein.' };
@@ -572,6 +577,10 @@ ipcMain.handle('morphos:generate', async (
   // „nicht gewählt“ und läuft damit auf vanilla hinaus.
   const framework: Framework | undefined =
     payload.framework === 'preact' || payload.framework === 'vanilla' ? payload.framework : undefined;
+  // Der UI-Entwurf, den ein Entwurf mitbringt (c0112). Er kommt aus dem
+  // Renderer und wird darum hier zurechtgerückt, bevor er irgendwohin geht —
+  // wie alles, was von dort einen Weg auf die Platte hat.
+  const design = payload.design ? normalizeDesign(payload.design) : undefined;
   // Der Fortschritt geht an genau das Fenster zurück, das den Lauf gestartet
   // hat — die Lauf-Id ordnet ihn dort dem richtigen App-Fenster zu.
   const runId = typeof payload.runId === 'string' ? payload.runId : '';
@@ -584,7 +593,7 @@ ipcMain.handle('morphos:generate', async (
   // und wartet daher auf nichts.
   const key = id === null ? `entwurf:${runId}` : `${folder} :: ${id}`;
   return appRuns.run(key, () =>
-    generate(payload.prompt, folder, id, chat, attachments, elements, framework, onEvent, runId),
+    generate(payload.prompt, folder, id, chat, attachments, elements, framework, onEvent, runId, design),
   );
 });
 

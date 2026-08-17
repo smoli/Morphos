@@ -33,7 +33,9 @@ contextBridge.exposeInMainWorld('morphos', {
   platform: process.platform,
 
   // Der Agent arbeitet im Ordner der App: Es gehen nur der Wunsch und die
-  // Anschrift der App hinüber, keine Dateiinhalte mehr (c0087).
+  // Anschrift der App hinüber, keine Dateiinhalte mehr (c0087). Einzige
+  // Ausnahme ist der UI-Entwurf einer NEUEN App (c0112) — sie hat noch keinen
+  // Ordner, in dem er läge.
   generate: (
     prompt: string,
     folder: string,
@@ -43,8 +45,11 @@ contextBridge.exposeInMainWorld('morphos', {
     runId?: string,
     framework?: Framework,
     elements?: ElementRef[],
+    design?: Design,
   ): Promise<GenerateResult> =>
-    ipcRenderer.invoke('morphos:generate', { prompt, folder, id, chat, attachments, runId, framework, elements }),
+    ipcRenderer.invoke('morphos:generate', {
+      prompt, folder, id, chat, attachments, runId, framework, elements, design,
+    }),
 
   // Fortschritt eines laufenden Agentenlaufs (Strom der Claude CLI).
   onAgentEvent: (cb: (runId: string, event: AgentEvent) => void): (() => void) => {
