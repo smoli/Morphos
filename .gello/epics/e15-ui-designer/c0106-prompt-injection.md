@@ -7,6 +7,8 @@ depends: [c0104]
 created: 2026-08-16
 updated: 2026-08-17
 status-changed: 2026-08-17T07:02:18
+usage-tokens: 30199
+usage-cost: 2.397228
 ---
 
 # Prompt injection — UI-LAYOUT section when design exists
