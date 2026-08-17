@@ -9,13 +9,13 @@
       "cardId": "c0109",
       "phase": "running",
       "activity": {
-        "name": "Bash",
-        "arg": "git show --stat --format=full d08a622 | head -30"
+        "name": "mcp__gello__set_status",
+        "arg": "review"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-17T19:11:04",
+  "updated": "2026-08-17T19:11:29",
   "pickupDelay": 10,
   "owned": [
     "c0029",

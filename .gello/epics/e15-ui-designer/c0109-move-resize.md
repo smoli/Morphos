@@ -1,12 +1,13 @@
 ---
 id: c0109
 title: "Move + resize blocks"
-status: in-progress
+status: review
 epic: e15
 depends: [c0107]
 created: 2026-08-16
+commit: 9e6e7dd
 updated: 2026-08-17
-status-changed: 2026-08-17T18:58:23
+status-changed: 2026-08-17T19:11:29
 ---
 
 # Move + resize blocks
@@ -88,3 +89,4 @@ Karte sagt, später an.
   `AppWindow`. Volle Suite 1916 Tests grün (42 neue), `vue-tsc` sauber,
   `npm run build` sauber. Nebenbei die uncommittete Leerzeile in `TopBar.vue`
   zurückgenommen, die zwei Reviews angemerkt hatten.
+- 2026-08-17 status → review (agent)
