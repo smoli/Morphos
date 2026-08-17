@@ -20,17 +20,58 @@ darauf wechselt zu jenem Kasten.
 
 ## Acceptance criteria
 
-- [ ] Das Feld zeigt den Weg des ausgewählten Kastens von der Wurzel bis zu ihm
+- [x] Das Feld zeigt den Weg des ausgewählten Kastens von der Wurzel bis zu ihm
       (`Entwurf › Inhalt › Liste`); ein Wurzelkasten steht unmittelbar am
       Entwurf.
-- [ ] Es zeigt die unmittelbaren Kinder des Kastens; hat er keine, steht dort
+- [x] Es zeigt die unmittelbaren Kinder des Kastens; hat er keine, steht dort
       nichts.
-- [ ] Ein Klick auf einen Vorfahren oder ein Kind wählt jenen Kasten aus — das
+- [x] Ein Klick auf einen Vorfahren oder ein Kind wählt jenen Kasten aus — das
       Feld redet fortan von ihm.
-- [ ] Der Weg kommt aus `core/design` (ein Helfer, keine zweite Rechnung in der
+- [x] Der Weg kommt aus `core/design` (ein Helfer, keine zweite Rechnung in der
       Ansicht).
-- [ ] Ein `.spec.ts` deckt Weg, Kinder und das Wechseln ab.
+- [x] Ein `.spec.ts` deckt Weg, Kinder und das Wechseln ab.
+
+## Notes
+
+**Ein Kasten ist eine Stelle, kein Name.** „Liste“ allein sagt nichts; „Entwurf ›
+Inhalt › Liste“ sagt alles, was das Feld über die Gliederung zu sagen hat. Der
+Weg steht darum dort, wo bisher bloß der Name stand — der Name ist sein letztes
+Glied, nicht eine zweite Zeile daneben.
+
+**Ein Weg, eine Rechnung.** Den Weg rechnet `pathIn` in `core/design`, nicht die
+Ansicht: Der Baum wird an genau einer Stelle abgelaufen, und die Kästen kommen
+unverändert aus ihm — das Feld nennt damit stets die Namen, die gerade in der
+Datei stehen, wie schon der ausgewählte Kasten selbst (`findBlockIn`, c0108).
+Einen Kasten, den es nicht gibt, gibt es auch nicht halb: Dann ist der Weg leer.
+
+**Der Weg ist zugleich der Weg dorthin.** Auf der Fläche ist stets das Unterste
+gemeint (c0110) — ein Elter, den seine Kinder ganz ausfüllen, ist dort gar nicht
+mehr zu treffen; über seinen Namen im Feld schon. Das ist keine Zutat, sondern
+das, was das Zeigen erst nützlich macht: Wer sieht, wo er steht, will dorthin.
+Ausgewählt wird trotzdem nicht hier — das Feld bittet nur (`select`), und wer
+ausgewählt ist, weiß weiter die Fläche.
+
+**Nur eine Ebene hinunter.** Gezeigt werden die unmittelbaren Kinder; tiefer
+kommt man, indem man auf eines klickt und dort weiterliest. Ein ganzer Baum im
+Feld wäre der Entwurf ein zweites Mal — und der steht schon nebenan, in
+Originalgröße.
+
+**Nichts gesagt bleibt still.** Ein Kasten ohne Kinder hat keine leere Liste,
+sondern gar keine — wie Rolle und Anweisungen (c0108). Und der Kasten selbst ist
+kein Knopf: Bei ihm ist man bereits.
+
+**Umbrechen statt abschneiden.** Das Feld ist 260 Pixel schmal, ein tief
+geschachtelter Kasten hat viele Vorfahren. Ein abgeschnittener Weg wäre wertlos
+(gerade die vordersten Glieder fielen weg), also darf er umbrechen; abgekürzt
+wird höchstens ein einzelner überlanger Name.
+
+Nicht angefasst: `design.ui.json` und der Prompt. Diese Karte zeigt nur, was der
+Baum ohnehin sagt — geschrieben wird nichts.
 
 ## Log
 
 - 2026-08-17 status → in-progress (agent)
+- 2026-08-17 `pathIn` in `core/design`; Weg (`.di-path`) und Kinder (`.di-kids`)
+  im `DesignInspector`, beide als Wechsel (`select`); `ancestors` und die
+  Weiterreichung der Auswahl im `DesignOverlay`. Volle Suite 1984 Tests grün
+  (17 neue), `vue-tsc` sauber, `npm run build` sauber.
