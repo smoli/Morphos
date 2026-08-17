@@ -110,6 +110,60 @@ Nicht angefasst: der Prompt. Der `UI-LAYOUT`-Abschnitt rückt Kinder seit c0106
 unter ihrem Elter ein — es gab bloß bis jetzt keine Kinder zu zeigen; die dünne
 Scheibe (`DesignFlow.spec.ts`) prüft das nun über eine echte Datei mit.
 
+## Review
+
+### 2026-08-17T19:36:49 — pass
+
+Checked: alle sechs Akzeptanzkriterien gegen den Code, der Diff von `f2dd7fb`,
+`npm test`, `npx vue-tsc --noEmit`, `npm run build` (ein Lint-Skript gibt es
+nicht).
+
+- Volle Suite grün: 1967 Tests in 96 Dateien, `vue-tsc` und `npm run build`
+  beide Exit 0. Kein `.only`, `.skip`, `console.log` oder abgeschwächter Test
+  in den berührten Dateien; der Arbeitsbaum ist bis auf `.companion/state.json`
+  sauber.
+- „Hineingeschoben verschachtelt" und „hinausgeschoben hängt um" sind belegt:
+  `nestBlock` (design.ts:610) geht über `containerFor` + `reparentBlock`, also
+  über die Helfer aus c0104; `design.spec.ts` prüft beide Richtungen, das
+  Mitwandern der Kinder und die unveränderte Geometrie, `app.spec.ts` dasselbe
+  durch `addDesignBlock`/`moveDesignBlock`/`resizeDesignBlock` bis in die
+  geschriebene Datei.
+- „Kindgeometrie bleibt vernünftig" gilt hier konstruktiv statt korrigierend:
+  `fits` verlangt die GANZE Fläche im Elter (design.ts:492), ein Kind liegt
+  also immer in seinem Elter. Die `FIT`-Nachsicht von 1e-6 ist getestet
+  (`0.2 + 0.4 > 0.1 + 0.5` als `double`) und liegt weit unter einem Pixel.
+- Löschen: `deleteBlock` (design.ts:631) hebt die Kinder an die Stelle des
+  gelöschten Kastens — die Regel ist definiert UND getestet (Wurzel- wie
+  Kindfall, Geometrie, unbekannte Id, Unversehrtheit des übergebenen
+  Entwurfs). Der Weg Feld → Schicht → Fenster → Store ist in
+  `DesignInspector.spec.ts`, `DesignOverlay.spec.ts` und `AppWindow.spec.ts`
+  je eigen abgedeckt.
+- Baum und Prompt: `DesignFlow.spec.ts:228` prüft über eine echte Datei den
+  Baum in `design.ui.json` und die Einrückung im `UI-LAYOUT` (`- Inhalt` /
+  `  - Liste`) — auch nach dem Umhängen und nach dem Löschen des Elters.
+- Kein Kreis, zweifach abgesichert: `containerIn` überspringt den bewegten
+  Kasten samt Zweig (`continue` vor der Rekursion, design.ts:512), und
+  `reparentBlock` verweigert einen Nachfahren als Elter (design.ts:471). Beides
+  getestet, dazu die Vorschau (`bietet den eigenen Zweig nicht als Elter an`).
+- `canNestUnder` ist an `normalizeDesign` richtig geeicht: `readBlock` liest
+  Kinder nur bei `depth + 1 < MAX_DESIGN_DEPTH`, die Rechnung
+  `depth + 1 + height < MAX_DESIGN_DEPTH` trifft genau diese Grenze, und der
+  Test `lässt eine ganze Kette bis MAX_DESIGN_DEPTH unangetastet durch` belegt
+  sie am Zurechtrücken selbst.
+- Der Diff bleibt im What: `core/design`, Store, die drei Entwurfs-Komponenten
+  und eine `@delete`-Zeile im `AppWindow` — nichts darüber hinaus. Die
+  Anmerkung aus dem Review zu c0109 (Druck auf ein nicht ausgewähltes Kind
+  schob dessen Elter) ist mit erledigt und ist hier keine Zutat: Ohne sie ließe
+  sich in ein Kind nichts hineinzeichnen.
+
+Zwei Anmerkungen ohne Einfluss auf das Urteil, für den nächsten Zug: Die
+Vorschau (`dropId`) fragt `containerIn`, aber nicht `canNestUnder` — an der
+16. Ebene leuchtet ein Elter auf, unter den `nestBlock` hinterher doch nicht
+hängt. Und `deleteBlock` reicht die Kinderliste des gelöschten Kastens
+unkopiert nach oben (Strukturteilung mit dem alten Entwurf); solange niemand
+einen Entwurf verändert, ist das harmlos, weicht aber vom `.map`-Kopieren der
+übrigen Helfer ab.
+
 ## Log
 
 - 2026-08-16 created from the e15 epic breakdown.
