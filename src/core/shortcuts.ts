@@ -28,7 +28,8 @@ export type ShortcutId =
   | 'close-window'
   | 'minimize-window'
   | 'maximize-window'
-  | 'composer';
+  | 'composer'
+  | 'design';
 
 export interface Shortcut {
   id: ShortcutId;
@@ -52,6 +53,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { id: 'minimize-window', label: 'Fenster minimieren', key: 'm', shift: true, keys: 'Strg/⌘ + ⇧ + M' },
   { id: 'maximize-window', label: 'Fenster maximieren / wiederherstellen', key: 'f', shift: true, keys: 'Strg/⌘ + ⇧ + F' },
   { id: 'composer', label: 'Chat der App öffnen / schließen', key: 'c', shift: true, keys: 'Strg/⌘ + ⇧ + C' },
+  { id: 'design', label: 'Entwurf der App öffnen / schließen', key: 'd', shift: true, keys: 'Strg/⌘ + ⇧ + D' },
 ];
 
 /** Wie der Umschalter aufgerufen wird — fürs Anzeigen. */

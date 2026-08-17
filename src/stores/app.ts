@@ -1,5 +1,8 @@
 import { defineStore } from 'pinia';
 import type { AgentEvent, AppDocs, Attachment, ChatMessage, ElementRef, Framework, SourceFile, VersionInfo } from '@/types';
+// Nur der Typ: Gelesen wird der Entwurf im Hauptprozess (core/design greift auf
+// die Platte), hierher kommt der fertige Baum über den Host.
+import type { Block, Design } from '@/core/design';
 import { getHost } from '@/services/host';
 import { agentEventLabel } from '@/core/agent';
 import { refLabel } from '@/core/pick';
@@ -43,6 +46,18 @@ interface AppState {
    */
   composerOpen: boolean;
   /**
+   * Liegt der Entwurfs-Modus über dieser App (e15)? Er zeigt den UI-Entwurf —
+   * die Kästen, an die sich der Agent beim Bauen hält — als durchscheinende
+   * Schicht über der laufenden App.
+   */
+  designOpen: boolean;
+  /**
+   * Der zuletzt gelesene Entwurf dieser App; null, solange keiner gelesen
+   * wurde. Gelesen wird bei jedem Öffnen frisch von der Platte: Maßgeblich ist
+   * die Datei, nicht was das Fenster einmal gesehen hat.
+   */
+  design: Design | null;
+  /**
    * Womit eine NEUE App gebaut werden soll — die Wahl im Composer, die es nur
    * beim Anlegen gibt (Vorgabe: Preact). Eine bestehende App trägt ihre Wahl in
    * ihrem eigenen Quelltext; dieser Wert bleibt dann ohne Wirkung.
@@ -85,6 +100,8 @@ export function useAppWindow(instanceId: string) {
     chat: [],
     pendingQuestion: null,
     composerOpen: false,
+    designOpen: false,
+    design: null,
     newFramework: DEFAULT_FRAMEWORK,
     activity: [],
     runStartedAt: null,
@@ -99,6 +116,8 @@ export function useAppWindow(instanceId: string) {
     /** Gibt es überhaupt etwas zu lesen (Konzept oder Anleitung)? */
     hasDocs: (s): boolean => s.docs.concept.length > 0 || s.docs.userdoc.length > 0,
     versionCount: (s): number => s.versions.length,
+    /** Die Kästen des Entwurfs — ohne Entwurf schlicht keine. */
+    designBlocks: (s): Block[] => s.design?.blocks ?? [],
     isDraft: (s): boolean => s.id === null,
     /** Der aktive Stand ist immer der neueste Commit (HEAD). */
     activeSha: (s): string | null => s.versions[0]?.sha ?? null,
@@ -118,6 +137,42 @@ export function useAppWindow(instanceId: string) {
     },
     toggleComposer(): void {
       this.composerOpen = !this.composerOpen;
+    },
+
+    /**
+     * Der Entwurfs-Modus dieses Fensters (e15). Beim Aufgehen wird der Entwurf
+     * frisch von der Platte gelesen — auch ein leerer: Die Schicht geht auf und
+     * ist eben leer, denn noch keinen Entwurf zu haben ist der Normalfall.
+     */
+    async openDesign(): Promise<void> {
+      await this.loadDesign();
+      this.designOpen = true;
+    },
+    closeDesign(): void {
+      this.designOpen = false;
+    },
+    async toggleDesign(): Promise<void> {
+      if (this.designOpen) this.closeDesign();
+      else await this.openDesign();
+    },
+
+    /**
+     * Liest den Entwurf der App (design.ui.json) über den Host. Ein Entwurf,
+     * der noch keine App ist, hat keinen; scheitert das Lesen oder fehlt die
+     * Anbindung, bleibt es beim leeren Entwurf — der Entwurfs-Modus ist keine
+     * Stelle, an der eine Fehlermeldung stünde.
+     */
+    async loadDesign(): Promise<void> {
+      this.design = null;
+      if (!this.folder || this.id === null) return;
+      try {
+        const design = await getHost().readDesign?.(this.folder, this.id);
+        // Was über die Brücke kommt, wird hier nur noch als Baum angenommen,
+        // wenn es einer ist (zurechtgerückt hat es der Hauptprozess).
+        if (design && Array.isArray(design.blocks)) this.design = design;
+      } catch {
+        /* kein Entwurf ist kein Fehler */
+      }
     },
 
     /**

@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { Design } from '../src/core/design';
 import type {
   AgentEvent,
   AppData,
@@ -104,6 +105,11 @@ contextBridge.exposeInMainWorld('morphos', {
   // origin ein und schiebt die Historie hinüber. Angelegt wird dort nichts.
   publishApp: (folder: string, id: string, url: string): Promise<RemoteResult> =>
     ipcRenderer.invoke('morphos:publishApp', folder, id, url),
+
+  // Der UI-Entwurf einer App (e15): Gelesen wird er im Hauptprozess, hier geht
+  // nur der fertige Baum hinüber. Fehlt die Datei, kommt ein leerer Entwurf.
+  readDesign: (folder: string, id: string): Promise<Design> =>
+    ipcRenderer.invoke('morphos:readDesign', folder, id),
 
   listVersions: (folder: string, id: string): Promise<VersionInfo[]> =>
     ipcRenderer.invoke('morphos:listVersions', folder, id),

@@ -13,6 +13,7 @@ import ChatDock from './ChatDock.vue';
 import WelcomeScreen from './WelcomeScreen.vue';
 import HistoryList from './HistoryList.vue';
 import DocsPanel from './DocsPanel.vue';
+import DesignOverlay from './DesignOverlay.vue';
 import AppIcon from './AppIcon.vue';
 import IconDialog from './IconDialog.vue';
 import { shortcutKeys } from '@/core/shortcuts';
@@ -115,6 +116,17 @@ const chatTitle = computed(
   () => `${store.composerOpen ? 'Chat schließen' : 'Chat öffnen'} (${shortcutKeys('composer')})`,
 );
 
+// ---- Entwurfs-Modus (e15/c0105): Der UI-Entwurf der App liegt als
+//      durchscheinende Schicht über ihr — die Kästen, an die sich der Agent
+//      beim Bauen hält. Hier nur zum Ansehen; gezeichnet wird ab c0107.
+const designTitle = computed(
+  () => `${store.designOpen ? 'Entwurf schließen' : 'Entwurf öffnen'} (${shortcutKeys('design')})`,
+);
+
+function toggleDesign(): void {
+  void store.toggleDesign();
+}
+
 // Versionen und Dokumente legen sich beide über die App — es liegt also stets
 // höchstens eine der beiden Ansichten oben.
 function toggleVersions(): void {
@@ -171,6 +183,17 @@ async function onIcon(icon: string | null): Promise<void> {
       <button
         v-if="!store.isDraft"
         type="button"
+        class="w-design"
+        :class="{ on: store.designOpen }"
+        :title="designTitle"
+        @mousedown.stop
+        @click="toggleDesign"
+      >
+        📐
+      </button>
+      <button
+        v-if="!store.isDraft"
+        type="button"
         class="w-docs"
         title="Konzept und Anleitung"
         @mousedown.stop
@@ -223,6 +246,14 @@ async function onIcon(icon: string | null): Promise<void> {
       @exit-pick="picking = false"
     />
     <WelcomeScreen v-else @pick="onPrompt" />
+
+    <!-- Der Entwurf liegt über der laufenden App: Sie läuft weiter und bleibt
+         durch die Schicht hindurch zu sehen. -->
+    <DesignOverlay
+      v-if="store.designOpen"
+      :blocks="store.designBlocks"
+      @close="store.closeDesign()"
+    />
 
     <div v-if="store.busy || runningElsewhere" class="w-loading">
       <div class="spinner"></div>
@@ -358,8 +389,9 @@ async function onIcon(icon: string | null): Promise<void> {
   font-size: 12px;
   cursor: pointer;
 }
-/* Der 💬-Knopf zeigt, ob der Chat offen steht. */
-.w-chat.on {
+/* Der 💬-Knopf zeigt, ob der Chat offen steht — der 📐-Knopf ebenso für den Entwurf. */
+.w-chat.on,
+.w-design.on {
   border-color: var(--accent) !important;
   color: var(--text) !important;
 }

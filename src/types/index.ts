@@ -1,6 +1,9 @@
 // Der Kachel-Baum ist Rechnung, keine Ablage — er steht darum in core/tiling;
 // hier steht nur, dass die Einstellungen ihn merken (siehe core/tilelayout).
 import type { TileTree } from '@/core/tiling';
+// Der UI-Entwurf einer App wird im Hauptprozess gelesen (core/design greift auf
+// die Platte); hierher kommt nur sein Typ.
+import type { Design } from '@/core/design';
 
 /** Eine virtuelle Quelldatei einer App. Pfad mit "/" relativ zum App-Ordner, stets unter src/. */
 export interface SourceFile {
@@ -685,6 +688,15 @@ export interface MorphosHost {
    * Gegenstelle.
    */
   publishApp?(folder: string, id: string, url: string): Promise<RemoteResult>;
+
+  /**
+   * Liest den UI-Entwurf einer App (`design.ui.json` in ihrem Ordner, siehe
+   * core/design). Fehlt oder taugt die Datei nicht, kommt ein leerer Entwurf —
+   * kein Entwurf ist der Normalfall, kein Fehler. Nur Lesen: Geschrieben wird
+   * er (ab c0107) über einen eigenen Weg. Optional: im Renderer-Test fehlt die
+   * Anbindung, dann bleibt der Entwurfs-Modus leer.
+   */
+  readDesign?(folder: string, id: string): Promise<Design>;
 
   /** Liefert die Git-Versionshistorie einer App, neueste zuerst. */
   listVersions(folder: string, id: string): Promise<VersionInfo[]>;

@@ -5,6 +5,7 @@ import AppWindow from './AppWindow.vue';
 import WelcomeScreen from './WelcomeScreen.vue';
 import IconDialog from './IconDialog.vue';
 import DocsPanel from './DocsPanel.vue';
+import DesignOverlay from './DesignOverlay.vue';
 import ChatDock from './ChatDock.vue';
 import AppCanvas from './AppCanvas.vue';
 import { useAppWindow } from '@/stores/app';
@@ -168,6 +169,98 @@ describe('AppWindow', () => {
       await flushPromises();
 
       expect(wrapper.find('.w-docs').exists()).toBe(false);
+    });
+  });
+
+  // c0105: Der Entwurfs-Modus des UI-Designers — eine durchscheinende Schicht
+  // ÜBER der laufenden App, aufgerufen aus der Titelleiste. Nur zum Ansehen.
+  describe('Entwurfs-Modus aus der Titelleiste', () => {
+    const DESIGN = {
+      version: 1,
+      blocks: [
+        {
+          id: 'b1',
+          name: 'Kopf',
+          rect: { x: 0, y: 0, w: 1, h: 0.2 },
+          children: [{ id: 'b2', name: 'Titel', rect: { x: 0.05, y: 0.05, w: 0.4, h: 0.1 }, children: [] }],
+        },
+      ],
+    };
+
+    it('legt den Entwurf über die App und nimmt ihn wieder fort', async () => {
+      const readDesign = vi.fn(async () => DESIGN);
+      const { wrapper } = await mountFrameForApp({ readDesign });
+      expect(wrapper.findComponent(DesignOverlay).exists()).toBe(false);
+
+      await wrapper.get('.w-design').trigger('click');
+      await flushPromises();
+
+      expect(readDesign).toHaveBeenCalledWith('/apps', 'rechner-1');
+      const overlay = wrapper.getComponent(DesignOverlay);
+      expect(overlay.props('blocks')).toEqual(DESIGN.blocks);
+      expect(overlay.findAll('.db-name').map((n) => n.text())).toEqual(['Kopf', 'Titel']);
+      // Der geschachtelte Kasten liegt in seinem Elter.
+      expect(overlay.get('.design-block .design-block .db-name').text()).toBe('Titel');
+
+      await wrapper.get('.w-design').trigger('click');
+      await flushPromises();
+      expect(wrapper.findComponent(DesignOverlay).exists()).toBe(false);
+    });
+
+    it('lässt die laufende App darunter weiterlaufen', async () => {
+      const { wrapper } = await mountFrameForApp({ readDesign: vi.fn(async () => DESIGN) });
+      const iframe = wrapper.get('iframe').element;
+
+      await wrapper.get('.w-design').trigger('click');
+      await flushPromises();
+
+      // Dasselbe iframe wie zuvor: Die Schicht liegt darüber, sie ersetzt nichts.
+      expect(wrapper.get('iframe').element).toBe(iframe);
+      expect(wrapper.findComponent(DesignOverlay).exists()).toBe(true);
+    });
+
+    it('zeigt ohne Entwurf eine leere Schicht (statt zu straucheln)', async () => {
+      const { wrapper } = await mountFrameForApp({
+        readDesign: vi.fn(async () => ({ version: 1, blocks: [] })),
+      });
+
+      await wrapper.get('.w-design').trigger('click');
+      await flushPromises();
+
+      expect(wrapper.getComponent(DesignOverlay).props('blocks')).toEqual([]);
+      expect(wrapper.findAll('.design-block')).toHaveLength(0);
+    });
+
+    it('kommt auch ohne Anbindung an den Entwurf zurecht', async () => {
+      const { wrapper } = await mountFrameForApp();
+
+      await wrapper.get('.w-design').trigger('click');
+      await flushPromises();
+
+      expect(wrapper.getComponent(DesignOverlay).props('blocks')).toEqual([]);
+    });
+
+    it('schließt ihn über den Schließen-Knopf der Schicht', async () => {
+      const { wrapper } = await mountFrameForApp({ readDesign: vi.fn(async () => DESIGN) });
+      await wrapper.get('.w-design').trigger('click');
+      await flushPromises();
+
+      await wrapper.get('.design-close').trigger('click');
+
+      expect(wrapper.findComponent(DesignOverlay).exists()).toBe(false);
+    });
+
+    it('bietet einem Entwurf (noch ohne App) keinen Entwurfs-Modus an', async () => {
+      setActivePinia(createPinia());
+      setHost(makeHost());
+      useWorkspaceStore().folder = '/apps';
+      const desktop = useDesktopStore();
+      const id = desktop.openDraft();
+      const win = desktop.windows.find((w) => w.instanceId === id)!;
+      const wrapper = mount(AppWindow, { props: { win } });
+      await flushPromises();
+
+      expect(wrapper.find('.w-design').exists()).toBe(false);
     });
   });
 

@@ -39,6 +39,7 @@ import {
 } from '../src/core/remote';
 import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeChat } from '../src/core/appstore';
 import { isSafeAppId } from '../src/core/app';
+import { emptyDesign, readDesign } from '../src/core/design';
 import { IMPORT_DIR, repoUrlError, resolveImport, startImport } from '../src/core/appimport';
 import { validateIcon } from '../src/core/icon';
 import { writeReadme } from '../src/core/readme';
@@ -58,6 +59,7 @@ import { cleanWallpapers } from '../src/core/wallpaper';
 import { cleanBlurs, cleanTransparencies } from '../src/core/transparency';
 import { resolveLibs } from './libcache';
 import type { PromptAttachment, PromptContext } from '../src/core/prompt';
+import type { Design } from '../src/core/design';
 import type {
   AgentEvent,
   AgentResult,
@@ -1100,6 +1102,22 @@ ipcMain.handle('morphos:publishApp', async (_e, folder: string, id: string, url:
     return { ok: true, status: await readRemoteStatus(dir, false) };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+/**
+ * Der UI-Entwurf einer App (e15): `design.ui.json` in ihrem Ordner, gelesen und
+ * zurechtgerückt von core/design. Gelesen wird hier, weil der Entwurf neben dem
+ * Konzept im App-Ordner liegt und der Renderer selbst nie auf die Platte greift.
+ * Fehlt oder taugt die Datei nicht, kommt ein leerer Entwurf — kein Entwurf ist
+ * der Normalfall. Geschrieben wird an dieser Stelle nichts.
+ */
+ipcMain.handle('morphos:readDesign', async (_e, folder: string, id: string): Promise<Design> => {
+  try {
+    return readDesign(appDir(folder, id));
+  } catch (err) {
+    console.error('[morphos] readDesign fehlgeschlagen:', err);
+    return emptyDesign();
   }
 });
 

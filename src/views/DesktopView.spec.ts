@@ -387,6 +387,76 @@ describe('DesktopView', () => {
     });
   });
 
+  // c0105: Der Entwurfs-Modus gehört dem Fenster (components/AppWindow) — von
+  // außen kommen nur das Tastenkürzel des aktiven Fensters und Escape.
+  describe('Entwurfs-Modus (UI-Designer)', () => {
+    const DESIGN = {
+      version: 1,
+      blocks: [{ id: 'b1', name: 'Kopf', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [] }],
+    };
+
+    /** Der Rechner im Vordergrund, mit einem Entwurf auf der Platte. */
+    async function withApp() {
+      setHost(makeHost({ loadApp: vi.fn(async () => rechnerData), readDesign: vi.fn(async () => DESIGN) }));
+      const { wrapper } = await mountView();
+      const instanceId = useDesktopStore().openApp('rechner-1', { title: 'Rechner', icon: '🧮' });
+      await flushPromises();
+      return { wrapper, instanceId };
+    }
+
+    it('legt den Entwurf des aktiven Fensters per Tastenkürzel über die App und wieder fort', async () => {
+      const { wrapper, instanceId } = await withApp();
+      expect(wrapper.find('.design-overlay').exists()).toBe(false);
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'D', metaKey: true, shiftKey: true }));
+      await flushPromises();
+
+      expect(useAppWindow(instanceId).designOpen).toBe(true);
+      expect(wrapper.get('.design-overlay').get('.db-name').text()).toBe('Kopf');
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'D', metaKey: true, shiftKey: true }));
+      await flushPromises();
+      expect(wrapper.find('.design-overlay').exists()).toBe(false);
+    });
+
+    it('schließt ihn mit Escape', async () => {
+      const { wrapper, instanceId } = await withApp();
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'D', metaKey: true, shiftKey: true }));
+      await flushPromises();
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      await flushPromises();
+
+      expect(useAppWindow(instanceId).designOpen).toBe(false);
+      expect(wrapper.find('.design-overlay').exists()).toBe(false);
+    });
+
+    it('lässt Escape zuerst den Entwurf schließen, dann den Chat', async () => {
+      const { wrapper, instanceId } = await withApp();
+      const store = useAppWindow(instanceId);
+      store.openComposer();
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'D', metaKey: true, shiftKey: true }));
+      await flushPromises();
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      await flushPromises();
+      expect(store.designOpen).toBe(false);
+      expect(store.composerOpen).toBe(true);
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      await flushPromises();
+      expect(store.composerOpen).toBe(false);
+      expect(wrapper.find('.w-composer').exists()).toBe(false);
+    });
+
+    it('greift ohne App im Vordergrund ins Leere', async () => {
+      const { wrapper } = await mountView();
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'D', metaKey: true, shiftKey: true }));
+      await flushPromises();
+      expect(wrapper.find('.design-overlay').exists()).toBe(false);
+    });
+  });
+
   // c0082: Apps mit einer Gegenstelle lassen sich von der Kachel aus schieben
   // und ziehen — nur im Vorlauf, und geholt wird ausschließlich auf Geheiß.
   describe('Abgleich mit der Gegenstelle (c0082)', () => {

@@ -795,6 +795,105 @@ describe('useAppStore', () => {
     });
   });
 
+  // c0105: Der Entwurfs-Modus legt den UI-Entwurf (design.ui.json) über die
+  // laufende App. Gelesen wird er im Hauptprozess (core/design) — hier kommt
+  // der fertige Baum an.
+  describe('Entwurfs-Modus (UI-Designer)', () => {
+    const DESIGN = {
+      version: 1,
+      blocks: [{ id: 'b1', name: 'Kopf', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [] }],
+    };
+
+    /** Eine geöffnete App — nur dann gibt es überhaupt einen Entwurf. */
+    async function openedStore(over: Partial<MorphosHost> = {}) {
+      setHost(makeHost({
+        loadApp: vi.fn(async (): Promise<AppData> => ({
+          id: 'rechner-1', name: 'Rechner', icon: '🧮', createdAt: 1, updatedAt: 2,
+          files: FILES(DOC('calc')), html: DOC('calc'), chat: [],
+        })),
+        ...over,
+      }));
+      const store = useAppStore();
+      await store.open('/apps', 'rechner-1');
+      return store;
+    }
+
+    it('ist zunächst zu und ohne Entwurf', async () => {
+      const store = await openedStore();
+      expect(store.designOpen).toBe(false);
+      expect(store.designBlocks).toEqual([]);
+    });
+
+    it('liest den Entwurf der App, sobald er aufgeht', async () => {
+      const readDesign = vi.fn(async () => DESIGN);
+      const store = await openedStore({ readDesign });
+
+      await store.toggleDesign();
+
+      expect(readDesign).toHaveBeenCalledWith('/apps', 'rechner-1');
+      expect(store.designOpen).toBe(true);
+      expect(store.designBlocks).toEqual(DESIGN.blocks);
+    });
+
+    it('schließt wieder — und liest beim nächsten Öffnen frisch von der Platte', async () => {
+      const readDesign = vi.fn(async () => DESIGN);
+      const store = await openedStore({ readDesign });
+
+      await store.toggleDesign();
+      await store.toggleDesign();
+      expect(store.designOpen).toBe(false);
+
+      await store.toggleDesign();
+      expect(readDesign).toHaveBeenCalledTimes(2);
+      expect(store.designOpen).toBe(true);
+    });
+
+    it('geht auch ohne Entwurf auf — leer statt gar nicht', async () => {
+      const store = await openedStore({ readDesign: vi.fn(async () => ({ version: 1, blocks: [] })) });
+
+      await store.toggleDesign();
+
+      expect(store.designOpen).toBe(true);
+      expect(store.designBlocks).toEqual([]);
+    });
+
+    it('übersteht einen scheiternden Host und eine fehlende Anbindung', async () => {
+      const kaputt = await openedStore({ readDesign: vi.fn(async () => { throw new Error('weg'); }) });
+      await kaputt.toggleDesign();
+      expect(kaputt.designOpen).toBe(true);
+      expect(kaputt.designBlocks).toEqual([]);
+      expect(kaputt.error).toBeNull();
+
+      setActivePinia(createPinia());
+      const ohne = await openedStore();
+      await ohne.toggleDesign();
+      expect(ohne.designOpen).toBe(true);
+      expect(ohne.designBlocks).toEqual([]);
+    });
+
+    it('nimmt einen krummen Baum nicht in den Zustand', async () => {
+      const store = await openedStore({
+        readDesign: vi.fn(async () => ({ version: 1 } as never)),
+      });
+
+      await store.toggleDesign();
+
+      expect(store.designBlocks).toEqual([]);
+    });
+
+    it('fragt für einen Entwurf (noch ohne App) gar nicht erst nach', async () => {
+      const readDesign = vi.fn(async () => DESIGN);
+      setHost(makeHost({ readDesign }));
+      const store = useAppStore();
+      store.newDraft('/apps');
+
+      await store.toggleDesign();
+
+      expect(readDesign).not.toHaveBeenCalled();
+      expect(store.designBlocks).toEqual([]);
+    });
+  });
+
   describe('Framework-Wahl', () => {
     /** Das Framework-Argument des letzten generate-Aufrufs. */
     const frameworkOf = (host: MorphosHost): unknown =>

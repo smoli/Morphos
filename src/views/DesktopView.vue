@@ -172,18 +172,28 @@ function openDockEntry(entry: DockEntry): void {
 }
 
 /**
- * Der Chat gehört dem Fenster, nicht dem Desktop (siehe components/AppWindow) —
- * hier gibt es nur die beiden Wege, die von außen kommen: das Tastenkürzel des
- * aktiven Fensters und Escape.
+ * Chat und Entwurf gehören dem Fenster, nicht dem Desktop (siehe
+ * components/AppWindow) — hier gibt es nur die beiden Wege, die von außen
+ * kommen: das Tastenkürzel des aktiven Fensters und Escape.
  */
 const activeStore = computed(() => (desktop.activeAppId ? useAppWindow(desktop.activeAppId) : null));
 
-/** Escape schließt den offenen Chat des aktiven Fensters. Meldet, ob es einen gab. */
-function closeActiveComposer(): boolean {
+/**
+ * Escape räumt das ab, was über der App des aktiven Fensters liegt — zuerst der
+ * Entwurf, dann der Chat, immer nur eines je Druck (von oben nach unten).
+ * Meldet, ob es etwas abzuräumen gab.
+ */
+function closeActiveOverlay(): boolean {
   const store = activeStore.value;
-  if (!store?.composerOpen) return false;
-  store.closeComposer();
-  return true;
+  if (store?.designOpen) {
+    store.closeDesign();
+    return true;
+  }
+  if (store?.composerOpen) {
+    store.closeComposer();
+    return true;
+  }
+  return false;
 }
 
 // ---- Anordnung der Kacheln (frei abgelegt, sonst Raster — siehe core/arrange) ----
@@ -494,9 +504,9 @@ function onKeyDown(e: KeyboardEvent): void {
     closeSwitcher();
     return;
   }
-  // Escape schließt den Chat des aktiven Fensters — auch aus seinem Eingabefeld
-  // heraus. Ist das Startmenü offen, gehört Escape zuerst ihm.
-  if (e.key === 'Escape' && !searchOpen.value && closeActiveComposer()) {
+  // Escape schließt Entwurf bzw. Chat des aktiven Fensters — auch aus seinem
+  // Eingabefeld heraus. Ist das Startmenü offen, gehört Escape zuerst ihm.
+  if (e.key === 'Escape' && !searchOpen.value && closeActiveOverlay()) {
     e.preventDefault();
     return;
   }
@@ -543,6 +553,10 @@ function runShortcut(id: ShortcutId): void {
     case 'composer':
       // Ohne App im Vordergrund gibt es nichts zu bereden — dafür gibt es „Neue App“.
       activeStore.value?.toggleComposer();
+      break;
+    case 'design':
+      // Der Entwurf gehört einer App; ohne eine im Vordergrund gibt es keinen.
+      void activeStore.value?.toggleDesign();
       break;
   }
 }
