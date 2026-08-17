@@ -1,9 +1,16 @@
 {
-  "status": "idle",
-  "ready": [],
+  "status": "running",
+  "ready": [
+    "i0008"
+  ],
   "waiting": [],
-  "runs": [],
-  "updated": "2026-08-17T21:35:43",
+  "runs": [
+    {
+      "cardId": "i0008",
+      "phase": "running"
+    }
+  ],
+  "updated": "2026-08-17T21:43:53",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -72,8 +79,11 @@
     "c0109",
     "c0110",
     "c0111",
-    "c0112"
+    "c0112",
+    "i0008"
   ],
   "afk": true,
-  "firstSeen": {}
+  "firstSeen": {
+    "i0008": "2026-08-17T21:43:43"
+  }
 }
