@@ -78,3 +78,8 @@ schon an jedem Kasten. Neu ist bloß, dass jemand sie eintragen kann.
 - 2026-08-16 created from the e15 epic breakdown.
 - 2026-08-16 status → ready (app)
 - 2026-08-17 status → in-progress (agent)
+- 2026-08-17 Auswahl (`selectedId`) in `DesignOverlay`/`DesignBlock`, neues Feld
+  `DesignInspector.vue` (Rolle als Vorschlagsfeld, Anweisungen als Textfeld),
+  `BLOCK_ROLES` + `findBlockIn` in `core/design`, `describeDesignBlock` im Store,
+  `@describe` im `AppWindow`. Volle Suite 1874 Tests grün (29 neue),
+  `vue-tsc` sauber, `npm run build` sauber.

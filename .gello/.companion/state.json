@@ -10,13 +10,13 @@
       "cardId": "c0108",
       "phase": "running",
       "activity": {
-        "name": "Read",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e15-ui-designer/c0108-block-instructions-role.md"
+        "name": "Bash",
+        "arg": "npm test 2>&1 | tail -6; git status --short"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-17T18:55:11",
+  "updated": "2026-08-17T18:55:22",
   "pickupDelay": 10,
   "owned": [
     "c0029",
