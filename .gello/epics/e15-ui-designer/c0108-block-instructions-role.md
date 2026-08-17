@@ -8,8 +8,8 @@ created: 2026-08-16
 commit: d08a622
 updated: 2026-08-17
 status-changed: 2026-08-17T18:56:08
-usage-tokens: 30251
-usage-cost: 2.547507
+usage-tokens: 51547
+usage-cost: 6.592382
 ---
 
 # Block instructions + type/role editing

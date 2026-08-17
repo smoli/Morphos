@@ -10,13 +10,13 @@
       "cardId": "c0108",
       "phase": "running",
       "activity": {
-        "name": "mcp__gello__set_status",
-        "arg": "review"
+        "name": "Bash",
+        "arg": "git diff -- src/components/TopBar.vue .gello/epics/e15-ui-designer/c0108-block-instructions-role.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-17T18:56:08",
+  "updated": "2026-08-17T18:56:30",
   "pickupDelay": 10,
   "owned": [
     "c0029",
