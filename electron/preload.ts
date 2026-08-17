@@ -106,10 +106,14 @@ contextBridge.exposeInMainWorld('morphos', {
   publishApp: (folder: string, id: string, url: string): Promise<RemoteResult> =>
     ipcRenderer.invoke('morphos:publishApp', folder, id, url),
 
-  // Der UI-Entwurf einer App (e15): Gelesen wird er im Hauptprozess, hier geht
-  // nur der fertige Baum hinüber. Fehlt die Datei, kommt ein leerer Entwurf.
+  // Der UI-Entwurf einer App (e15): Gelesen und geschrieben wird er im
+  // Hauptprozess, hier geht nur der fertige Baum hinüber. Fehlt die Datei,
+  // kommt ein leerer Entwurf; beim Schreiben kommt zurück, was auf der Platte
+  // steht (oder null, wenn nichts geschrieben werden konnte).
   readDesign: (folder: string, id: string): Promise<Design> =>
     ipcRenderer.invoke('morphos:readDesign', folder, id),
+  writeDesign: (folder: string, id: string, design: Design): Promise<Design | null> =>
+    ipcRenderer.invoke('morphos:writeDesign', folder, id, design),
 
   listVersions: (folder: string, id: string): Promise<VersionInfo[]> =>
     ipcRenderer.invoke('morphos:listVersions', folder, id),

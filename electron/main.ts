@@ -39,7 +39,8 @@ import {
 } from '../src/core/remote';
 import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeChat } from '../src/core/appstore';
 import { isSafeAppId } from '../src/core/app';
-import { emptyDesign, readDesign } from '../src/core/design';
+import { emptyDesign } from '../src/core/design';
+import { readDesign, writeDesign } from '../src/core/designstore';
 import { IMPORT_DIR, repoUrlError, resolveImport, startImport } from '../src/core/appimport';
 import { validateIcon } from '../src/core/icon';
 import { writeReadme } from '../src/core/readme';
@@ -1118,6 +1119,22 @@ ipcMain.handle('morphos:readDesign', async (_e, folder: string, id: string): Pro
   } catch (err) {
     console.error('[morphos] readDesign fehlgeschlagen:', err);
     return emptyDesign();
+  }
+});
+
+/**
+ * Schreibt den UI-Entwurf einer App (c0107) — der einzige Weg, auf dem
+ * `design.ui.json` entsteht. Was hineingeht, rückt core/design zurecht; zurück
+ * geht der Baum, wie er nun auf der Platte steht, damit das Fenster die Datei
+ * zeigt und nicht seine eigene Rechnung. Scheitert das Schreiben, kommt null:
+ * Der Anwender soll erfahren, dass sein Entwurf nicht gespeichert ist.
+ */
+ipcMain.handle('morphos:writeDesign', async (_e, folder: string, id: string, design: Design): Promise<Design | null> => {
+  try {
+    return writeDesign(appDir(folder, id), design);
+  } catch (err) {
+    console.error('[morphos] writeDesign fehlgeschlagen:', err);
+    return null;
   }
 });
 

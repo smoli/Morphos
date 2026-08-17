@@ -1,8 +1,19 @@
 import { defineStore } from 'pinia';
 import type { AgentEvent, AppDocs, Attachment, ChatMessage, ElementRef, Framework, SourceFile, VersionInfo } from '@/types';
-// Nur der Typ: Gelesen wird der Entwurf im Hauptprozess (core/design greift auf
-// die Platte), hierher kommt der fertige Baum über den Host.
-import type { Block, Design } from '@/core/design';
+// Das Modell des UI-Entwurfs ist rein (core/design) und darf darum auch hier
+// laufen; auf die Platte greift allein der Hauptprozess (core/designstore), der
+// über den Host erreicht wird.
+import {
+  DEFAULT_BLOCK_NAME,
+  addBlock,
+  clampRect,
+  emptyDesign,
+  makeBlockId,
+  updateBlock,
+  type Block,
+  type Design,
+  type Rect,
+} from '@/core/design';
 import { getHost } from '@/services/host';
 import { agentEventLabel } from '@/core/agent';
 import { refLabel } from '@/core/pick';
@@ -172,6 +183,59 @@ export function useAppWindow(instanceId: string) {
         if (design && Array.isArray(design.blocks)) this.design = design;
       } catch {
         /* kein Entwurf ist kein Fehler */
+      }
+    },
+
+    /**
+     * Zeichnet einen neuen Kasten in den Entwurf (c0107): Die Lage kommt als
+     * Anteil des Fensters von der Zeichenfläche, der Name aus dem Feld im
+     * Kasten — ist er leer, bekommt er den Platzhalter. Zurück kommt die Id des
+     * neuen Kastens, oder null, wenn nichts geschrieben wurde.
+     */
+    async addDesignBlock(rect: Rect, name = ''): Promise<string | null> {
+      const block: Block = {
+        id: makeBlockId(),
+        name: name.trim() || DEFAULT_BLOCK_NAME,
+        rect: clampRect(rect),
+        children: [],
+      };
+      const ok = await this.saveDesign(addBlock(this.design ?? emptyDesign(), block));
+      return ok ? block.id : null;
+    },
+
+    /** Gibt einem Kasten einen neuen Namen (leer: der Platzhalter). */
+    async renameDesignBlock(id: string, name: string): Promise<void> {
+      if (!this.design) return;
+      await this.saveDesign(updateBlock(this.design, id, { name: name.trim() || DEFAULT_BLOCK_NAME }));
+    },
+
+    /**
+     * Schreibt den Entwurf über den Host in den App-Ordner und übernimmt, was
+     * dabei tatsächlich auf der Platte gelandet ist — maßgeblich ist die Datei,
+     * nicht die Rechnung des Fensters. Anders als beim Lesen wird ein Fehlschlag
+     * hier gesagt: Ein Zug, der nicht gespeichert ist, wäre stillschweigend
+     * verloren. Ohne Anbindung (Renderer-Test) bleibt es beim eigenen Stand.
+     */
+    async saveDesign(design: Design): Promise<boolean> {
+      if (!this.folder || this.id === null) return false;
+      // Reine Werte übergeben (kein reaktiver Proxy) — Electron-IPC nutzt structured clone.
+      const plain = JSON.parse(JSON.stringify(design)) as Design;
+      const host = getHost();
+      if (!host.writeDesign) {
+        this.design = plain;
+        return true;
+      }
+      try {
+        const written = await host.writeDesign(this.folder, this.id, plain);
+        if (!written || !Array.isArray(written.blocks)) {
+          this.error = 'Der Entwurf konnte nicht gespeichert werden.';
+          return false;
+        }
+        this.design = written;
+        return true;
+      } catch {
+        this.error = 'Der Entwurf konnte nicht gespeichert werden.';
+        return false;
       }
     },
 

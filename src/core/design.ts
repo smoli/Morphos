@@ -1,12 +1,15 @@
-import fs from 'node:fs';
-import path from 'node:path';
-
 /**
  * Der UI-Entwurf einer App (e15): ein Baum aus Blöcken, den der Anwender über
  * der laufenden App zeichnet, und an den sich der Agent beim Bauen hält.
  *
  *   <app>/design.ui.json   der Entwurf — im Wurzelverzeichnis der App, neben
  *                          concept.md, also NICHT unter src/
+ *
+ * Dieses Modul ist das reine MODELL: Typen, Zurechtrücken und die Baum-Helfer,
+ * ohne einen Griff zur Platte. Gelesen und geschrieben wird in core/designstore
+ * (nur Hauptprozess). Die Trennung ist keine Kür — seit c0107 zeichnet der
+ * Renderer selbst, braucht also `addBlock` und Genossen als echte Werte, und
+ * dürfte doch niemals node:fs ins Bündel ziehen.
  *
  * Der Ort ist Absicht und zugleich die Grenze: Der Agent darf ausschließlich
  * unter src/ und in die beiden Dokumente schreiben (core/files), der Entwurf
@@ -68,15 +71,17 @@ export const MAX_DESIGN_DEPTH = 16;
 /** Kleiner darf kein Block werden — sonst ließe er sich nicht mehr greifen. */
 export const MIN_BLOCK_SIZE = 0.01;
 
+/**
+ * Wie ein frisch gezeichneter Kasten heißt, solange ihm niemand einen Namen
+ * gegeben hat. Er steht so im Prompt — lieber ein sichtbarer Platzhalter als
+ * ein namenloser Kasten, den der Agent nicht deuten kann.
+ */
+export const DEFAULT_BLOCK_NAME = 'Neuer Block';
+
 /** Obergrenzen für die Texte eines Blocks (sie gehen in jeden Prompt). */
 const MAX_NAME_LENGTH = 120;
 const MAX_TYPE_LENGTH = 60;
 const MAX_INSTRUCTIONS_LENGTH = 4000;
-
-/** Wo der Entwurf einer App liegt. */
-export function designPath(dir: string): string {
-  return path.join(dir, DESIGN_FILE);
-}
 
 /** Noch kein Entwurf (jeder Aufruf liefert einen eigenen). */
 export function emptyDesign(): Design {
@@ -184,33 +189,6 @@ export function normalizeDesign(raw: unknown): Design {
       ? d.blocks.map((b) => readBlock(b, 0, seen)).filter((b): b is Block => b !== null)
       : [],
   };
-}
-
-/* ------------------------------------------------------------------ */
-/* Platte                                                              */
-/* ------------------------------------------------------------------ */
-
-/**
- * Liest den Entwurf einer App. Fehlt die Datei oder ist sie beschädigt, kommt
- * ein leerer Entwurf zurück — ein fehlender Entwurf ist der Normalfall, kein
- * Fehler. Geschrieben wird dabei nichts.
- */
-export function readDesign(dir: string): Design {
-  try {
-    return normalizeDesign(JSON.parse(fs.readFileSync(designPath(dir), 'utf8')));
-  } catch {
-    return emptyDesign();
-  }
-}
-
-/**
- * Schreibt den Entwurf in den App-Ordner — eingerückt, damit er sich im Git-Diff
- * lesen lässt. Was hineingeht, wird zuvor zurechtgerückt: Auf der Platte steht
- * nie ein kaputter Baum.
- */
-export function writeDesign(dir: string, design: Design): void {
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(designPath(dir), JSON.stringify(normalizeDesign(design), null, 2), 'utf8');
 }
 
 /* ------------------------------------------------------------------ */

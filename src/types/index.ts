@@ -692,11 +692,18 @@ export interface MorphosHost {
   /**
    * Liest den UI-Entwurf einer App (`design.ui.json` in ihrem Ordner, siehe
    * core/design). Fehlt oder taugt die Datei nicht, kommt ein leerer Entwurf —
-   * kein Entwurf ist der Normalfall, kein Fehler. Nur Lesen: Geschrieben wird
-   * er (ab c0107) über einen eigenen Weg. Optional: im Renderer-Test fehlt die
-   * Anbindung, dann bleibt der Entwurfs-Modus leer.
+   * kein Entwurf ist der Normalfall, kein Fehler. Optional: im Renderer-Test
+   * fehlt die Anbindung, dann bleibt der Entwurfs-Modus leer.
    */
   readDesign?(folder: string, id: string): Promise<Design>;
+
+  /**
+   * Schreibt den UI-Entwurf einer App (c0107) — der einzige Weg, auf dem
+   * `design.ui.json` entsteht: Nur die Schale zeichnet, der Agent liest bloß.
+   * Zurück kommt der Baum, wie er auf der Platte steht (zurechtgerückt), oder
+   * null, wenn nichts geschrieben werden konnte.
+   */
+  writeDesign?(folder: string, id: string, design: Design): Promise<Design | null>;
 
   /** Liefert die Git-Versionshistorie einer App, neueste zuerst. */
   listVersions(folder: string, id: string): Promise<VersionInfo[]>;

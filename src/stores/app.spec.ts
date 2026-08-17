@@ -5,6 +5,7 @@ import { setHost } from '@/services/host';
 // Jeder Test bekommt eine frische Pinia — dieselbe Instanz-Id ist damit isoliert.
 const useAppStore = () => useAppWindow('test');
 import type { AgentEvent, AppData, AppSnapshot, ElementRef, GenerateResult, MorphosHost, SourceFile, VersionInfo } from '@/types';
+import { DEFAULT_BLOCK_NAME, emptyDesign, type Design } from '@/core/design';
 
 const DOC = (body: string, title = 'Test', icon = '🧪'): string =>
   `<!DOCTYPE html><html><head><title>${title}</title><meta name="morphos:icon" content="${icon}"></head><body>${body}</body></html>`;
@@ -891,6 +892,118 @@ describe('useAppStore', () => {
 
       expect(readDesign).not.toHaveBeenCalled();
       expect(store.designBlocks).toEqual([]);
+    });
+
+    // c0107: Gezeichnet wird im Fenster, geschrieben auf der Platte — der Baum
+    // entsteht hier mit den reinen Helfern aus core/design und geht als Ganzes
+    // über den Host in die Datei.
+    describe('Zeichnen und Benennen (c0107)', () => {
+      /** Ein Host, der das Geschriebene festhält und zurechtgerückt zurückgibt. */
+      function writingHost() {
+        const written: Design[] = [];
+        const writeDesign = vi.fn(async (_f: string, _i: string, d: Design) => {
+          written.push(JSON.parse(JSON.stringify(d)) as Design);
+          return d;
+        });
+        return { written, writeDesign };
+      }
+
+      it('legt einen gezeichneten Kasten an und schreibt ihn auf die Platte', async () => {
+        const { written, writeDesign } = writingHost();
+        const store = await openedStore({ writeDesign, readDesign: vi.fn(async () => emptyDesign()) });
+        await store.openDesign();
+
+        const id = await store.addDesignBlock({ x: 0.1, y: 0.2, w: 0.3, h: 0.4 }, 'Kopf');
+
+        expect(id).toBeTruthy();
+        expect(writeDesign).toHaveBeenCalledWith('/apps', 'rechner-1', expect.anything());
+        expect(written[0].blocks).toEqual([
+          { id, name: 'Kopf', rect: { x: 0.1, y: 0.2, w: 0.3, h: 0.4 }, children: [] },
+        ]);
+        // Und das Fenster zeigt sofort, was in der Datei steht.
+        expect(store.designBlocks).toEqual(written[0].blocks);
+      });
+
+      it('gibt einem namenlosen Kasten den Platzhalternamen', async () => {
+        const { written, writeDesign } = writingHost();
+        const store = await openedStore({ writeDesign, readDesign: vi.fn(async () => emptyDesign()) });
+
+        await store.addDesignBlock({ x: 0, y: 0, w: 0.5, h: 0.5 }, '   ');
+
+        expect(written[0].blocks[0].name).toBe(DEFAULT_BLOCK_NAME);
+      });
+
+      it('legt den zweiten Kasten neben den ersten, ohne den ersten zu verlieren', async () => {
+        const { written, writeDesign } = writingHost();
+        const store = await openedStore({ writeDesign, readDesign: vi.fn(async () => emptyDesign()) });
+
+        await store.addDesignBlock({ x: 0, y: 0, w: 0.5, h: 0.2 }, 'Kopf');
+        await store.addDesignBlock({ x: 0, y: 0.3, w: 0.5, h: 0.2 }, 'Fuß');
+
+        expect(written[1].blocks.map((b) => b.name)).toEqual(['Kopf', 'Fuß']);
+        expect(store.designBlocks).toHaveLength(2);
+      });
+
+      it('benennt einen bestehenden Kasten um und schreibt ihn wieder', async () => {
+        const { written, writeDesign } = writingHost();
+        const store = await openedStore({ writeDesign, readDesign: vi.fn(async () => DESIGN) });
+        await store.openDesign();
+
+        await store.renameDesignBlock('b1', 'Kopfzeile');
+
+        expect(written[0].blocks[0].name).toBe('Kopfzeile');
+        expect(store.designBlocks[0].name).toBe('Kopfzeile');
+      });
+
+      it('nimmt den Entwurf, wie ihn die Platte zurückgibt', async () => {
+        // Der Hauptprozess rückt zurecht (core/design) — maßgeblich ist er.
+        const writeDesign = vi.fn(async (): Promise<Design> => ({
+          version: 1,
+          blocks: [{ id: 'gerade', name: 'Kopf', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [] }],
+        }));
+        const store = await openedStore({ writeDesign, readDesign: vi.fn(async () => emptyDesign()) });
+
+        await store.addDesignBlock({ x: 0, y: 0, w: 2, h: 0.2 }, 'Kopf');
+
+        expect(store.designBlocks).toEqual([
+          { id: 'gerade', name: 'Kopf', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [] },
+        ]);
+      });
+
+      it('sagt es, wenn der Entwurf nicht gespeichert werden konnte', async () => {
+        const store = await openedStore({
+          writeDesign: vi.fn(async () => null),
+          readDesign: vi.fn(async () => emptyDesign()),
+        });
+
+        const id = await store.addDesignBlock({ x: 0, y: 0, w: 0.5, h: 0.5 }, 'Kopf');
+
+        expect(id).toBeNull();
+        expect(store.error).toContain('nicht gespeichert');
+      });
+
+      it('übersteht einen werfenden Host', async () => {
+        const store = await openedStore({
+          writeDesign: vi.fn(async () => { throw new Error('Platte voll'); }),
+          readDesign: vi.fn(async () => emptyDesign()),
+        });
+
+        const id = await store.addDesignBlock({ x: 0, y: 0, w: 0.5, h: 0.5 }, 'Kopf');
+
+        expect(id).toBeNull();
+        expect(store.error).toContain('nicht gespeichert');
+      });
+
+      it('zeichnet nicht in einen Entwurf ohne App', async () => {
+        const { writeDesign } = writingHost();
+        setHost(makeHost({ writeDesign }));
+        const store = useAppStore();
+        store.newDraft('/apps');
+
+        expect(await store.addDesignBlock({ x: 0, y: 0, w: 0.5, h: 0.5 }, 'Kopf')).toBeNull();
+        expect(writeDesign).not.toHaveBeenCalled();
+        expect(store.error).toBeNull();
+      });
     });
   });
 

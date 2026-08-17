@@ -1,26 +1,20 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+import { describe, it, expect } from 'vitest';
 import {
   addBlock,
   DESIGN_FILE,
   DESIGN_VERSION,
   MAX_DESIGN_DEPTH,
   MIN_BLOCK_SIZE,
-  designPath,
   emptyDesign,
   findBlock,
   listBlocks,
   makeBlockId,
   moveBlock,
   normalizeDesign,
-  readDesign,
   removeBlock,
   reparentBlock,
   updateBlock,
   walkBlocks,
-  writeDesign,
   type Block,
   type Design,
 } from './design';
@@ -42,7 +36,7 @@ function design(...blocks: Block[]): Design {
   return { version: DESIGN_VERSION, blocks };
 }
 
-describe('emptyDesign / designPath', () => {
+describe('emptyDesign', () => {
   it('liefert einen leeren Entwurf in der aktuellen Fassung', () => {
     expect(emptyDesign()).toEqual({ version: DESIGN_VERSION, blocks: [] });
   });
@@ -51,11 +45,6 @@ describe('emptyDesign / designPath', () => {
     const a = emptyDesign();
     a.blocks.push(block('b1'));
     expect(emptyDesign().blocks).toEqual([]);
-  });
-
-  it('legt die Datei im Wurzelverzeichnis der App ab', () => {
-    expect(DESIGN_FILE).toBe('design.ui.json');
-    expect(designPath('/apps/notiz')).toBe(path.join('/apps/notiz', DESIGN_FILE));
   });
 
   it('ist für den Agenten nicht beschreibbar (Nur-Lesen-Vertrag)', () => {
@@ -172,68 +161,6 @@ describe('normalizeDesign', () => {
     const copy = JSON.parse(JSON.stringify(d)) as Design;
     expect(normalizeDesign(d)).toEqual(d);
     expect(d).toEqual(copy);
-  });
-});
-
-describe('readDesign / writeDesign', () => {
-  let dir: string;
-
-  beforeEach(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'morphos-design-'));
-  });
-  afterEach(() => {
-    fs.rmSync(dir, { recursive: true, force: true });
-  });
-
-  it('liefert einen leeren Entwurf, solange keine Datei da ist', () => {
-    expect(readDesign(dir)).toEqual(emptyDesign());
-    expect(fs.existsSync(designPath(dir))).toBe(false);
-  });
-
-  it('schreibt und liest denselben Entwurf zurück', () => {
-    const d = design(
-      block('b1', { x: 0.1, y: 0.2, w: 0.3, h: 0.4 }, {
-        name: 'Kopf',
-        instructions: 'Zwei Zeilen\nText',
-        type: 'header',
-        children: [block('b2', { x: 0.15, y: 0.25, w: 0.1, h: 0.1 })],
-      }),
-      block('b3'),
-    );
-    writeDesign(dir, d);
-    expect(readDesign(dir)).toEqual(d);
-  });
-
-  it('legt die Datei lesbar (eingerückt) im Wurzelverzeichnis ab', () => {
-    writeDesign(dir, design(block('b1')));
-    const text = fs.readFileSync(designPath(dir), 'utf8');
-    expect(text).toContain('\n  "version"');
-    expect(JSON.parse(text).blocks).toHaveLength(1);
-  });
-
-  it('bringt beim Schreiben in Ordnung, was ihm gereicht wird', () => {
-    writeDesign(dir, { version: 0, blocks: [{ name: 'a', rect: { x: 9, y: 9, w: 9, h: 9 } }] } as unknown as Design);
-    const d = readDesign(dir);
-    expect(d.version).toBe(DESIGN_VERSION);
-    expect(d.blocks[0].rect.x).toBeLessThanOrEqual(1);
-  });
-
-  it('legt einen fehlenden Ordner an', () => {
-    const sub = path.join(dir, 'neu', 'app');
-    writeDesign(sub, design(block('b1')));
-    expect(readDesign(sub).blocks).toHaveLength(1);
-  });
-
-  it('überlebt eine beschädigte Datei', () => {
-    fs.writeFileSync(designPath(dir), '{ kein json', 'utf8');
-    expect(readDesign(dir)).toEqual(emptyDesign());
-  });
-
-  it('bringt eine fremde Datei beim Lesen in Ordnung', () => {
-    fs.writeFileSync(designPath(dir), JSON.stringify({ blocks: [{ name: 'a', rect: { w: 4 } }] }), 'utf8');
-    const d = readDesign(dir);
-    expect(d.version).toBe(DESIGN_VERSION);
-    expect(d.blocks[0].rect.w).toBe(1);
   });
 });
 

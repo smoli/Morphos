@@ -253,6 +253,8 @@ async function onIcon(icon: string | null): Promise<void> {
       v-if="store.designOpen"
       :blocks="store.designBlocks"
       @close="store.closeDesign()"
+      @draw="(rect, name) => store.addDesignBlock(rect, name)"
+      @rename="(id, name) => store.renameDesignBlock(id, name)"
     />
 
     <div v-if="store.busy || runningElsewhere" class="w-loading">

@@ -5,7 +5,8 @@ import path from 'node:path';
 import { agentArgs, generateApp, type GenerateDeps, type GenerateRequest } from './generate';
 import { MCP_ALLOWED_TOOLS, MCP_DENIED_TOOLS, mcpToolId } from './mcp';
 import { CONCEPT_FILE, USERDOC_FILE } from './docs';
-import { DESIGN_VERSION, writeDesign } from './design';
+import { DESIGN_VERSION } from './design';
+import { writeDesign } from './designstore';
 import { readManifest } from './appstore';
 import type { AgentResult } from '@/types';
 

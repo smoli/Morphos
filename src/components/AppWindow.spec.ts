@@ -240,6 +240,42 @@ describe('AppWindow', () => {
       expect(wrapper.getComponent(DesignOverlay).props('blocks')).toEqual([]);
     });
 
+    // c0107: Was auf der Schicht gezeichnet und benannt wird, geht durch das
+    // Fenster auf die Platte — hier ist die Naht zwischen beidem geprüft.
+    it('gibt einen gezeichneten Kasten an den Host weiter', async () => {
+      const writeDesign = vi.fn(async (_f: string, _i: string, d: unknown) => d);
+      const { wrapper } = await mountFrameForApp({
+        readDesign: vi.fn(async () => ({ version: 1, blocks: [] })),
+        writeDesign: writeDesign as never,
+      });
+      await wrapper.get('.w-design').trigger('click');
+      await flushPromises();
+
+      wrapper.getComponent(DesignOverlay).vm.$emit('draw', { x: 0, y: 0, w: 1, h: 0.2 }, 'Kopfzeile');
+      await flushPromises();
+
+      const geschrieben = writeDesign.mock.calls[0]![2] as { blocks: { name: string }[] };
+      expect(writeDesign).toHaveBeenCalledWith('/apps', 'rechner-1', expect.anything());
+      expect(geschrieben.blocks.map((b) => b.name)).toEqual(['Kopfzeile']);
+      expect(wrapper.getComponent(DesignOverlay).props('blocks')).toHaveLength(1);
+    });
+
+    it('gibt einen neuen Namen an den Host weiter', async () => {
+      const writeDesign = vi.fn(async (_f: string, _i: string, d: unknown) => d);
+      const { wrapper } = await mountFrameForApp({
+        readDesign: vi.fn(async () => DESIGN),
+        writeDesign: writeDesign as never,
+      });
+      await wrapper.get('.w-design').trigger('click');
+      await flushPromises();
+
+      wrapper.getComponent(DesignOverlay).vm.$emit('rename', 'b1', 'Kopfzeile');
+      await flushPromises();
+
+      const geschrieben = writeDesign.mock.calls[0]![2] as { blocks: { name: string }[] };
+      expect(geschrieben.blocks[0].name).toBe('Kopfzeile');
+    });
+
     it('schließt ihn über den Schließen-Knopf der Schicht', async () => {
       const { wrapper } = await mountFrameForApp({ readDesign: vi.fn(async () => DESIGN) });
       await wrapper.get('.w-design').trigger('click');

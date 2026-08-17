@@ -8,7 +8,7 @@ import { bundle, ENTRY_FILE } from './bundle';
 import { extractHtml, extractIcon, extractTitle } from './html';
 import { extractLibs, splitLibs } from './libs';
 import { resolveFramework } from './framework';
-import { readDesign } from './design';
+import { readDesign } from './designstore';
 import { DEFAULT_ICON, DEFAULT_NAME, makeAppId } from './app';
 
 /**
