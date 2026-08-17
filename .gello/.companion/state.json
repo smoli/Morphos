@@ -1,9 +1,11 @@
 {
   "status": "idle",
-  "ready": [],
+  "ready": [
+    "c0111"
+  ],
   "waiting": [],
   "runs": [],
-  "updated": "2026-08-17T19:37:26",
+  "updated": "2026-08-17T21:13:18",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -73,5 +75,7 @@
     "c0110"
   ],
   "afk": true,
-  "firstSeen": {}
+  "firstSeen": {
+    "c0111": "2026-08-17T21:13:18"
+  }
 }
