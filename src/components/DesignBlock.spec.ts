@@ -99,6 +99,28 @@ describe('DesignBlock', () => {
     });
   });
 
+  // c0110: Während eines Zugs ist der künftige Elter hervorgehoben — welcher
+  // das ist, entscheidet die Fläche (containerIn), der Kasten trägt es nur.
+  describe('Künftiger Elter (c0110)', () => {
+    it('hebt sich hervor, wenn ein Zug in ihm landen würde', () => {
+      const ohne = mount(DesignBlock, { props: { block: block() } });
+      expect(ohne.get('.design-block').classes()).not.toContain('drop');
+
+      const mit = mount(DesignBlock, { props: { block: block(), dropId: 'b1' } });
+      expect(mit.get('.design-block').classes()).toContain('drop');
+    });
+
+    it('reicht die Auszeichnung durch den ganzen Baum', () => {
+      const kind = block({ id: 'b2', name: 'Liste', rect: { x: 0.2, y: 0.3, w: 0.1, h: 0.1 } });
+      const wrapper = mount(DesignBlock, {
+        props: { block: block({ children: [kind] }), dropId: 'b2' },
+      });
+
+      expect(wrapper.get('.design-block').classes()).not.toContain('drop');
+      expect(wrapper.get('.design-block .design-block').classes()).toContain('drop');
+    });
+  });
+
   it('trägt auch tiefere Verschachtelungen (Kind im Kind)', () => {
     const enkel = block({ id: 'b3', name: 'Zeile', rect: { x: 0.25, y: 0.35, w: 0.05, h: 0.05 } });
     const kind = block({ id: 'b2', name: 'Liste', rect: { x: 0.2, y: 0.3, w: 0.1, h: 0.1 }, children: [enkel] });

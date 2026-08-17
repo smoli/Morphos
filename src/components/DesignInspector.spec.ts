@@ -138,4 +138,25 @@ describe('DesignInspector (c0108)', () => {
       window.removeEventListener('keydown', draussen);
     }
   });
+
+  // c0110: Das Feld redet von einem Kasten — also gehört auch das Wegwerfen
+  // dieses Kastens hierher.
+  it('bittet um das Löschen des Kastens', async () => {
+    const { wrapper } = inspector();
+
+    await wrapper.get('.di-delete').trigger('click');
+
+    expect(wrapper.emitted('delete')).toHaveLength(1);
+    // Geschrieben wird hier nichts, und geschlossen wird auch nicht: Das
+    // entscheidet, was von der Platte zurückkommt.
+    expect(wrapper.emitted('close')).toBeUndefined();
+  });
+
+  it('sagt, dass die Kinder des Kastens bleiben', async () => {
+    // Gelöscht wird der Rahmen, nicht der Inhalt (core/design: deleteBlock) —
+    // das soll dranstehen, bevor jemand klickt.
+    const { wrapper } = inspector();
+
+    expect(wrapper.get('.di-delete').attributes('title')).toContain('Kinder');
+  });
 });

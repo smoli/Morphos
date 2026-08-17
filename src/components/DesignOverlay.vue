@@ -6,6 +6,7 @@ import {
   DEFAULT_BLOCK_NAME,
   MIN_BLOCK_SIZE,
   blockBounds,
+  containerIn,
   findBlockIn,
   moveRect,
   resizeRect,
@@ -40,6 +41,13 @@ import {
  * geht dem Anfassen also voraus — sonst ließe sich in einem Kasten nie ein
  * zweiter aufziehen.
  *
+ * Seit c0110 sagt die LAGE eines Kastens, wohin er gehört: Was ganz in einem
+ * anderen Kasten liegt, wird sein Kind; was herausgeschoben wird, hängt sich um
+ * (core/design: `containerIn`, `nestBlock`). Die Fläche rechnet das nicht aus,
+ * um es zu tun — das tut der Store —, sondern um es zu ZEIGEN: Der künftige
+ * Elter leuchtet auf, solange der Zug läuft. Und das Löschen sitzt im Feld des
+ * ausgewählten Kastens (DesignInspector) und geht als `delete` nach oben.
+ *
  * Die Anteile beziehen sich auf die Fläche (`.design-stage`) — dieselbe Fläche,
  * auf der auch gezeichnet wird. Was gezeichnet ist und was zu sehen ist, meint
  * damit dasselbe.
@@ -58,6 +66,8 @@ const emit = defineEmits<{
   move: [id: string, to: { x: number; y: number }];
   /** Ein Kasten ist an einer seiner Kanten größer (oder kleiner) gezogen worden. */
   resize: [id: string, rect: Rect];
+  /** Ein Kasten soll weg (c0110) — seine Kinder rücken an seine Stelle. */
+  delete: [id: string];
 }>();
 
 /** Die Id des noch ungeborenen Kastens — er steht in keinem Entwurf. */
@@ -115,6 +125,19 @@ const band = computed<Rect | null>(() => {
   return gesture.value ? shaped(gesture.value, from.value, to.value) : span(from.value, to.value);
 });
 
+/**
+ * Der Kasten, in dem der laufende Zug LANDEN würde (c0110) — sein künftiger
+ * Elter. Gerechnet wird mit derselben Funktion, die den Baum hinterher umhängt
+ * (`containerIn` in core/design): Zwei Rechnungen für dasselbe wären zwei
+ * Wahrheiten, und die Vorschau löge früher oder später. Der geschobene Kasten
+ * selbst (samt seinem Zweig) kommt nicht in Frage — kein Kreis.
+ */
+const dropId = computed<string | null>(() => {
+  const rect = band.value;
+  if (!rect) return null;
+  return containerIn(props.blocks, rect, gesture.value?.id)?.id ?? null;
+});
+
 /** Der Kasten, in dem der Name des neuen eingetragen wird. */
 const draftBlock = computed<Block | null>(() =>
   draft.value ? { id: DRAFT_ID, name: DEFAULT_BLOCK_NAME, rect: draft.value, children: [] } : null,
@@ -152,18 +175,23 @@ function shaped(g: NonNullable<typeof gesture.value>, a: { x: number; y: number 
 /**
  * Ein Kasten meldet, dass er angefasst wurde. Der erste gewinnt: Ein Druck auf
  * einen Griff läuft über den Kasten weiter (und ein Kind über seinen Elter),
- * gemeint ist aber, was zuunterst liegt. Anfassen lässt sich nur der
- * ausgewählte Kasten — jeder andere Druck zeichnet.
+ * gemeint ist aber, was zuunterst liegt.
+ *
+ * Gemeldet wird darum jeder Kasten, angefasst ist nur der ausgewählte
+ * (`onPointerDown`): Ein Druck auf ein NICHT ausgewähltes Kind zeichnet, auch
+ * wenn dessen Elter ausgewählt ist — sonst wäre die Fläche jedes Kindes für den
+ * Stift verloren, sobald sein Elter ausgewählt ist, und in ein Kind hinein
+ * ließe sich nichts mehr schachteln (c0110).
  */
 function onGrab(id: string, handle: Handle | null): void {
-  if (grabbed || draft.value || id !== selectedId.value) return;
+  if (grabbed || draft.value) return;
   grabbed = { id, handle };
 }
 
 function onPointerDown(event: PointerEvent): void {
   // Ein noch offenes Namensfeld schließt sich von selbst (Verlassen des Feldes)
   // — erst danach beginnt der neue Zug.
-  const grab = grabbed;
+  const grab = grabbed?.id === selectedId.value ? grabbed : null;
   grabbed = null;
   dragged = false;
   if (event.button !== undefined && event.button !== 0) return;
@@ -258,8 +286,8 @@ function onCancel(): void {
     <div class="design-head">
       <span class="design-title">Entwurf</span>
       <span class="design-hint">
-        Ziehen zeichnet einen Kasten, ein Klick wählt ihn aus — den ausgewählten schiebt
-        und zieht man zurecht
+        Ziehen zeichnet, ein Klick wählt aus — den ausgewählten Kasten schiebt und zieht
+        man zurecht; in einen Kasten hinein heißt hinein
       </span>
       <button type="button" class="design-close" @click="emit('close')">Schließen</button>
     </div>
@@ -281,6 +309,7 @@ function onCancel(): void {
         :block="block"
         :editing-id="editingId"
         :selected-id="selectedId"
+        :drop-id="dropId"
         @edit="editingId = $event"
         @select="onSelect"
         @grab="onGrab"
@@ -306,6 +335,7 @@ function onCancel(): void {
         v-if="selected"
         :block="selected"
         @update="(patch) => selected && emit('describe', selected.id, patch)"
+        @delete="selected && emit('delete', selected.id)"
         @close="selectedId = null"
       />
     </div>

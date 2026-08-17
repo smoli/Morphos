@@ -276,6 +276,26 @@ describe('AppWindow', () => {
       expect(geschrieben.blocks[0].name).toBe('Kopfzeile');
     });
 
+    // c0110: Auch das Löschen geht denselben Weg — die Schicht bittet, das
+    // Fenster schreibt.
+    it('gibt einen gelöschten Kasten an den Host weiter', async () => {
+      const writeDesign = vi.fn(async (_f: string, _i: string, d: unknown) => d);
+      const { wrapper } = await mountFrameForApp({
+        readDesign: vi.fn(async () => DESIGN),
+        writeDesign: writeDesign as never,
+      });
+      await wrapper.get('.w-design').trigger('click');
+      await flushPromises();
+
+      wrapper.getComponent(DesignOverlay).vm.$emit('delete', 'b1');
+      await flushPromises();
+
+      // Der Kopf ist weg, sein Kind an seiner Stelle (core/design: deleteBlock).
+      const geschrieben = writeDesign.mock.calls[0]![2] as { blocks: { name: string }[] };
+      expect(geschrieben.blocks.map((b) => b.name)).toEqual(['Titel']);
+      expect(wrapper.getComponent(DesignOverlay).props('blocks')).toHaveLength(1);
+    });
+
     it('schließt ihn über den Schließen-Knopf der Schicht', async () => {
       const { wrapper } = await mountFrameForApp({ readDesign: vi.fn(async () => DESIGN) });
       await wrapper.get('.w-design').trigger('click');

@@ -1103,6 +1103,163 @@ describe('useAppStore', () => {
           expect(store.error).toBeNull();
         });
       });
+
+      // c0110: Wohin ein Kasten gehört, sagt seine Lage (core/design:
+      // containerFor/nestBlock) — hineingeschoben verschachtelt, hinausgeschoben
+      // hängt um. Gelöscht wird der Rahmen, nicht der Inhalt.
+      describe('Verschachteln, Umhängen, Löschen (c0110)', () => {
+        /** Ein Inhaltskasten in der linken Hälfte — Platz für einen Kasten darin. */
+        const INHALT = {
+          version: 1,
+          blocks: [{
+            id: 'b1', name: 'Inhalt', rect: { x: 0.1, y: 0.1, w: 0.5, h: 0.5 }, children: [],
+          }],
+        };
+
+        it('macht einen Kasten, der in einen anderen gezeichnet wird, zu seinem Kind', async () => {
+          const { written, writeDesign } = writingHost();
+          const store = await openedStore({ writeDesign, readDesign: vi.fn(async () => INHALT) });
+          await store.openDesign();
+
+          const id = await store.addDesignBlock({ x: 0.2, y: 0.2, w: 0.2, h: 0.2 }, 'Liste');
+
+          expect(written[0].blocks.map((b) => b.id)).toEqual(['b1']);
+          expect(written[0].blocks[0].children.map((b) => b.name)).toEqual(['Liste']);
+          // Verschoben wird dabei nichts — die Anteile sind absolut (c0104).
+          expect(written[0].blocks[0].children[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.2, h: 0.2 });
+          expect(id).toBe(written[0].blocks[0].children[0].id);
+        });
+
+        it('lässt einen Kasten daneben an der Wurzel', async () => {
+          const { written, writeDesign } = writingHost();
+          const store = await openedStore({ writeDesign, readDesign: vi.fn(async () => INHALT) });
+          await store.openDesign();
+
+          await store.addDesignBlock({ x: 0.7, y: 0.1, w: 0.2, h: 0.2 }, 'Seitenleiste');
+
+          expect(written[0].blocks.map((b) => b.name)).toEqual(['Inhalt', 'Seitenleiste']);
+          expect(written[0].blocks[0].children).toEqual([]);
+        });
+
+        it('verschachtelt einen Kasten, der in einen anderen geschoben wird', async () => {
+          const { written, writeDesign } = writingHost();
+          const store = await openedStore({
+            writeDesign,
+            readDesign: vi.fn(async () => ({
+              version: 1,
+              blocks: [
+                INHALT.blocks[0],
+                { id: 'b2', name: 'Liste', rect: { x: 0.7, y: 0.2, w: 0.1, h: 0.1 }, children: [] },
+              ],
+            })),
+          });
+          await store.openDesign();
+
+          await store.moveDesignBlock('b2', { x: 0.2, y: 0.2 });
+
+          expect(written[0].blocks.map((b) => b.id)).toEqual(['b1']);
+          expect(written[0].blocks[0].children.map((b) => b.id)).toEqual(['b2']);
+          expect(written[0].blocks[0].children[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.1, h: 0.1 });
+        });
+
+        it('hängt einen herausgeschobenen Kasten an die Wurzel — samt seiner Kinder', async () => {
+          const { written, writeDesign } = writingHost();
+          const store = await openedStore({
+            writeDesign,
+            readDesign: vi.fn(async () => ({
+              version: 1,
+              blocks: [{
+                ...INHALT.blocks[0],
+                children: [{
+                  id: 'b2', name: 'Liste', rect: { x: 0.2, y: 0.2, w: 0.1, h: 0.1 },
+                  children: [{
+                    id: 'b3', name: 'Zeile', rect: { x: 0.22, y: 0.22, w: 0.05, h: 0.05 }, children: [],
+                  }],
+                }],
+              }],
+            })),
+          });
+          await store.openDesign();
+
+          await store.moveDesignBlock('b2', { x: 0.8, y: 0.8 });
+
+          expect(written[0].blocks.map((b) => b.id)).toEqual(['b1', 'b2']);
+          expect(written[0].blocks[0].children).toEqual([]);
+          // Das Enkelkind ist mitgewandert und hängt weiter an seinem Elter.
+          expect(written[0].blocks[1].children[0].rect).toEqual({ x: 0.82, y: 0.82, w: 0.05, h: 0.05 });
+        });
+
+        it('hängt auch einen Kasten um, der aus seinem Elter heraus gezogen wird', async () => {
+          const { written, writeDesign } = writingHost();
+          const store = await openedStore({
+            writeDesign,
+            readDesign: vi.fn(async () => ({
+              version: 1,
+              blocks: [{
+                ...INHALT.blocks[0],
+                children: [{
+                  id: 'b2', name: 'Liste', rect: { x: 0.2, y: 0.2, w: 0.1, h: 0.1 }, children: [],
+                }],
+              }],
+            })),
+          });
+          await store.openDesign();
+
+          // Die rechte Kante über den Elter hinaus: Der Kasten liegt nicht mehr drin.
+          await store.resizeDesignBlock('b2', { x: 0.2, y: 0.2, w: 0.7, h: 0.1 });
+
+          expect(written[0].blocks.map((b) => b.id)).toEqual(['b1', 'b2']);
+          expect(written[0].blocks[1].rect).toEqual({ x: 0.2, y: 0.2, w: 0.7, h: 0.1 });
+        });
+
+        it('löscht einen Kasten und hebt seine Kinder an seine Stelle', async () => {
+          const { written, writeDesign } = writingHost();
+          const store = await openedStore({
+            writeDesign,
+            readDesign: vi.fn(async () => ({
+              version: 1,
+              blocks: [{
+                ...INHALT.blocks[0],
+                children: [{
+                  id: 'b2', name: 'Liste', rect: { x: 0.2, y: 0.2, w: 0.2, h: 0.2 },
+                  children: [{
+                    id: 'b3', name: 'Zeile', rect: { x: 0.25, y: 0.25, w: 0.05, h: 0.05 }, children: [],
+                  }],
+                }],
+              }],
+            })),
+          });
+          await store.openDesign();
+
+          await store.deleteDesignBlock('b2');
+
+          expect(written[0].blocks.map((b) => b.id)).toEqual(['b1']);
+          expect(written[0].blocks[0].children.map((b) => b.id)).toEqual(['b3']);
+          expect(written[0].blocks[0].children[0].rect).toEqual({ x: 0.25, y: 0.25, w: 0.05, h: 0.05 });
+          expect(store.designBlocks[0].children[0].id).toBe('b3');
+        });
+
+        it('löscht ohne Entwurf nichts und sagt nichts', async () => {
+          const { writeDesign } = writingHost();
+          const store = await openedStore({ writeDesign, readDesign: vi.fn(async () => emptyDesign()) });
+
+          await store.deleteDesignBlock('b1');
+
+          expect(writeDesign).not.toHaveBeenCalled();
+          expect(store.error).toBeNull();
+        });
+
+        it('schreibt nicht, wenn es den zu löschenden Kasten nicht gibt', async () => {
+          const { writeDesign } = writingHost();
+          const store = await openedStore({ writeDesign, readDesign: vi.fn(async () => INHALT) });
+          await store.openDesign();
+
+          await store.deleteDesignBlock('gibtsnicht');
+
+          expect(writeDesign).not.toHaveBeenCalled();
+          expect(store.error).toBeNull();
+        });
+      });
     });
   });
 

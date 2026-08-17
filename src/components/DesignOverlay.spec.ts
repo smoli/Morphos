@@ -524,4 +524,136 @@ describe('DesignOverlay', () => {
       expect(wrapper.find('.design-band').exists()).toBe(false);
     });
   });
+
+  // c0110: Wohin ein Kasten gehört, sagt seine Lage — gerechnet wird das in
+  // core/design (containerIn). Die Fläche zeigt es an, WÄHREND gezogen wird:
+  // Wer nicht sieht, in welchem Kasten er landet, schachtelt aus Versehen.
+  describe('Verschachteln und Löschen', () => {
+    /** Ein Overlay mit Kästen, dessen Fläche 400 × 200 Pixel groß ist. */
+    function nesting(blocks: Block[] = BLOCKS) {
+      const wrapper = mount(DesignOverlay, { props: { blocks }, attachTo: document.body });
+      const stage = wrapper.get('.design-stage');
+      (stage.element as HTMLElement).getBoundingClientRect = () =>
+        ({ left: 0, top: 0, width: 400, height: 200, right: 400, bottom: 200, x: 0, y: 0 }) as DOMRect;
+      return { wrapper, stage };
+    }
+
+    /** Der Kasten, der als künftiger Elter hervorgehoben ist (sein Name). */
+    function dropName(wrapper: ReturnType<typeof nesting>['wrapper']): string | null {
+      const marked = wrapper.findAll('.design-block.drop');
+      expect(marked.length).toBeLessThan(2);
+      return marked.length ? marked[0].get('.db-name').text() : null;
+    }
+
+    it('zeigt während des Zeichnens, in welchem Kasten der neue Kasten landet', async () => {
+      // Unter der Liste, aber noch im Inhalt (der reicht senkrecht bis unten).
+      const { wrapper, stage } = nesting();
+
+      await stage.trigger('pointerdown', { button: 0, clientX: 40, clientY: 160 });
+      await stage.trigger('pointermove', { clientX: 100, clientY: 180 });
+
+      expect(dropName(wrapper)).toBe('Inhalt');
+    });
+
+    it('hebt nichts hervor, wo kein Kasten ist', async () => {
+      const { wrapper, stage } = nesting();
+
+      await stage.trigger('pointerdown', { button: 0, clientX: 300, clientY: 40 });
+      await stage.trigger('pointermove', { clientX: 380, clientY: 80 });
+
+      expect(dropName(wrapper)).toBeNull();
+    });
+
+    it('hebt nichts mehr hervor, sobald der Zug vorbei ist', async () => {
+      const { wrapper, stage } = nesting();
+
+      await stage.trigger('pointerdown', { button: 0, clientX: 40, clientY: 160 });
+      await stage.trigger('pointermove', { clientX: 100, clientY: 180 });
+      await stage.trigger('pointerup', { clientX: 100, clientY: 180 });
+
+      expect(dropName(wrapper)).toBeNull();
+    });
+
+    it('zeigt beim Schieben, in welchem Kasten der Kasten landet', async () => {
+      const { wrapper, stage } = nesting();
+      const liste = wrapper.get('.design-block .design-block');
+      await liste.trigger('click');
+
+      await liste.trigger('pointerdown', { button: 0, clientX: 100, clientY: 100 });
+      await stage.trigger('pointermove', { clientX: 110, clientY: 110 });
+
+      // Der geschobene Kasten selbst kommt nicht in Frage — sein Elter schon.
+      expect(dropName(wrapper)).toBe('Inhalt');
+    });
+
+    it('bietet den eigenen Zweig nicht als Elter an (kein Kreis)', async () => {
+      // Ein Kasten, der ganz in seinem eigenen Kind liegt: Beim Schieben darf
+      // weder er selbst noch das Kind als künftiger Elter erscheinen.
+      const eng: Block[] = [{
+        id: 'p',
+        name: 'Elter',
+        rect: { x: 0.2, y: 0.2, w: 0.1, h: 0.1 },
+        children: [{ id: 'k', name: 'Kind', rect: { x: 0.1, y: 0.1, w: 0.5, h: 0.5 }, children: [] }],
+      }];
+      const { wrapper, stage } = nesting(eng);
+      const elter = wrapper.get('.design-stage > .design-block');
+      await elter.trigger('click');
+
+      await elter.trigger('pointerdown', { button: 0, clientX: 90, clientY: 45 });
+      await stage.trigger('pointermove', { clientX: 95, clientY: 50 });
+
+      expect(dropName(wrapper)).toBeNull();
+    });
+
+    it('zeichnet in ein Kind hinein, auch wenn dessen Elter ausgewählt ist', async () => {
+      // „Gemeint ist das Unterste“ (c0109): Ein Druck auf ein NICHT ausgewähltes
+      // Kind zeichnet — sonst wäre die Fläche jedes Kindes für den Stift
+      // verloren, sobald sein Elter ausgewählt ist, und in ein Kind hinein
+      // ließe sich nichts mehr schachteln.
+      const { wrapper, stage } = nesting();
+      await wrapper.findAll('.design-stage > .design-block')[1].trigger('click');
+      expect(wrapper.get('.di-name').text()).toBe('Inhalt');
+
+      const liste = wrapper.get('.design-block .design-block');
+      await liste.trigger('pointerdown', { button: 0, clientX: 40, clientY: 60 });
+      await stage.trigger('pointermove', { clientX: 120, clientY: 100 });
+      // Der neue Kasten landet in der Liste, nicht in ihrem Elter.
+      expect(dropName(wrapper)).toBe('Liste');
+      await stage.trigger('pointerup', { clientX: 120, clientY: 100 });
+
+      expect(wrapper.emitted('move')).toBeUndefined();
+      expect(wrapper.get('input.db-input')).toBeTruthy();
+    });
+
+    it('gibt das Löschen des ausgewählten Kastens weiter', async () => {
+      const { wrapper } = nesting();
+      await wrapper.findAll('.design-stage > .design-block')[0].trigger('click');
+
+      await wrapper.get('.di-delete').trigger('click');
+
+      expect(wrapper.emitted('delete')).toEqual([['b1']]);
+    });
+
+    it('löscht auch einen geschachtelten Kasten', async () => {
+      const { wrapper } = nesting();
+      await wrapper.get('.design-block .design-block').trigger('click');
+
+      await wrapper.get('.di-delete').trigger('click');
+
+      expect(wrapper.emitted('delete')).toEqual([['b3']]);
+    });
+
+    it('schließt das Feld, sobald der Kasten aus dem Entwurf verschwunden ist', async () => {
+      // Maßgeblich ist die Datei (c0107): Gelöscht ist der Kasten erst, wenn er
+      // nicht mehr zurückkommt — dann hat das Feld nichts mehr zu zeigen.
+      const { wrapper } = nesting();
+      await wrapper.findAll('.design-stage > .design-block')[0].trigger('click');
+      expect(wrapper.find('.design-inspector').exists()).toBe(true);
+
+      await wrapper.setProps({ blocks: [BLOCKS[1]] });
+
+      expect(wrapper.find('.design-inspector').exists()).toBe(false);
+      expect(wrapper.emitted('close')).toBeUndefined();
+    });
+  });
 });

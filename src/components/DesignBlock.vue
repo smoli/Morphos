@@ -27,12 +27,17 @@ import { BLOCK_HANDLES, type Block, type Handle, type Rect } from '@/core/design
  * eines Kindes. Gezeichnet wird ein Kind aber im Kasten seines Elters, darum
  * rechnet `style` die Anteile einmal auf dessen Kasten um. Das Verschachteln
  * bleibt so eine reine Aussage über die Gliederung, ist im Baum aber zu sehen.
+ *
+ * Läuft ein Zug, ist der Kasten hervorgehoben, in dem er landen würde (c0110:
+ * `dropId`) — wer nicht sieht, in welchen Kasten er zeichnet oder schiebt,
+ * schachtelt aus Versehen. Welcher das ist, weiß auch hier die Fläche.
  */
 const props = defineProps<{
   block: Block;
   parent?: Rect;
   editingId?: string | null;
   selectedId?: string | null;
+  dropId?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -57,6 +62,7 @@ const emit = defineEmits<{
 
 const editing = computed(() => !!props.editingId && props.editingId === props.block.id);
 const selected = computed(() => !!props.selectedId && props.selectedId === props.block.id);
+const drop = computed(() => !!props.dropId && props.dropId === props.block.id);
 
 const input = ref<HTMLInputElement | null>(null);
 
@@ -115,7 +121,7 @@ const style = computed(() => {
 <template>
   <div
     class="design-block"
-    :class="{ editing, selected }"
+    :class="{ editing, selected, drop }"
     :style="style"
     @click.stop="emit('select', block.id)"
     @pointerdown="emit('grab', block.id, null)"
@@ -151,6 +157,7 @@ const style = computed(() => {
       :parent="block.rect"
       :editing-id="editingId"
       :selected-id="selectedId"
+      :drop-id="dropId"
       @edit="emit('edit', $event)"
       @select="emit('select', $event)"
       @grab="(id, handle) => emit('grab', id, handle)"
@@ -227,6 +234,16 @@ const style = computed(() => {
 /* Der ausgewählte Kasten lässt sich schieben — das sagt schon der Zeiger. */
 .design-block.selected {
   cursor: move;
+}
+/*
+ * Der künftige Elter (c0110): Er leuchtet auf, solange ein Zug in ihm landen
+ * würde — in einer anderen Farbe als der ausgewählte Kasten, denn er sagt etwas
+ * anderes (hier hinein, nicht: dieser hier).
+ */
+.design-block.drop {
+  border-color: rgba(255, 196, 92, 0.95);
+  background: rgba(255, 196, 92, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 196, 92, 0.7);
 }
 /*
  * Die Griffe sitzen auf den Kanten und Ecken, je zur Hälfte innen und außen:

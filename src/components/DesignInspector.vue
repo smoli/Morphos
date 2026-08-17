@@ -21,12 +21,20 @@ import {
  * Tastendruck: Sonst schriebe jeder Buchstabe die Datei neu. Hat sich nichts
  * geändert, geht auch nichts nach oben. Escape verwirft das Feld und schließt
  * es — und bleibt hier, statt gleich den ganzen Entwurfs-Modus zuzuklappen.
+ *
+ * Seit c0110 steht hier auch das Löschen: Das Feld redet von EINEM Kasten, also
+ * gehört das Wegwerfen dieses Kastens hierher und nicht in die Fläche. Gelöscht
+ * wird dabei nur der Rahmen — seine Kinder rücken an seine Stelle (core/design:
+ * deleteBlock). Darum wird auch nicht nachgefragt: Zu verlieren ist ein Kasten,
+ * nicht ein halber Entwurf.
  */
 const props = defineProps<{ block: Block }>();
 
 const emit = defineEmits<{
   /** Rolle bzw. Anweisungen dieses Kastens sind fortan andere. */
   update: [patch: { instructions?: string; type?: string }];
+  /** Dieser Kasten soll weg (c0110) — seine Kinder rücken an seine Stelle. */
+  delete: [];
   close: [];
 }>();
 
@@ -103,6 +111,19 @@ function cancel(): void {
         @keydown.esc.prevent.stop="cancel"
       ></textarea>
     </label>
+
+    <!-- Löschen steht unten und für sich: Es ist das einzige hier, was sich
+         nicht mit dem nächsten Tastendruck zurücknehmen lässt. -->
+    <div class="di-foot">
+      <button
+        type="button"
+        class="di-delete"
+        title="Diesen Kasten löschen — seine Kinder bleiben und rücken an seine Stelle"
+        @click="emit('delete')"
+      >
+        Kasten löschen
+      </button>
+    </div>
   </div>
 </template>
 
@@ -181,5 +202,24 @@ function cancel(): void {
 .di-instructions:focus {
   outline: none;
   border-color: var(--accent, rgba(108, 140, 255, 0.85));
+}
+.di-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+/* Zurückhaltend, aber in der Farbe der Warnung: Es soll zu finden sein, ohne
+   sich anzubieten. */
+.di-delete {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 10px;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.di-delete:hover {
+  border-color: var(--danger, #ff6c6c);
+  color: var(--danger, #ff6c6c);
 }
 </style>

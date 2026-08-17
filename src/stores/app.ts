@@ -6,10 +6,14 @@ import type { AgentEvent, AppDocs, Attachment, ChatMessage, ElementRef, Framewor
 import {
   DEFAULT_BLOCK_NAME,
   addBlock,
+  canNestUnder,
   clampRect,
+  containerFor,
+  deleteBlock,
   emptyDesign,
   makeBlockId,
   moveBlock,
+  nestBlock,
   placeBlock,
   updateBlock,
   type Block,
@@ -193,6 +197,9 @@ export function useAppWindow(instanceId: string) {
      * Anteil des Fensters von der Zeichenfläche, der Name aus dem Feld im
      * Kasten — ist er leer, bekommt er den Platzhalter. Zurück kommt die Id des
      * neuen Kastens, oder null, wenn nichts geschrieben wurde.
+     *
+     * Wo er landet, sagt seine Lage (c0110): In einen bestehenden Kasten
+     * gezeichnet wird er dessen Kind, sonst hängt er an der Wurzel.
      */
     async addDesignBlock(rect: Rect, name = ''): Promise<string | null> {
       const block: Block = {
@@ -201,7 +208,12 @@ export function useAppWindow(instanceId: string) {
         rect: clampRect(rect),
         children: [],
       };
-      const ok = await this.saveDesign(addBlock(this.design ?? emptyDesign(), block));
+      const design = this.design ?? emptyDesign();
+      const parent = containerFor(design, block.rect)?.id ?? null;
+      // Zu tief geschachtelt fiele der Kasten beim Speichern weg — dann hängt er
+      // lieber an der Wurzel als nirgends.
+      const at = canNestUnder(design, parent) ? parent : null;
+      const ok = await this.saveDesign(addBlock(design, block, at));
       return ok ? block.id : null;
     },
 
@@ -226,20 +238,37 @@ export function useAppWindow(instanceId: string) {
      * Schiebt einen Kasten an eine neue Stelle (c0109) — samt seiner Kinder:
      * Ihre Anteile beziehen sich aufs Fenster (c0104), also müssen sie
      * mitwandern, sonst rutschten sie aus ihrem Elter.
+     *
+     * Wo er hinterher liegt, sagt auch, wo er hinterher HÄNGT (c0110): In einen
+     * anderen Kasten geschoben wird er dessen Kind, herausgeschoben hängt er sich
+     * um — bis zur Wurzel.
      */
     async moveDesignBlock(id: string, to: { x: number; y: number }): Promise<void> {
       if (!this.design) return;
-      await this.saveDesign(placeBlock(this.design, id, to.x, to.y));
+      await this.saveDesign(nestBlock(placeBlock(this.design, id, to.x, to.y), id));
     },
 
     /**
      * Zieht einen Kasten an einer seiner Kanten größer oder kleiner (c0109).
      * Anders als beim Schieben bleiben die Kinder, wo sie sind — gemeint ist
-     * dieser eine Kasten.
+     * dieser eine Kasten. Auch er hängt sich um, wenn er hinterher woanders liegt
+     * (c0110): Wer seinen Kasten aus dem Elter herauszieht, meint das.
      */
     async resizeDesignBlock(id: string, rect: Partial<Rect>): Promise<void> {
       if (!this.design) return;
-      await this.saveDesign(moveBlock(this.design, id, rect));
+      await this.saveDesign(nestBlock(moveBlock(this.design, id, rect), id));
+    },
+
+    /**
+     * Löscht einen Kasten (c0110). Seine Kinder rücken an seine Stelle — gelöscht
+     * ist der Rahmen, nicht der Inhalt (core/design: deleteBlock). Gibt es den
+     * Kasten nicht (mehr), wird nichts geschrieben.
+     */
+    async deleteDesignBlock(id: string): Promise<void> {
+      if (!this.design) return;
+      const next = deleteBlock(this.design, id);
+      if (next === this.design) return;
+      await this.saveDesign(next);
     },
 
     /**

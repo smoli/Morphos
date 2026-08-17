@@ -225,6 +225,59 @@ describe('Entwurf zeichnen, speichern, wiederfinden (c0107)', () => {
     expect(store.error).toBeNull();
   });
 
+  it('verschachtelt, hängt um und löscht — in der Datei und im Prompt (c0110)', async () => {
+    const store = await openWindow('flow');
+    const inhalt = await store.addDesignBlock({ x: 0.1, y: 0.1, w: 0.5, h: 0.5 }, 'Inhalt');
+
+    // Zeichnen: ein Zug GANZ IM Inhalt (0.2…0.4 in beiden Richtungen) — die
+    // Fläche zeigt schon während des Zugs, wo der neue Kasten landet.
+    const { wrapper, stage } = overlay(() => store.designBlocks);
+    await stage.trigger('pointerdown', { button: 0, clientX: 80, clientY: 40 });
+    await stage.trigger('pointermove', { clientX: 160, clientY: 80 });
+    expect(wrapper.get('.design-block.drop').get('.db-name').text()).toBe('Inhalt');
+    await stage.trigger('pointerup', { clientX: 160, clientY: 80 });
+
+    const input = wrapper.get('input.db-input');
+    (input.element as HTMLInputElement).value = 'Liste';
+    await input.trigger('keydown.enter');
+    const [rect, name] = wrapper.emitted('draw')![0] as [Rect, string];
+    const liste = await store.addDesignBlock(rect, name);
+
+    // In der Datei steht der Baum: die Liste IM Inhalt.
+    const drin = readDesign(dir);
+    expect(drin.blocks.map((b) => b.name)).toEqual(['Inhalt']);
+    expect(drin.blocks[0].children.map((b) => b.name)).toEqual(['Liste']);
+    expect(drin.blocks[0].children[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.2, h: 0.2 });
+
+    // Und der Agent sieht die Gliederung als Einrückung.
+    const prompt = buildPrompt('Bau die Liste', [], { design: drin });
+    expect(prompt).toContain('- Inhalt\n');
+    expect(prompt).toContain('  - Liste\n');
+
+    // Umhängen: dieselbe Liste nach rechts unten aus dem Inhalt heraus.
+    await store.moveDesignBlock(liste!, { x: 0.7, y: 0.7 });
+    const raus = readDesign(dir);
+    expect(raus.blocks.map((b) => b.name)).toEqual(['Inhalt', 'Liste']);
+    expect(raus.blocks[0].children).toEqual([]);
+    expect(buildPrompt('Weiter', [], { design: raus })).toContain('- Liste\n');
+
+    // Wieder hinein — und dann den Elter löschen: Der Rahmen fällt weg, das
+    // Kind bleibt liegen, wo es liegt.
+    await store.moveDesignBlock(liste!, { x: 0.2, y: 0.2 });
+    expect(readDesign(dir).blocks[0].children).toHaveLength(1);
+
+    await store.deleteDesignBlock(inhalt!);
+    const nach = readDesign(dir);
+    expect(nach.blocks.map((b) => b.name)).toEqual(['Liste']);
+    expect(nach.blocks[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.2, h: 0.2 });
+    expect(store.error).toBeNull();
+
+    // Und wiederfinden: Der Entwurfs-Modus geht zu und wieder auf.
+    store.closeDesign();
+    await store.openDesign();
+    expect(store.designBlocks.map((b) => b.name)).toEqual(['Liste']);
+  });
+
   it('gibt den gezeichneten Kasten an den Agenten weiter (UI-LAYOUT, c0106)', async () => {
     const store = await openWindow('flow');
     await store.addDesignBlock({ x: 0, y: 0, w: 1, h: 0.2 }, 'Kopfzeile');

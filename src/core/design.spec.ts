@@ -9,6 +9,10 @@ import {
   MAX_TYPE_LENGTH,
   MIN_BLOCK_SIZE,
   blockBounds,
+  canNestUnder,
+  containerFor,
+  containerIn,
+  deleteBlock,
   emptyDesign,
   findBlock,
   findBlockIn,
@@ -16,7 +20,9 @@ import {
   makeBlockId,
   moveBlock,
   moveRect,
+  nestBlock,
   normalizeDesign,
+  parentOf,
   placeBlock,
   removeBlock,
   reparentBlock,
@@ -511,5 +517,280 @@ describe('reparentBlock', () => {
     const before = JSON.parse(JSON.stringify(d)) as Design;
     reparentBlock(d, 'b', 'a');
     expect(d).toEqual(before);
+  });
+});
+
+// c0110: Wohin ein Kasten GEHÖRT, sagt seine Lage — der unterste Kasten, der ihn
+// ganz umschließt, ist sein Elter; umschließt ihn keiner, gehört er an die
+// Wurzel. Eine Regel für beide Richtungen: hineinschieben verschachtelt,
+// hinausschieben hängt um.
+describe('containerIn / containerFor', () => {
+  const d = design(
+    block('a', { x: 0.1, y: 0.1, w: 0.5, h: 0.5 }, {
+      children: [block('a1', { x: 0.2, y: 0.2, w: 0.2, h: 0.2 })],
+    }),
+    block('b', { x: 0.7, y: 0.7, w: 0.2, h: 0.2 }),
+  );
+
+  it('nimmt den untersten Kasten, der die Fläche ganz umschließt', () => {
+    expect(containerFor(d, { x: 0.22, y: 0.22, w: 0.05, h: 0.05 })!.id).toBe('a1');
+    expect(containerFor(d, { x: 0.12, y: 0.12, w: 0.05, h: 0.05 })!.id).toBe('a');
+    expect(containerFor(d, { x: 0.75, y: 0.75, w: 0.05, h: 0.05 })!.id).toBe('b');
+  });
+
+  it('lässt eine Fläche an der Wurzel, die kein Kasten ganz umschließt', () => {
+    // Ragt sie auch nur an einer Kante heraus, liegt sie nicht drinnen.
+    expect(containerFor(d, { x: 0.05, y: 0.2, w: 0.1, h: 0.1 })).toBeNull();
+    expect(containerFor(d, { x: 0.2, y: 0.2, w: 0.5, h: 0.1 })).toBeNull();
+    expect(containerFor(d, { x: 0, y: 0, w: 1, h: 1 })).toBeNull();
+    expect(containerIn([], { x: 0.2, y: 0.2, w: 0.1, h: 0.1 })).toBeNull();
+  });
+
+  it('zählt die Kante als drinnen und übersteht den Rechenstaub', () => {
+    // Deckungsgleich heißt drinnen — sonst ließe sich ein Kasten nicht in einen
+    // gleich großen zeichnen.
+    expect(containerFor(d, { x: 0.1, y: 0.1, w: 0.5, h: 0.5 })!.id).toBe('a');
+    // 0.2 + 0.4 rechnet das Fließkomma als 0.6000000000000001, die Kante von
+    // 'a' liegt bei 0.6 — ein Millionstel Nachsicht macht daraus kein Draußen.
+    expect(0.2 + 0.4).toBeGreaterThan(0.1 + 0.5);
+    expect(containerFor(d, { x: 0.2, y: 0.2, w: 0.4, h: 0.4 })!.id).toBe('a');
+  });
+
+  it('übersieht einen Kasten nicht, dessen Elter die Fläche nicht umschließt', () => {
+    // Ein Kind darf über seinen Elter hinausragen (c0104): Die Suche darf einen
+    // Zweig darum nicht abschneiden, nur weil der Elter nicht passt.
+    const ragt = design(
+      block('p', { x: 0.1, y: 0.1, w: 0.1, h: 0.1 }, {
+        children: [block('k', { x: 0.5, y: 0.5, w: 0.4, h: 0.4 })],
+      }),
+    );
+    expect(containerFor(ragt, { x: 0.6, y: 0.6, w: 0.1, h: 0.1 })!.id).toBe('k');
+  });
+
+  it('überspringt einen Kasten samt seinem Zweig (kein Kreis)', () => {
+    // Beim Umhängen darf weder er selbst noch sein Nachfahre sein Elter werden.
+    expect(containerFor(d, findBlock(d, 'a')!.rect, 'a')).toBeNull();
+    expect(containerFor(d, { x: 0.25, y: 0.25, w: 0.05, h: 0.05 }, 'a1')!.id).toBe('a');
+  });
+
+  it('nimmt bei gleicher Tiefe den zuletzt gezeichneten — er liegt oben', () => {
+    const gleich = design(
+      block('unten', { x: 0.1, y: 0.1, w: 0.5, h: 0.5 }),
+      block('oben', { x: 0.1, y: 0.1, w: 0.5, h: 0.5 }),
+    );
+    expect(containerFor(gleich, { x: 0.2, y: 0.2, w: 0.1, h: 0.1 })!.id).toBe('oben');
+  });
+
+  it('sucht auch in einer blanken Kästenliste (ohne Entwurf drumherum)', () => {
+    // Die Zeichenfläche bekommt nur die Kästen gereicht, zeigt aber schon
+    // während des Zugs, wo der Kasten landet.
+    expect(containerIn(d.blocks, { x: 0.22, y: 0.22, w: 0.05, h: 0.05 })!.id).toBe('a1');
+  });
+});
+
+describe('parentOf', () => {
+  const d = design(block('a', {}, { children: [block('a1')] }), block('b'));
+
+  it('nennt den Elter eines Kastens — an der Wurzel keinen', () => {
+    expect(parentOf(d, 'a1')!.id).toBe('a');
+    expect(parentOf(d, 'a')).toBeNull();
+    expect(parentOf(d, 'weg')).toBeNull();
+  });
+});
+
+describe('canNestUnder', () => {
+  /** Eine Kette von `n` Kästen, jeder ganz im vorigen. */
+  function chain(n: number): Design {
+    let inner: Block | null = null;
+    for (let i = n - 1; i >= 0; i--) {
+      inner = {
+        id: `t${i}`,
+        name: `t${i}`,
+        rect: { x: i * 0.01, y: i * 0.01, w: 1 - i * 0.02, h: 1 - i * 0.02 },
+        children: inner ? [inner] : [],
+      };
+    }
+    return design(inner!);
+  }
+
+  it('lässt an der Wurzel und in flachen Bäumen alles zu', () => {
+    const d = design(block('a', {}, { children: [block('a1')] }));
+    expect(canNestUnder(d, null)).toBe(true);
+    expect(canNestUnder(d, 'a1')).toBe(true);
+    expect(canNestUnder(d, 'a', 3)).toBe(true);
+  });
+
+  it('sagt Nein, wo der Zweig beim Speichern wegfiele', () => {
+    // normalizeDesign kappt bei MAX_DESIGN_DEPTH — was tiefer läge, wäre beim
+    // nächsten Schreiben still verloren.
+    const tief = chain(MAX_DESIGN_DEPTH);
+    expect(canNestUnder(tief, `t${MAX_DESIGN_DEPTH - 2}`)).toBe(true);
+    expect(canNestUnder(tief, `t${MAX_DESIGN_DEPTH - 1}`)).toBe(false);
+    // Ein Zweig braucht Platz für seine eigenen Ebenen.
+    expect(canNestUnder(tief, `t${MAX_DESIGN_DEPTH - 3}`, 1)).toBe(true);
+    expect(canNestUnder(tief, `t${MAX_DESIGN_DEPTH - 3}`, 2)).toBe(false);
+  });
+
+  it('kennt einen Kasten nicht, den es nicht gibt', () => {
+    expect(canNestUnder(design(block('a')), 'weg')).toBe(false);
+  });
+
+  it('lässt eine ganze Kette bis MAX_DESIGN_DEPTH unangetastet durch', () => {
+    // Belegt, dass die Grenze richtig gezogen ist: Diese Kette übersteht das
+    // Zurechtrücken vollständig.
+    const tief = chain(MAX_DESIGN_DEPTH);
+    expect(listBlocks(normalizeDesign(tief))).toHaveLength(MAX_DESIGN_DEPTH);
+  });
+});
+
+describe('nestBlock', () => {
+  // Der Kasten 'b' liegt in 'a', hängt aber (noch) an der Wurzel.
+  const d = design(
+    block('a', { x: 0.1, y: 0.1, w: 0.5, h: 0.5 }),
+    block('b', { x: 0.2, y: 0.2, w: 0.1, h: 0.1 }),
+  );
+
+  it('hängt einen Kasten unter den, in dem er liegt', () => {
+    const next = nestBlock(d, 'b');
+    expect(next.blocks.map((x) => x.id)).toEqual(['a']);
+    expect(findBlock(next, 'a')!.children.map((x) => x.id)).toEqual(['b']);
+    // Verschoben wird dabei nichts: Die Anteile sind absolut (c0104).
+    expect(findBlock(next, 'b')!.rect).toEqual(d.blocks[1].rect);
+  });
+
+  it('hebt einen Kasten an die Wurzel, der aus seinem Elter heraus liegt', () => {
+    const drin = design(
+      block('a', { x: 0.1, y: 0.1, w: 0.3, h: 0.3 }, {
+        children: [block('b', { x: 0.7, y: 0.7, w: 0.1, h: 0.1 })],
+      }),
+    );
+    const next = nestBlock(drin, 'b');
+    expect(next.blocks.map((x) => x.id)).toEqual(['a', 'b']);
+    expect(findBlock(next, 'a')!.children).toEqual([]);
+  });
+
+  it('hängt ihn unter den untersten Kasten, in dem er liegt', () => {
+    const zwei = design(
+      block('a', { x: 0.1, y: 0.1, w: 0.8, h: 0.8 }, {
+        children: [block('a1', { x: 0.2, y: 0.2, w: 0.4, h: 0.4 })],
+      }),
+      block('b', { x: 0.25, y: 0.25, w: 0.1, h: 0.1 }),
+    );
+    expect(findBlock(nestBlock(zwei, 'b'), 'a1')!.children.map((x) => x.id)).toEqual(['b']);
+  });
+
+  it('nimmt die Kinder des umgehängten Kastens mit', () => {
+    const mitKind = design(
+      block('a', { x: 0.1, y: 0.1, w: 0.5, h: 0.5 }),
+      block('b', { x: 0.2, y: 0.2, w: 0.2, h: 0.2 }, {
+        children: [block('b1', { x: 0.25, y: 0.25, w: 0.05, h: 0.05 })],
+      }),
+    );
+    const next = nestBlock(mitKind, 'b');
+    expect(findBlock(next, 'a')!.children.map((x) => x.id)).toEqual(['b']);
+    expect(findBlock(next, 'b')!.children.map((x) => x.id)).toEqual(['b1']);
+  });
+
+  it('lässt alles, wie es ist, wenn er schon am richtigen Elter hängt', () => {
+    const passt = design(
+      block('a', { x: 0.1, y: 0.1, w: 0.5, h: 0.5 }, {
+        children: [block('b', { x: 0.2, y: 0.2, w: 0.1, h: 0.1 })],
+      }),
+    );
+    expect(nestBlock(passt, 'b')).toBe(passt);
+    // Und ein Wurzelkasten, den keiner umschließt, bleibt an der Wurzel.
+    expect(nestBlock(passt, 'a')).toBe(passt);
+  });
+
+  it('macht einen Kasten nicht zu seinem eigenen Nachfahren', () => {
+    // Ein Elter, der (nach einem Zug) ganz in seinem Kind liegt: Er bleibt, wo
+    // er ist — ein Kreis entsteht nie.
+    const eng = design(
+      block('a', { x: 0.2, y: 0.2, w: 0.1, h: 0.1 }, {
+        children: [block('a1', { x: 0.1, y: 0.1, w: 0.5, h: 0.5 })],
+      }),
+    );
+    expect(nestBlock(eng, 'a')).toBe(eng);
+    expect(findBlock(nestBlock(eng, 'a'), 'a1')!.children).toEqual([]);
+  });
+
+  it('hängt nicht so tief, dass der Kasten beim Speichern verlorenginge', () => {
+    let inner: Block | null = null;
+    for (let i = MAX_DESIGN_DEPTH - 1; i >= 0; i--) {
+      inner = {
+        id: `t${i}`,
+        name: `t${i}`,
+        rect: { x: i * 0.01, y: i * 0.01, w: 1 - i * 0.02, h: 1 - i * 0.02 },
+        children: inner ? [inner] : [],
+      };
+    }
+    const tief = design(inner!, block('b', { x: 0.3, y: 0.3, w: 0.05, h: 0.05 }));
+
+    // 'b' liegt im tiefsten Kasten der Kette — dort wäre es eine Ebene zu tief.
+    expect(nestBlock(tief, 'b')).toBe(tief);
+  });
+
+  it('lässt den Entwurf unverändert, wenn es die Id nicht gibt', () => {
+    expect(nestBlock(d, 'weg')).toBe(d);
+  });
+
+  it('verändert den übergebenen Entwurf nicht', () => {
+    const before = JSON.parse(JSON.stringify(d)) as Design;
+    const next = nestBlock(d, 'b');
+    expect(d).toEqual(before);
+    expect(next).not.toBe(d);
+  });
+});
+
+describe('deleteBlock', () => {
+  const d = design(
+    block('a', { x: 0.1, y: 0.1, w: 0.5, h: 0.5 }, {
+      children: [
+        block('a1', { x: 0.2, y: 0.2, w: 0.2, h: 0.2 }, {
+          children: [block('a11', { x: 0.25, y: 0.25, w: 0.05, h: 0.05 })],
+        }),
+        block('a2', { x: 0.45, y: 0.2, w: 0.1, h: 0.1 }),
+      ],
+    }),
+    block('b', { x: 0.7, y: 0.7, w: 0.2, h: 0.2 }),
+  );
+
+  it('nimmt einen Kasten weg', () => {
+    expect(deleteBlock(d, 'b').blocks.map((x) => x.id)).toEqual(['a']);
+  });
+
+  it('hebt die Kinder an die Stelle des gelöschten Kastens', () => {
+    // Gelöscht wird der Rahmen, nicht der Inhalt: Ein Griff daneben soll nicht
+    // einen halben Entwurf mitnehmen.
+    const next = deleteBlock(d, 'a1');
+    expect(findBlock(next, 'a')!.children.map((x) => x.id)).toEqual(['a11', 'a2']);
+    expect(findBlock(next, 'a11')!.children).toEqual([]);
+    expect(findBlock(next, 'a1')).toBeNull();
+  });
+
+  it('hebt die Kinder eines Wurzelkastens an die Wurzel', () => {
+    expect(deleteBlock(d, 'a').blocks.map((x) => x.id)).toEqual(['a1', 'a2', 'b']);
+  });
+
+  it('lässt die Geometrie, wie sie ist', () => {
+    // Die Anteile sind absolut (c0104) — wer hochrückt, bleibt, wo er liegt.
+    const next = deleteBlock(d, 'a1');
+    expect(findBlock(next, 'a11')!.rect).toEqual({ x: 0.25, y: 0.25, w: 0.05, h: 0.05 });
+  });
+
+  it('macht aus einem gelöschten Blatt nichts weiter', () => {
+    expect(listBlocks(deleteBlock(d, 'a11')).map((x) => x.id)).toEqual(['a', 'a1', 'a2', 'b']);
+  });
+
+  it('lässt den Entwurf unverändert, wenn es die Id nicht gibt', () => {
+    expect(deleteBlock(d, 'weg')).toBe(d);
+    expect(deleteBlock(d, '')).toBe(d);
+  });
+
+  it('verändert den übergebenen Entwurf nicht', () => {
+    const before = JSON.parse(JSON.stringify(d)) as Design;
+    const next = deleteBlock(d, 'a1');
+    expect(d).toEqual(before);
+    expect(next).not.toBe(d);
   });
 });

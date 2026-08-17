@@ -26,6 +26,11 @@
  * Das Verschachteln ist damit eine reine Aussage über die Gliederung; ein
  * Umhängen verschiebt nichts.
  *
+ * Wohin ein Kasten GEHÖRT, sagt darum seine Lage (c0110): Sein Elter ist der
+ * unterste Kasten, der ihn ganz umschließt (`containerIn`, `nestBlock`). Eine
+ * Regel für beide Richtungen — hineingeschoben verschachtelt, hinausgeschoben
+ * hängt um —, und so sagt der Baum nie etwas anderes als das Bild.
+ *
  * Alles hier ist rein und ohne Zustand: Die Baum-Helfer geben stets einen neuen
  * Entwurf zurück und lassen den übergebenen unangetastet. Was von der Platte
  * kommt, geht durch `normalizeDesign` — eine fremde oder halb geschriebene
@@ -470,4 +475,140 @@ export function reparentBlock(design: Design, id: string, parentId: string | nul
     const at = index === undefined ? children.length : clamp(Math.trunc(index), 0, children.length);
     return [...children.slice(0, at), block, ...children.slice(at)];
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Verschachteln, Umhängen, Löschen (c0110)                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Wieviel Rechenstaub beim Vergleich zweier Kanten durchgeht. Die Anteile stehen
+ * auf vier Stellen (`round`), das Fließkomma rechnet 0.3 + 0.3 aber als
+ * 0.6000000000000001 — ein Millionstel des Fensters ist weit unter einem Pixel
+ * und rettet davor, dass ein Kasten „gerade eben nicht mehr“ in seinem Elter
+ * liegt.
+ */
+const FIT = 1e-6;
+
+/** Ob `inner` ganz in `outer` liegt — die Kante gilt als drinnen. */
+function fits(inner: Rect, outer: Rect): boolean {
+  return (
+    inner.x >= outer.x - FIT &&
+    inner.y >= outer.y - FIT &&
+    inner.x + inner.w <= outer.x + outer.w + FIT &&
+    inner.y + inner.h <= outer.y + outer.h + FIT
+  );
+}
+
+/**
+ * Der Kasten, in den eine Fläche GEHÖRT: der unterste, der sie ganz umschließt.
+ * `null` heißt, dass keiner sie umschließt — dann gehört sie an die Wurzel.
+ * Liegen mehrere gleich tief in Frage, gewinnt der zuletzt gezeichnete: Er liegt
+ * oben, und gemeint ist, was man sieht.
+ *
+ * Das ist die EINE Regel für beides (c0110): Ein Kasten, der in einen anderen
+ * geschoben oder gezeichnet wird, wird sein Kind; einer, der herausgeschoben
+ * wird, hängt sich um — bis zur Wurzel. So sagt der Baum nie etwas anderes als
+ * das Bild, und ein Kind liegt stets in seinem Elter.
+ *
+ * `skipId` nimmt einen Kasten samt seinem ganzen Zweig aus der Wahl. Beim
+ * Umhängen ist das zweierlei nötig: Er umschließt sich selbst immer, und sein
+ * eigener Nachfahre darf niemals sein Elter werden (kein Kreis).
+ *
+ * Gesucht wird im ganzen Baum, auch unter einem Kasten, der die Fläche NICHT
+ * umschließt: Ein Kind darf über seinen Elter hinausragen (c0104), ein Zweig
+ * lässt sich also nicht vorschnell abschneiden.
+ */
+export function containerIn(blocks: readonly Block[], rect: Rect, skipId?: string): Block | null {
+  let found: Block | null = null;
+  let foundDepth = -1;
+  const step = (list: readonly Block[], depth: number): void => {
+    for (const b of list) {
+      if (skipId !== undefined && b.id === skipId) continue;
+      if (depth >= foundDepth && fits(rect, b.rect)) {
+        found = b;
+        foundDepth = depth;
+      }
+      step(b.children, depth + 1);
+    }
+  };
+  step(blocks, 0);
+  return found;
+}
+
+/** Der Kasten, in den eine Fläche gehört (siehe `containerIn`). */
+export function containerFor(design: Design, rect: Rect, skipId?: string): Block | null {
+  return containerIn(design.blocks, rect, skipId);
+}
+
+/** Der Elter eines Kastens — `null` an der Wurzel (und für einen, den es nicht gibt). */
+export function parentOf(design: Design, id: string): Block | null {
+  let found: Block | null = null;
+  walkBlocks(design, (b, parent) => {
+    if (b.id === id) found = parent;
+  });
+  return found;
+}
+
+/** Wie tief ein Kasten liegt (0 an der Wurzel) — -1: Es gibt ihn nicht. */
+function depthOf(design: Design, id: string): number {
+  let at = -1;
+  walkBlocks(design, (b, _parent, depth) => {
+    if (b.id === id) at = depth;
+  });
+  return at;
+}
+
+/** Wieviele Ebenen unter einem Kasten hängen (0: keine). */
+function heightOf(block: Block): number {
+  return block.children.reduce((max, c) => Math.max(max, heightOf(c) + 1), 0);
+}
+
+/**
+ * Ob unter `parentId` noch ein Zweig von `height` weiteren Ebenen Platz hat.
+ * `normalizeDesign` kappt bei `MAX_DESIGN_DEPTH`, und geschrieben wird stets
+ * zurechtgerückt — was tiefer läge, wäre beim nächsten Speichern still
+ * verloren. Darum wird gar nicht erst so tief geschachtelt.
+ */
+export function canNestUnder(design: Design, parentId: string | null, height = 0): boolean {
+  if (parentId === null) return height < MAX_DESIGN_DEPTH;
+  const depth = depthOf(design, parentId);
+  if (depth < 0) return false;
+  return depth + 1 + height < MAX_DESIGN_DEPTH;
+}
+
+/**
+ * Hängt einen Kasten dorthin, wo er LIEGT (c0110): unter den untersten Kasten,
+ * der ihn ganz umschließt, oder an die Wurzel, wenn ihn keiner umschließt. Seine
+ * Kinder kommen mit, verschoben wird nichts (die Anteile sind absolut, c0104) —
+ * das Umhängen ist eine reine Aussage über die Gliederung.
+ *
+ * Hängt er schon richtig, kommt der übergebene Entwurf unverändert zurück; das
+ * gilt auch für einen Zug, der nicht geht: ein Kreis (den `containerIn` gar nicht
+ * erst anbietet) oder eine Schachtelung, die zu tief würde.
+ */
+export function nestBlock(design: Design, id: string): Design {
+  const block = findBlock(design, id);
+  if (!block) return design;
+  const target = containerFor(design, block.rect, id);
+  const parentId = target?.id ?? null;
+  if (parentId === (parentOf(design, id)?.id ?? null)) return design;
+  if (!canNestUnder(design, parentId, heightOf(block))) return design;
+  return reparentBlock(design, id, parentId);
+}
+
+/**
+ * Löscht einen Kasten — seine Kinder rücken an seine Stelle unter seinem Elter
+ * (bzw. an die Wurzel). Gelöscht wird also der RAHMEN, nicht der Inhalt: Ein
+ * Griff daneben soll nicht einen halben Entwurf mitnehmen, und weil die Anteile
+ * absolut sind (c0104), bleibt dabei alles liegen, wo es liegt. Wer einen ganzen
+ * Zweig los sein will, löscht ihn von innen nach außen.
+ *
+ * Eine unbekannte Id lässt den Entwurf unverändert.
+ */
+export function deleteBlock(design: Design, id: string): Design {
+  if (!findBlock(design, id)) return design;
+  const step = (blocks: readonly Block[]): Block[] =>
+    blocks.flatMap((b) => (b.id === id ? b.children : [{ ...b, children: step(b.children) }]));
+  return { ...design, blocks: step(design.blocks) };
 }
