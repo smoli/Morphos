@@ -8,6 +8,8 @@ created: 2026-08-16
 commit: 9e6e7dd
 updated: 2026-08-17
 status-changed: 2026-08-17T19:11:29
+usage-tokens: 60511
+usage-cost: 7.041907
 ---
 
 # Move + resize blocks

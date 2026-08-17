@@ -9,13 +9,13 @@
       "cardId": "c0109",
       "phase": "running",
       "activity": {
-        "name": "mcp__gello__set_status",
-        "arg": "review"
+        "name": "Bash",
+        "arg": "cat package.json && echo \"=== README scripts ===\" && grep -n -i -A4 \"npm run\\|test\\|lint\\|typecheck\" README.md | head -60"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-17T19:11:29",
+  "updated": "2026-08-17T19:11:49",
   "pickupDelay": 10,
   "owned": [
     "c0029",
