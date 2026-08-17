@@ -1,7 +1,6 @@
 {
   "status": "running",
   "ready": [
-    "c0106",
     "c0107",
     "c0108",
     "c0109",
@@ -10,16 +9,16 @@
   "waiting": [],
   "runs": [
     {
-      "cardId": "c0105",
+      "cardId": "c0106",
       "phase": "running",
       "activity": {
-        "name": "Bash",
-        "arg": "git diff -- src/components/TopBar.vue .gello/epics/e15-ui-designer/c0105-overlay-mode.md"
+        "name": "Read",
+        "arg": "/Users/stephan/WebstormProjects/Morphos/src/core/generate.ts"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-17T06:55:14",
+  "updated": "2026-08-17T06:58:01",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -81,11 +80,11 @@
     "c0082",
     "c0083",
     "c0104",
-    "c0105"
+    "c0105",
+    "c0106"
   ],
   "afk": true,
   "firstSeen": {
-    "c0106": "2026-08-16T23:09:41",
     "c0107": "2026-08-16T23:09:43",
     "c0108": "2026-08-16T23:09:44",
     "c0109": "2026-08-16T23:09:46",
