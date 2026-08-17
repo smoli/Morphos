@@ -8,8 +8,8 @@ created: 2026-08-16
 commit: 9e6e7dd
 updated: 2026-08-17
 status-changed: 2026-08-17T19:11:29
-usage-tokens: 60511
-usage-cost: 7.041907
+usage-tokens: 71628
+usage-cost: 8.296765
 ---
 
 # Move + resize blocks
@@ -79,6 +79,56 @@ zum nächsten Druck.
 
 Nicht angefasst: Einrasten (Snap) und Führungslinien — die stehen, wie die
 Karte sagt, später an.
+
+## Review
+
+### 2026-08-17T19:13:56 — pass
+
+Checked: alle fünf Akzeptanzkriterien gegen den Code, den Diff von `9e6e7dd`,
+`npm test`, `npm run typecheck`, `npm run build`.
+
+- "Dragged to a new position; `rect.x/y` update": `DesignOverlay.onGrab`/
+  `onPointerDown` machen aus dem Druck auf den ausgewählten Kasten einen Zug,
+  `finish` meldet `move`, `AppWindow` reicht ihn an `store.moveDesignBlock` →
+  `placeBlock` (`src/core/design.ts:400`). Belegt in
+  `DesignOverlay.spec.ts` ("schiebt den ausgewählten Kasten an eine neue
+  Stelle", "schiebt auch einen geschachtelten Kasten") und `design.spec.ts`
+  (`placeBlock` nimmt die Kinder mit).
+- "Resize handles change `rect.w/h`, mit Mindestgröße": acht Griffe nur am
+  ausgewählten Kasten (`DesignBlock.vue:140`), `resizeRect`
+  (`src/core/design.ts:185`) klemmt gegen `MIN_BLOCK_SIZE` (0.01) und lässt den
+  Kasten nicht umklappen — `design.spec.ts` "wird nicht kleiner als
+  MIN_BLOCK_SIZE und klappt nicht um", `DesignOverlay.spec.ts` "macht einen
+  Kasten nicht kleiner als das Kleinste".
+- "Persistiert und übersteht das Wiederöffnen": `DesignFlow.spec.ts` "schiebt
+  und zieht einen Kasten — und findet ihn so wieder (c0109)" geht über eine
+  ECHTE Datei (`core/designstore` im Wegwerf-Ordner), schließt den
+  Entwurfs-Modus und öffnet ihn wieder: `{ x: 0.2, y: 0.2, w: 0.5, h: 0.3 }`.
+- "Im Fenster geklemmt, nichts Negatives": `moveRect` klemmt gegen `blockBounds`
+  (also den ganzen Zweig), `resizeRect` gegen 0 und 1, und der Store-Weg des
+  Ziehens geht zusätzlich durch `clampRect`. Geprüft in `design.spec.ts`
+  ("bleibt am Rand stehen, statt zu schrumpfen", "lässt nichts ins Negative
+  rutschen", "hält auch die Kinder im Fenster") und in `DesignOverlay.spec.ts`
+  ("lässt einen Kasten nicht aus dem Fenster hinaus"). Da `clampRect` jede
+  gelesene Geometrie in `[0,1]` hält, kann `blockBounds` nicht über das Fenster
+  hinausreichen — die Klemmung kehrt sich also nicht um.
+- "Ein `.spec.ts` deckt Schieben und Ziehen ab": 42 neue Tests in fünf Dateien
+  (`design.spec.ts`, `app.spec.ts`, `DesignBlock.spec.ts`,
+  `DesignOverlay.spec.ts`, `DesignFlow.spec.ts`), keine einzige gelöschte oder
+  abgeschwächte Zeile in einem Spec (0 Löschungen in `*.spec.ts`), kein `.only`,
+  `.skip` oder übrig gebliebener Debug-Code im Diff.
+- Checks grün: `npm test` 1916/1916 in 96 Dateien, `vue-tsc --noEmit` sauber,
+  `npm run build` sauber. Der Arbeitsbaum unter `src/` ist deckungsgleich mit
+  dem Commit.
+- Der Diff bleibt im What: nur `core/design`, der Store, die drei Komponenten
+  des Entwurfs-Modus und deren Specs. Snap/Führungslinien sind wie angekündigt
+  nicht angefasst. Die im Log erwähnte Leerzeile in `TopBar.vue` war eine
+  uncommittete Änderung und taucht folgerichtig gar nicht erst im Diff auf.
+- Angemerkt, kein Mangel: Ein Druck auf ein NICHT ausgewähltes Kind INNERHALB
+  des ausgewählten Elters schiebt den Elter (das Kind meldet sich zwar zuerst,
+  fällt in `onGrab` aber durch die Auswahlprüfung, ohne den Elter zu sperren).
+  Das deckt sich mit "ein Druck auf den ausgewählten Kasten schiebt ihn", nur
+  nicht mit "gemeint ist das Unterste" — c0110 sollte das im Blick behalten.
 
 ## Log
 

@@ -1,13 +1,12 @@
 ---
 id: c0110
 title: "Nesting + reparent + delete"
-status: ready
+status: in-progress
 epic: e15
 depends: [c0108, c0109]
 created: 2026-08-16
-updated: 2026-08-16
-status-changed: 2026-08-16T23:09:47
-order: 70
+updated: 2026-08-17
+status-changed: 2026-08-17T19:14:38
 ---
 
 # Nesting + reparent + delete
@@ -41,3 +40,4 @@ tree helpers from c0104.
 
 - 2026-08-16 created from the e15 epic breakdown.
 - 2026-08-16 status → ready (app)
+- 2026-08-17 status → in-progress (agent)
