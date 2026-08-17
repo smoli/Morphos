@@ -92,6 +92,49 @@ heißt `newApp` wie im `ChatDock` und ausdrücklich NICHT `draft`: In dieser
 Komponente ist der „Entwurf“ längst vergeben — an den aufgezogenen, noch
 namenlosen Kasten.
 
+## Review
+
+### 2026-08-17T21:34:55 — pass
+
+Checked: alle sieben Akzeptanzkriterien gegen den Code, der Diff von `7dc4784`,
+`npm test`, `npm run typecheck`, `npm run build` (ein Lint-Skript hat das
+Projekt nicht).
+
+- 📐 im Entwurfsfenster: Das `v-if="!store.isDraft"` am `.w-design`-Knopf ist
+  weg (`AppWindow.vue:185`), das Tastenkürzel lief nie über `isDraft`
+  (`DesktopView.vue:558` → `store.toggleDesign`). Zeichnen, Benennen,
+  Beschreiben, Schieben, Schachteln, Löschen gehen in `stores/app.ts` alle über
+  `saveDesign` und sind unverändert.
+- Ohne App keine Datei: `loadDesign` kehrt bei `id === null` vor dem `this.design
+  = null` um (`stores/app.ts:183`) — der Fensterstand bleibt stehen; `saveDesign`
+  übernimmt `normalizeDesign(plain)` und schreibt nicht (`stores/app.ts:289`).
+  `app.spec.ts` deckt beides ab, inklusive des Zurechtrückens ohne Platte.
+- Der erste Wunsch nimmt ihn mit: neuntes Argument von `generate` durch
+  `preload.ts:48` und `main.ts:596` (dort `normalizeDesign` auf die
+  Renderer-Eingabe), in `core/generate.ts:209` vor `readSourceFiles`/`buildPrompt`
+  per `writeDesign` in den frischen Ordner — der Prompt liest ihn also schon von
+  der Platte, die Regel aus c0106 bleibt wörtlich. `DesignFlow.spec.ts` fährt die
+  ganze Scheibe durch echtes `generateApp` und prüft `UI-LAYOUT` + `senkrecht
+  0%…20%` im ersten Prompt.
+- Nach der Geburt gilt die Datei: `born = this.id === null && !!res.app` löst
+  genau einmal `loadDesign()` aus (`stores/app.ts:467`, `:497`); der Test
+  „liest ihn von der Platte, sobald die App entstanden ist“ zeigt, dass der Baum
+  aus dem Host (`id: 'geschrieben'`) den des Fensters ersetzt.
+- Rückfrage/Fehler: `born` bleibt falsch, `loadDesign` wird nicht gerufen, und
+  `discardDraft` räumt nur den Ordner weg — der Test „lässt ihn im Fenster
+  stehen …“ prüft auch, dass der nächste Wunsch ihn erneut mitnimmt.
+- Leerer Entwurf: doppelt abgesichert — `plainDesign` nur bei
+  `this.design?.blocks.length` (`stores/app.ts:446`), `brought?.blocks.length` in
+  `core/generate.ts:210`. `generate.spec.ts` prüft: kein `UI-LAYOUT`, keine
+  `design.ui.json`.
+- Diff bleibt im What: 13 Dateien, kein toter Code. Die beiden umgedrehten
+  Zusagen in `AppWindow.spec` und `app.spec` sind durch ihr Gegenteil ersetzt,
+  nicht gestrichen; die Indexänderung in `agents.spec.ts` (`call.length - 1` →
+  `call[7]`) hält die alte Prüfung auf `elements` fest, statt sie zu lockern.
+  Kein `.only`, kein `skip`.
+- Prüfungen grün: 1997 Tests in 96 Dateien, `vue-tsc` ohne Ausgabe, Build sauber
+  — und kein `node:fs` im Renderer-Bündel.
+
 ## Log
 
 - 2026-08-17 status → in-progress (agent)

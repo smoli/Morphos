@@ -8,12 +8,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "git show --stat 7dc4784 && echo \"=== CARD WT DIFF ===\" && git diff .gello/epics/e15-ui-designer/c0112-provide-this-when-specing-a-new-app.md"
+        "arg": "git show --stat 7fa1ed3 | head -20"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-17T21:33:36",
+  "updated": "2026-08-17T21:35:23",
   "pickupDelay": 10,
   "owned": [
     "c0029",
