@@ -8,8 +8,8 @@ created: 2026-08-16
 commit: d08a622
 updated: 2026-08-17
 status-changed: 2026-08-17T18:56:08
-usage-tokens: 51547
-usage-cost: 6.592382
+usage-tokens: 58081
+usage-cost: 7.488299
 ---
 
 # Block instructions + type/role editing
@@ -73,6 +73,53 @@ danach kein `"instructions": ""`, im Prompt kein leeres `[]`.
 
 Der Prompt selbst brauchte keinen Handschlag: c0106 nennt Rolle und Anweisungen
 schon an jedem Kasten. Neu ist bloß, dass jemand sie eintragen kann.
+
+## Review
+
+### 2026-08-17T18:57:47 — pass
+
+Checked: alle fünf Abnahmekriterien gegen den Code, der Diff von `d08a622`,
+`npm test` und `npm run typecheck`. Lint gibt es in diesem Repo nicht (keine
+eslint/prettier/biome-Konfiguration, `package.json` kennt nur `dev`, `build`,
+`start`, `test`, `test:watch`, `typecheck`) — also nichts zu laufen, nicht
+übersprungen.
+
+- „Selecting a block reveals editors" belegt: `DesignBlock.vue:105`
+  (`@click.stop="emit('select', …)"`) meldet den Klick, `DesignOverlay.vue`
+  hält `selectedId` und zeigt `DesignInspector.vue` mit `input.di-type` und
+  `textarea.di-instructions`. Der Klick bleibt im Kind stehen (Test „wählt den
+  geschachtelten Kasten aus, nicht seinen Elter"), und Benennen bleibt getrennt
+  (`.db-name` mit eigenem `@click.stop`, Test „hält Benennen und Auswählen
+  auseinander").
+- „Edits persist via core/design" belegt: `describe` → `AppWindow.vue:258` →
+  `store.describeDesignBlock` (`stores/app.ts:218`) → `updateBlock` →
+  `saveDesign`. `DesignFlow.spec.ts` prüft das an einer echten
+  `design.ui.json` auf der Platte, nicht am Mock.
+- „instructions und type im UI-LAYOUT" belegt: `formatDesign`
+  (`core/prompt.ts:293`/`:298`) setzt `[type]` an den Namen und die
+  Anweisungen darunter; `DesignFlow.spec.ts` prüft `- Kopfzeile [Kopfzeile]`
+  und `Anweisungen: …` im fertigen Prompt.
+- „Leeres wird sauber weggelassen" belegt: `updateBlock` (`core/design.ts:337`)
+  löscht das Feld bei leerem Text; der Flow-Test liest die Datei roh und
+  verlangt weder `instructions` noch `type` darin, der Prompt weder
+  `Anweisungen:` noch `[]`. `app.spec.ts` prüft dasselbe am Geschriebenen
+  (`'type' in written[1].blocks[0]` ist false).
+- „`.spec.ts` deckt beides ab": `DesignInspector.spec.ts` (12 Fälle: Anzeigen,
+  `change` statt Tastendruck, kein Schreiben ohne Änderung, Escape verwirft und
+  behält den Druck bei sich, Rückmeldung von der Platte füllt das Feld),
+  `DesignOverlay.spec.ts` (Auswahl, Abwahl, Zeichenzug ≠ Auswahl, Zug im Feld
+  zeichnet nichts) und die zwei Ketten-Tests in `DesignFlow.spec.ts`.
+- Prüfungen grün: `npm test` 96 Dateien / 1874 Tests, `npm run typecheck`
+  (`vue-tsc --noEmit`) ohne Ausgabe. Kein `.skip`/`.only`/`todo`, kein
+  `console.log`/`debugger` im Diff, kein abgeschwächter Test.
+- Diff bleibt beim What: elf Dateien, alle am Entwurf. Der einzige Umbau
+  außerhalb ist `findBlock` → `findBlockIn` in `core/design.ts` — nötig, weil
+  die Fläche nur die Kästen bekommt und nicht den Entwurf, und mit eigenem
+  Test.
+- Nebenbei, nicht Teil des Commits: im Arbeitsverzeichnis liegt eine
+  uncommittete Leerzeile in `src/components/TopBar.vue` (Zeile 105). Sie gehört
+  nicht zu dieser Karte und ändert nichts — bitte beim nächsten Commit
+  aufräumen.
 
 ## Log
 

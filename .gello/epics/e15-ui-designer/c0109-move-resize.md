@@ -1,13 +1,12 @@
 ---
 id: c0109
 title: "Move + resize blocks"
-status: ready
+status: in-progress
 epic: e15
 depends: [c0107]
 created: 2026-08-16
-updated: 2026-08-16
-status-changed: 2026-08-16T23:09:45
-order: 60
+updated: 2026-08-17
+status-changed: 2026-08-17T18:58:23
 ---
 
 # Move + resize blocks
@@ -35,3 +34,4 @@ later follow-up, not part of this card.
 
 - 2026-08-16 created from the e15 epic breakdown.
 - 2026-08-16 status → ready (app)
+- 2026-08-17 status → in-progress (agent)

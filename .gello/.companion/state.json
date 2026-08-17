@@ -1,22 +1,21 @@
 {
   "status": "running",
   "ready": [
-    "c0109",
     "c0110"
   ],
   "waiting": [],
   "runs": [
     {
-      "cardId": "c0108",
+      "cardId": "c0109",
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "git diff -- src/components/TopBar.vue .gello/epics/e15-ui-designer/c0108-block-instructions-role.md"
+        "arg": "find src -type d -name node_modules -prune -o -type f -print | sort"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-17T18:56:30",
+  "updated": "2026-08-17T18:58:31",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -81,11 +80,11 @@
     "c0105",
     "c0106",
     "c0107",
-    "c0108"
+    "c0108",
+    "c0109"
   ],
   "afk": true,
   "firstSeen": {
-    "c0109": "2026-08-16T23:09:46",
     "c0110": "2026-08-16T23:09:47"
   }
 }
