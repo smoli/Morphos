@@ -112,3 +112,11 @@ Scheibe (`DesignFlow.spec.ts`) prüft das nun über eine echte Datei mit.
 - 2026-08-16 created from the e15 epic breakdown.
 - 2026-08-16 status → ready (app)
 - 2026-08-17 status → in-progress (agent)
+- 2026-08-17 `containerIn`/`containerFor`, `parentOf`, `canNestUnder`, `nestBlock`
+  und `deleteBlock` in `core/design`; `deleteDesignBlock` im Store, Verschachteln
+  in `addDesignBlock`/`moveDesignBlock`/`resizeDesignBlock`; „Kasten löschen“ im
+  `DesignInspector`, der künftige Elter (`dropId`) in `DesignOverlay`/
+  `DesignBlock`, `@delete` im `AppWindow`. Dazu die Anmerkung aus dem Review zu
+  c0109 erledigt: Ein Druck auf ein nicht ausgewähltes Kind zeichnet, statt
+  seinen Elter zu schieben. Volle Suite 1967 Tests grün (51 neue), `vue-tsc`
+  sauber, `npm run build` sauber.

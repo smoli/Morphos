@@ -7,13 +7,13 @@
       "cardId": "c0110",
       "phase": "running",
       "activity": {
-        "name": "Edit",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e15-ui-designer/c0110-nesting-reparent-delete.md"
+        "name": "Bash",
+        "arg": "git add src/ && git commit -F - <<'EOF'\ngello c0110: Kästen schachteln, umhängen und löschen\n\nWohin ein Kasten gehört, sagt jetzt seine Lage: Der unterste Kasten, der ihn ganz\numschließt, ist sein Elter — umschließt ihn keiner, gehört er an die Wurzel.\nDamit sind Verschachteln und Umhängen dieselbe Regel von zwei Seiten:\nhineingeschoben (oder hineingezeichnet) wird er zum Kind, hinausgeschoben hängt\ner sich um, bis zur Wurzel. Der Baum in design.ui.json und die Einrückung im\nUI-LAYOUT folgen dem.\n\n- Ganz drinnen heißt drinnen: nicht der Mittelpunkt entscheidet, sondern die\n  ganze Fläche. Dadurch liegt ein Kind IMMER in seinem Elter, statt hinterher\n  zurechtgerückt zu werden. Die Kante zählt als drinnen, mit einem Millionstel\n  Nachsicht gegen den Rechenstaub des Fließkommas.\n- Umgehängt wird nur, wer angefasst wurde. Wer einen Elter kleiner zieht,\n  verliert seine Kinder nicht — sie sind nicht gemeint.\n- Gelöscht wird der Rahmen, nicht der Inhalt: deleteBlock hebt die Kinder an die\n  Stelle des gelöschten Kastens. Weil die Anteile absolut sind, bleibt alles\n  liegen, wo es liegt; ein Fehlgriff kostet einen Kasten, nicht einen halben\n  Entwurf. Der Knopf sitzt im Feld des ausgewählten Kastens.\n- Kein Kreis: containerIn überspringt den bewegten Kasten samt seinem Zweig, und\n  reparentBlock verweigert einen solchen Zug ohnehin. Dazu canNestUnder gegen die\n  andere Falle — zu tief geschachtelt wäre ein Kasten beim nächsten Speichern\n  still verloren (normalizeDesign kappt bei MAX_DESIGN_DEPTH).\n- Der künftige Elter leuchtet auf, solange der Zug läuft — mit derselben\n  Funktion, die ihn hinterher ausführt. Eine Schachtelung, die man erst nach dem\n  Loslassen sieht, wäre geraten.\n- „Gemeint ist das Unterste“ gilt jetzt wirklich (Anmerkung aus dem Review zu\n  c0109): Ein Druck auf ein nicht ausgewähltes Kind zeichnet, statt seinen Elter\n  zu schieben — sonst wäre die Fläche jedes Kindes für den Stift verloren, sobald\n  sein Elter ausgewählt ist.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nEOF"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-17T19:33:40",
+  "updated": "2026-08-17T19:34:22",
   "pickupDelay": 10,
   "owned": [
     "c0029",
