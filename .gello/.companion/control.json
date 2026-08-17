@@ -24,6 +24,11 @@
       "id": "c601d16d-0699-482e-b719-e19250e82117",
       "kind": "stop",
       "cardId": "c0087"
+    },
+    {
+      "id": "bbeee8db-2df7-42f9-830b-a11de72258cb",
+      "kind": "restart",
+      "cardId": "c0108"
     }
   ]
 }
