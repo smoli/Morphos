@@ -1,12 +1,13 @@
 ---
 id: c0112
 title: Provide this when specing a new app
-status: in-progress
+status: review
 ref: c0105
 epic: e15
+commit: 7dc4784
 created: 2026-08-17
 updated: 2026-08-17
-status-changed: 2026-08-17T21:21:14
+status-changed: 2026-08-17T21:33:14
 ---
 
 When I create a new app I want to be able to accompany the prompt with an initial UI design
@@ -98,3 +99,4 @@ namenlosen Kasten.
   Entwurfsfenster, `newApp`-Hinweis im `DesignOverlay`. Volle Suite 1997 Tests
   grün (24 neue), `vue-tsc` sauber, `npm run build` sauber (kein node:fs im
   Renderer-Bündel).
+- 2026-08-17 status → review (agent)
