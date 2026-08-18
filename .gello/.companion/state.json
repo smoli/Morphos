@@ -10,12 +10,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "git add src .gello/epics/e15-ui-designer/c0113-define-multiple-views.md && git commit -q -F - <<'EOF'\nc0113: Mehrere Ansichten im UI-Entwurf\n\nEin Entwurf hält jetzt Ansichten (e15/c0113): jede ein Bildschirm der App, mit\nTitel, freiwilliger Beschreibung und eigenem Baum aus Kästen.\n\n- core/design: `View` + `Design.views`; die Baum-Helfer arbeiten an einer\n  Ansicht, `inView` setzt eine Änderung in den Entwurf zurück. Dazu `addView`,\n  `removeView`, `updateView`, `findView`, `hasContent` — und `normalizeDesign`\n  macht aus einer Datei ohne Ansichten die eine Ansicht, die sie war.\n- stores/app: `designViews`/`designView`/`designViewId`, `keepDesignView` sowie\n  Anlegen, Wechseln, Beschreiben und Löschen; jeder Kasten-Zug gilt der\n  gezeigten Ansicht (`changeDesignView`), und der erste Kasten legt die erste\n  Ansicht an.\n- DesignViewBar (Reiter) und DesignViewInspector (Titel, Beschreibung, Löschen),\n  im DesignOverlay und AppWindow verdrahtet.\n- core/prompt: `UI-LAYOUT` nennt jede Ansicht als eigenen Abschnitt und sagt,\n  dass alle zu bauen und erreichbar zu machen sind.\n\nVolle Suite 2086 Tests grün, vue-tsc und Build sauber.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nEOF\ngit log --oneline -1"
+        "arg": "perl -0pi -e \"s/^commit: 312a242$/commit: 38414bf/m\" .gello/epics/e15-ui-designer/c0113-define-multiple-views.md && git add .gello/epics/e15-ui-designer/c0113-define-multiple-views.md && git commit -q -m \"c0113: Commit auf der Karte vermerkt\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\" && git log --oneline -2 && git status --short"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-18T07:50:46",
+  "updated": "2026-08-18T07:51:04",
   "pickupDelay": 10,
   "owned": [
     "c0029",
