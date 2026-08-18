@@ -6,6 +6,7 @@ created: 2026-08-18
 updated: 2026-08-18
 status-changed: 2026-08-18T07:53:55
 epic: e15
+commit: 66c1e54
 ---
 
 Add optional snapping, with guide lines etc.
