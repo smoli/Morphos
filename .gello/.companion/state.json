@@ -7,13 +7,13 @@
       "cardId": "c0114",
       "phase": "running",
       "activity": {
-        "name": "Edit",
-        "arg": "/Users/stephan/WebstormProjects/Morphos/.gello/epics/e15-ui-designer/c0114-snapping.md"
+        "name": "Bash",
+        "arg": "git show --stat --oneline 38414bf | head -30; echo ---; git show --stat --oneline e97480d | head"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-18T07:57:36",
+  "updated": "2026-08-18T08:04:31",
   "pickupDelay": 10,
   "owned": [
     "c0029",
