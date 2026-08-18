@@ -1,14 +1,14 @@
 ---
 id: c0114
 title: Snapping
-status: in-progress
+status: review
 created: 2026-08-18
 updated: 2026-08-18
-status-changed: 2026-08-18T08:08:48
+status-changed: 2026-08-18T08:11:32
 epic: e15
 commit: 517372a
-usage-tokens: 63240
-usage-cost: 6.373342
+usage-tokens: 73033
+usage-cost: 9.334201
 ---
 
 Add optional snapping, with guide lines etc.
@@ -151,3 +151,4 @@ sauber). Ein Lint-Skript gibt es im Repo nicht, also keins gelaufen.
   gedrückt, vor dem Loslassen gelöst, außerhalb eines Zugs unbeachtet); beide
   neuen Alt-Tests fallen gegen den alten Stand. Volle Suite 2118 Tests grün,
   `vue-tsc` sauber, `npm run build` sauber.
+- 2026-08-18 status → review (agent)
