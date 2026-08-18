@@ -7,13 +7,13 @@
       "cardId": "c0114",
       "phase": "running",
       "activity": {
-        "name": "mcp__gello__set_status",
-        "arg": "in-progress"
+        "name": "Bash",
+        "arg": "git add src/components/DesignOverlay.vue src/components/DesignOverlay.spec.ts .gello/epics/e15-ui-designer/c0114-snapping.md && git commit -q -F - <<'EOF'\nc0114: Alt-Taste als eine Quelle für Band und Ergebnis\n\nDas Gummiband las `aligns`, das Ende des Zugs dagegen das `altKey` des\npointerup — zwei Quellen für dieselbe Frage. Wurde Alt nach der letzten\nZeigerbewegung gedrückt oder gelöst (eine Modifikatortaste löst kein\npointermove aus), wurde etwas anderes gespeichert, als zu sehen war.\n\n- onPointerUp liest dasselbe `aligns` wie das Band.\n- Die Fläche hört für den laufenden Zug auf keydown/keyup: Alt wirkt auch\n  bei stillstehendem Zeiger, außerhalb eines Zugs bleibt sie unbeachtet.\n- Drei Tests: Alt nach der letzten Bewegung gedrückt, vor dem Loslassen\n  gelöst, ohne laufenden Zug unbeachtet.\n\nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>\nEOF\ngit log --oneline -3"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-18T08:08:49",
+  "updated": "2026-08-18T08:11:23",
   "pickupDelay": 10,
   "owned": [
     "c0029",
