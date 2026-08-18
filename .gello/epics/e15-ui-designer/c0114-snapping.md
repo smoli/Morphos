@@ -7,8 +7,8 @@ updated: 2026-08-18
 status-changed: 2026-08-18T08:11:32
 epic: e15
 commit: 517372a
-usage-tokens: 73033
-usage-cost: 9.334201
+usage-tokens: 82078
+usage-cost: 10.733614
 ---
 
 Add optional snapping, with guide lines etc.
@@ -132,6 +132,37 @@ sauber). Ein Lint-Skript gibt es im Repo nicht, also keins gelaufen.
 - Der Diff bleibt im What: `core/snap.ts` neu, `round` in `core/design.ts`
   exportiert, `DesignOverlay.vue` verdrahtet, zwei `.spec.ts`. Kein
   `.only`/`.skip`, kein Debug-Rest, kein abgeschwächter Test.
+
+### 2026-08-18T08:13:36 — pass
+
+Geprüft: der Nachbesserungs-Commit `517372a`, der Befund der ersten Runde,
+alle Akzeptanzkriterien, `npm test` (99 Dateien, 2118 Tests grün) und
+`npm run typecheck` (`vue-tsc` sauber). Ein Lint-Skript gibt es im Repo nicht,
+also keins gelaufen.
+
+- Der Befund der ersten Runde ist behoben: `onPointerUp` liest jetzt
+  `aligns.value` (`DesignOverlay.vue:383`), dieselbe Quelle wie das Band, und
+  ein `keydown`/`keyup`-Paar auf `window` (`onAlt`, `DesignOverlay.vue:354`)
+  hält `free` auch bei stillstehendem Zeiger nach. Beide Wege der ersten Runde
+  nachgestellt: Zug ohne Alt, Band `left: 20%`, pointerup mit `altKey` →
+  gespeichert `x: 0.2`; Zug mit Alt, Band `left: 19.75%`, pointerup ohne
+  `altKey` → gespeichert `x: 0.1975`. Band und Ergebnis sagen jetzt in beiden
+  Fällen dasselbe. Auch beim Schieben nachgeprüft (Alt mitten im Zug gedrückt:
+  Band `left: 29.75%`, gemeldet `x: 0.2975`).
+- Die drei neuen Tests sind echt, nicht bloß grün: `DesignOverlay.spec.ts` gegen
+  den alten Stand `66c1e54` laufen lassen (eigener Worktree) — „hört die
+  Alt-Taste auch bei stillstehendem Zeiger" und „richtet wieder aus, sobald Alt
+  vor dem Loslassen fällt" fallen dort, die übrigen 73 bleiben grün.
+- Der Wächter in `onAlt` stimmt: Ohne laufenden Zug (`!from.value`) bleibt die
+  Taste unbeachtet, und eine andere Taste bei gehaltenem Alt hebt das Aussetzen
+  nicht auf (`free.value === event.altKey` → früher Ausstieg) — beides
+  nachgestellt und bestätigt. Die Zuhörer werden in `onUnmounted` wieder
+  abgemeldet.
+- Die übrigen sechs Kriterien stehen unverändert wie in der ersten Runde
+  verifiziert: `core/snap.ts` ist von `517372a` nicht angefasst worden.
+- Der Diff bleibt im What: nur `DesignOverlay.vue`, `DesignOverlay.spec.ts` und
+  die Karte. Kein `.only`/`.skip`, kein Debug-Rest, keine gelöschte oder
+  abgeschwächte Zusicherung (null entfernte Test-Zeilen).
 
 ## Log
 
