@@ -8,8 +8,8 @@ commit: 38414bf
 created: 2026-08-18
 updated: 2026-08-18
 status-changed: 2026-08-18T07:50:36
-usage-tokens: 112423
-usage-cost: 20.362949
+usage-tokens: 122423
+usage-cost: 21.969337
 ---
 
 I want to be able to define multiple views. Each view has their own title and description and can hold an arbitrary number of blocks
@@ -103,6 +103,61 @@ nacheinander. Ohne Ansicht bleibt die Leiste ganz still.
 **Nicht dabei** (mögliche Folgekarten): die Reihenfolge der Ansichten ändern,
 eine Ansicht kopieren, Kästen zwischen Ansichten verschieben. Für alle drei ist
 das Modell da (`reparentBlock`, `addView`) — die Karte verlangt sie nicht.
+
+## Review
+
+### 2026-08-18T07:53:01 — pass
+
+Geprüft: alle acht Akzeptanzkriterien am Code, der Diff von `38414bf`, sowie
+`npm test`, `npm run typecheck` und `npm run build`.
+
+- Kriterium 1 (`views` mit `id`/`title`/`description`/`blocks`): `View` und
+  `Design.views` in `src/core/design.ts:78-92`; `readView` ergänzt Fehlendes,
+  kappt bei `MAX_VIEWS` und hält die Kasten-Ids über ALLE Ansichten auseinander
+  (`normalizeDesign`, `src/core/design.ts:314-371`).
+- Kriterium 2 (alte Datei bleibt lesbar): `normalizeDesign` macht aus `blocks`
+  am Stamm die eine Ansicht „Ansicht 1“ (`src/core/design.ts:352-356`), belegt
+  in `design.spec.ts:245` und — bis auf die Platte — in
+  `designstore.spec.ts:122`.
+- Kriterium 3 (Reiterleiste): `DesignViewBar.vue` zeigt jede Ansicht, hebt die
+  gezeigte hervor und bietet ＋ nur unterhalb `MAX_VIEWS`; `onAddView`
+  (`DesignOverlay.vue`) öffnet zugleich das Feld — `DesignOverlay.spec.ts:775`
+  und, durch das ganze Fenster hindurch, `AppWindow.spec.ts:312` (der neue
+  Reiter steht vorn, `input.dvi-title` zeigt „Ansicht 2“).
+- Kriterium 4 (Feld der Ansicht): `DesignViewInspector.vue` gibt Titel und
+  Beschreibung und löscht samt Kästen; ein geleerter Titel wird zweifach
+  abgefangen — im Feld (`commitTitle`) und im Modell (`updateView`,
+  `src/core/design.ts:435-438`). Belegt in `DesignViewInspector.spec.ts:47` und
+  `app.spec.ts:1545` (dort wird auch nichts geschrieben).
+- Kriterium 5 (Züge gelten der gezeigten Ansicht): jeder Kasten-Zug im Store
+  läuft durch `changeDesignView` → `inView` (`src/stores/app.ts`); ein Zug auf
+  einen Kasten der anderen Ansicht schreibt gar nichts
+  (`app.spec.ts:1496`), Zeichnen/Benennen/Beschreiben/Schieben/Schachteln/
+  Löschen sind in `app.spec.ts:1465` und `:1479` abgedeckt.
+- Kriterium 6 (erster Kasten legt die Ansicht an): `addDesignBlock` legt bei
+  fehlender Ansicht `emptyView(viewTitleFor(0))` an und zeigt sie danach
+  (`app.spec.ts:1506`); `emptyDesign()` hat weiterhin keine Ansicht.
+- Kriterium 7 (Prompt): `formatDesign` schreibt je Ansicht `ANSICHT: <Titel>`,
+  Beschreibung und Baum, für eine beschriebene leere Ansicht den ausdrücklichen
+  Freibrief; Kopf und `SYSTEM_PROMPT` sagen „baue sie alle und mach sie
+  erreichbar“ (`prompt.spec.ts:292`, `:319`, `:333`). Die Schranke ist
+  konsistent auf `hasContent` umgestellt (`prompt.ts`, `generate.ts`,
+  `stores/app.ts`).
+- Kriterium 8 (Tests): Modell `design.spec.ts:264-401`, Datei
+  `designstore.spec.ts:66/122`, Prompt `prompt.spec.ts:292-337`, Store
+  `app.spec.ts:1411-1560`, beide Bauteile in eigenen Spec-Dateien, und die
+  ganze Scheibe in `DesignFlow.spec.ts:359` (zwei Ansichten von der Fläche über
+  `design.ui.json` bis in den Prompt, samt Wiederfinden im zweiten Fenster und
+  Löschen).
+- Checks: `npm test` 2086 Tests in 98 Dateien grün (Exit 0), `npm run
+  typecheck` (vue-tsc) sauber, `npm run build` sauber. Ein Lint-Skript gibt es
+  im Projekt nicht — es konnte darum keines laufen. Kein Test ist übersprungen,
+  `.only`t oder abgeschwächt; das einzige `it.skipIf` in `gitstore.spec.ts:463`
+  ist älter als diese Karte.
+- Der Diff bleibt beim What: `generate.spec.ts` und `DesktopView.spec.ts`
+  ändern nur Vorgaben von `blocks` auf `views`, kein toter Debug-Code, keine
+  Reihenfolge-, Kopier- oder Verschiebe-Funktionen (unter „Nicht dabei“
+  ausdrücklich ausgenommen).
 
 ## Log
 
