@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import DesignBlock from './DesignBlock.vue';
 import DesignInspector from './DesignInspector.vue';
 import DesignViewBar from './DesignViewBar.vue';
@@ -341,6 +341,31 @@ function onPointerMove(event: PointerEvent): void {
 }
 
 /**
+ * Die Alt-Taste gilt auch bei stillstehendem Zeiger: Eine Modifikatortaste löst
+ * kein `pointermove` aus — wer sie mitten im Zug drückt, ohne die Hand zu
+ * bewegen, bekäme sonst erst bei der nächsten Regung eine Antwort, und das Band
+ * spräche bis dahin von etwas anderem als das Ende des Zugs.
+ *
+ * Gehört wird sie nur, solange ein Zug läuft: Außerhalb eines Zugs sagt sie
+ * nichts, und eine Fläche, die auf jeden Tastendruck des Fensters reagiert, wäre
+ * eine Fläche, die sich in fremde Dinge einmischt.
+ */
+function onAlt(event: KeyboardEvent): void {
+  if (!from.value || free.value === event.altKey) return;
+  free.value = event.altKey;
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onAlt);
+  window.addEventListener('keyup', onAlt);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onAlt);
+  window.removeEventListener('keyup', onAlt);
+});
+
+/**
  * Ende des Zugs: Was zu klein ist, war ein Klick und kein Zug — daraus wird
  * kein Kasten (sonst hinterließe jedes Antippen einen Krümel im Entwurf).
  * Gemessen wird dafür der ROHE Zug: Sonst bliese das Ausrichten ein Antippen
@@ -351,7 +376,11 @@ function onPointerUp(event: PointerEvent): void {
   const at = shareAt(event);
   const start = from.value;
   const g = gesture.value;
-  const align = snapping.value && !event.altKey;
+  // Dieselbe Antwort, die auch das Gummiband gelesen hat (`aligns`) — und nicht
+  // die Alt-Taste dieses einen Ereignisses: Sonst spräche das Ende des Zugs von
+  // etwas anderem als das Band, sobald sich die Taste zuletzt ohne Zeigerbewegung
+  // geändert hat.
+  const align = aligns.value;
   from.value = null;
   to.value = null;
   gesture.value = null;

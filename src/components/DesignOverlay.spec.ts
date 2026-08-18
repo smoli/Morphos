@@ -884,6 +884,15 @@ describe('DesignOverlay', () => {
       });
     }
 
+    /** Die Alt-Taste, gedrückt oder losgelassen, ohne dass sich der Zeiger rührt. */
+    async function alt(
+      wrapper: ReturnType<typeof snapping>['wrapper'],
+      down: boolean,
+    ): Promise<void> {
+      window.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { key: 'Alt', altKey: down }));
+      await wrapper.vm.$nextTick();
+    }
+
     /** Ein Zeichenzug über die Fläche, von Punkt zu Punkt (Pixel). */
     async function draw(
       { stage }: ReturnType<typeof snapping>,
@@ -964,6 +973,57 @@ describe('DesignOverlay', () => {
       await parts.wrapper.get('input.db-input').trigger('keydown.enter');
       expect(parts.wrapper.emitted('draw')?.[1]).toEqual([
         { x: 0.2, y: 0.45, w: 0.3, h: 0.2 }, DEFAULT_BLOCK_NAME,
+      ]);
+    });
+
+    it('hört die Alt-Taste auch bei stillstehendem Zeiger', async () => {
+      // Eine Modifikatortaste löst kein `pointermove` aus: Wer sie nach der
+      // letzten Bewegung drückt, muss dennoch das Band wechseln sehen — und
+      // gespeichert wird, was das Band zeigt.
+      const parts = snapping();
+      await parts.stage.trigger('pointerdown', { button: 0, clientX: 79, clientY: 90 });
+      await parts.stage.trigger('pointermove', { clientX: 198, clientY: 130 });
+      expect(parts.wrapper.get('.design-band').attributes('style')).toContain('left: 20%');
+
+      await alt(parts.wrapper, true);
+
+      expect(parts.wrapper.get('.design-band').attributes('style')).toContain('left: 19.75%');
+      expect(guides(parts.wrapper)).toEqual([]);
+      await parts.stage.trigger('pointerup', { clientX: 198, clientY: 130, altKey: true });
+      await parts.wrapper.get('input.db-input').trigger('keydown.enter');
+      expect(parts.wrapper.emitted('draw')).toEqual([
+        [{ x: 0.1975, y: 0.45, w: 0.2975, h: 0.2 }, DEFAULT_BLOCK_NAME],
+      ]);
+    });
+
+    it('richtet wieder aus, sobald Alt vor dem Loslassen fällt', async () => {
+      const parts = snapping();
+      await parts.stage.trigger('pointerdown', { button: 0, clientX: 79, clientY: 90, altKey: true });
+      await parts.stage.trigger('pointermove', { clientX: 198, clientY: 130, altKey: true });
+      expect(parts.wrapper.get('.design-band').attributes('style')).toContain('left: 19.75%');
+
+      await alt(parts.wrapper, false);
+
+      expect(parts.wrapper.get('.design-band').attributes('style')).toContain('left: 20%');
+      expect(guides(parts.wrapper)).toEqual(['x 20%', 'x 50%']);
+      await parts.stage.trigger('pointerup', { clientX: 198, clientY: 130 });
+      await parts.wrapper.get('input.db-input').trigger('keydown.enter');
+      expect(parts.wrapper.emitted('draw')).toEqual([
+        [{ x: 0.2, y: 0.45, w: 0.3, h: 0.2 }, DEFAULT_BLOCK_NAME],
+      ]);
+    });
+
+    it('hört die Taste nur, solange ein Zug läuft', async () => {
+      // Ohne Zug sagt sie nichts — und der nächste Zug beginnt mit dem, was die
+      // Taste beim Anfassen sagt.
+      const parts = snapping();
+
+      await alt(parts.wrapper, true);
+      await draw(parts, [79, 90], [198, 130]);
+      await parts.wrapper.get('input.db-input').trigger('keydown.enter');
+
+      expect(parts.wrapper.emitted('draw')).toEqual([
+        [{ x: 0.2, y: 0.45, w: 0.3, h: 0.2 }, DEFAULT_BLOCK_NAME],
       ]);
     });
 

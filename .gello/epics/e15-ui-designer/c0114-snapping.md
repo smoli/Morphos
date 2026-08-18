@@ -85,6 +85,15 @@ mitten im Zug drücken und wieder loslassen — ob es bündig wird, sieht man er
 beim Ziehen). Die Wahl lebt so lange wie der Entwurfs-Modus; sie ist kein Teil
 der Datei und keine gespeicherte Einstellung.
 
+**Die Taste selbst, nicht ihr Abdruck im Zeiger** (nachgereicht). Eine
+Modifikatortaste löst kein `pointermove` aus: Wer Alt nach der letzten Bewegung
+drückt, bekäme sonst erst bei der nächsten Regung eine Antwort. Darum hört die
+Fläche für den laufenden Zug auf `keydown`/`keyup` und führt daraus EINE Antwort
+(`aligns`) — die das Gummiband liest und, am Ende des Zugs, auch `onPointerUp`.
+Das `altKey` des einzelnen Ereignisses zu lesen war der Fehler: Zwei Quellen für
+dieselbe Frage, und gespeichert wurde etwas anderes, als zu sehen war. Außerhalb
+eines Zugs bleibt die Taste unbeachtet.
+
 **Nicht dabei** (mögliche Folgekarten): Abstände einrasten (gleiche Lücken
 zwischen drei Kästen), ein Raster, und das Merken des Umschalters über das
 Schließen der Schicht hinaus.
@@ -135,3 +144,10 @@ sauber). Ein Lint-Skript gibt es im Repo nicht, also keins gelaufen.
   `npm run build` sauber.
 - 2026-08-18 status → review (agent)
 - 2026-08-18 status → in-progress (agent)
+- 2026-08-18 Review-Befund behoben: `onPointerUp` liest dasselbe `aligns` wie das
+  Gummiband (statt `event.altKey`), und die Fläche hört für den laufenden Zug auf
+  `keydown`/`keyup` — Alt wirkt damit auch bei stillstehendem Zeiger, und Band und
+  Ergebnis sagen wieder dasselbe. Drei Tests dazu (Alt nach der letzten Bewegung
+  gedrückt, vor dem Loslassen gelöst, außerhalb eines Zugs unbeachtet); beide
+  neuen Alt-Tests fallen gegen den alten Stand. Volle Suite 2118 Tests grün,
+  `vue-tsc` sauber, `npm run build` sauber.
