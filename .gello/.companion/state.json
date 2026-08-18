@@ -1,11 +1,21 @@
 {
-  "status": "idle",
+  "status": "running",
   "ready": [
-    "c0113"
+    "c0114"
   ],
   "waiting": [],
-  "runs": [],
-  "updated": "2026-08-18T07:27:23",
+  "runs": [
+    {
+      "cardId": "c0113",
+      "phase": "running",
+      "activity": {
+        "name": "Bash",
+        "arg": "head -20 src/core/designstore.ts && grep -rn \"readDesign\\|writeDesign\\|DESIGN_FILE\\|normalizeDesign\" --include=\"*.ts\" --include=\"*.vue\" src electron | grep -v \"design.spec.ts\""
+      },
+      "model": "claude-opus-5"
+    }
+  ],
+  "updated": "2026-08-18T07:27:58",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -76,10 +86,11 @@
     "c0111",
     "c0112",
     "i0008",
-    "i0009"
+    "i0009",
+    "c0113"
   ],
   "afk": true,
   "firstSeen": {
-    "c0113": "2026-08-18T07:27:23"
+    "c0114": "2026-08-18T07:27:48"
   }
 }
