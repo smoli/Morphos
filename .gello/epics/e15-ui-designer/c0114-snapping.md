@@ -1,14 +1,14 @@
 ---
 id: c0114
 title: Snapping
-status: review
+status: in-progress
 created: 2026-08-18
 updated: 2026-08-18
-status-changed: 2026-08-18T08:04:58
+status-changed: 2026-08-18T08:08:48
 epic: e15
 commit: 66c1e54
-usage-tokens: 50675
-usage-cost: 5.144971
+usage-tokens: 63240
+usage-cost: 6.373342
 ---
 
 Add optional snapping, with guide lines etc.
@@ -89,6 +89,41 @@ der Datei und keine gespeicherte Einstellung.
 zwischen drei Kästen), ein Raster, und das Merken des Umschalters über das
 Schließen der Schicht hinaus.
 
+## Review
+
+### 2026-08-18T08:08:16 — fail
+
+Geprüft: alle Akzeptanzkriterien gegen den Code, der Diff von `66c1e54`,
+`npm test` (99 Dateien, 2115 Tests grün) und `npm run typecheck` (`vue-tsc`
+sauber). Ein Lint-Skript gibt es im Repo nicht, also keins gelaufen.
+
+- Kriterium „Gespeichert wird genau das, was das Gummiband zeigte (eine
+  Rechnung für Vorschau und Ergebnis)" ist nicht erfüllt: Das Band rechnet mit
+  `aligns` (aus `free`, gesetzt nur in `onPointerDown`/`onPointerMove`,
+  `DesignOverlay.vue:327,339`), das Ende des Zugs dagegen mit
+  `event.altKey` des pointerup (`DesignOverlay.vue:354`). Eine Alt-Taste, die
+  ohne Zeigerbewegung gedrückt oder losgelassen wird, ändert das Ergebnis, ohne
+  das Band zu ändern — beides nachgestellt und beides bestätigt:
+  Zug 79,90 → 198,130 ohne Alt, Band `left: 20%`, dann Alt gedrückt und
+  losgelassen → gespeichert `x: 0.1975`; derselbe Zug mit gehaltenem Alt, Band
+  `left: 19.75%`, Alt vor dem Loslassen gelöst → gespeichert `x: 0.2`. Beide
+  Wege gehen im Browser, denn eine Modifikatortaste löst kein `pointermove`
+  aus. `onPointerUp` müsste dasselbe `aligns.value` lesen, das auch das Band
+  liest; ein Test für „Alt zwischen letzter Bewegung und Loslassen" fehlt.
+- Alles übrige verifiziert: `snapLines`/`snapMoved`/`snapSized` rasten Kanten
+  UND Mitten an den Kästen (rekursiv) sowie an 0/0.5/1 ein, die nächste Linie
+  gewinnt (`shiftTo`/`edgeTo` in `core/snap.ts`); Hilfslinien hängen an `drag`
+  und verschwinden mit `from`/`to`; Umschalter `.design-snap` mit
+  `aria-pressed`; `snapLines(props.blocks, g?.id)` überspringt den angefassten
+  Kasten samt Kindern (das `continue` überspringt auch die Rekursion);
+  Fenstergrenzen über `lo`/`hi` aus `bounds` (`snapMoved`) bzw. `[0,1]`
+  (`snapSized`), `MIN_BLOCK_SIZE` über die Schranke der gegenüberliegenden
+  Kante — verworfen statt zurechtgestutzt; der Klick-Test läuft über den rohen
+  `span` (`DesignOverlay.vue:364`).
+- Der Diff bleibt im What: `core/snap.ts` neu, `round` in `core/design.ts`
+  exportiert, `DesignOverlay.vue` verdrahtet, zwei `.spec.ts`. Kein
+  `.only`/`.skip`, kein Debug-Rest, kein abgeschwächter Test.
+
 ## Log
 
 - 2026-08-18 status → ready (app)
@@ -99,3 +134,4 @@ Schließen der Schicht hinaus.
   Alt setzt aus). Volle Suite 2115 Tests grün (29 neue), `vue-tsc` sauber,
   `npm run build` sauber.
 - 2026-08-18 status → review (agent)
+- 2026-08-18 status → in-progress (agent)
