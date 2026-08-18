@@ -1,12 +1,14 @@
 ---
 id: c0114
 title: Snapping
-status: in-progress
+status: review
 created: 2026-08-18
 updated: 2026-08-18
-status-changed: 2026-08-18T07:53:55
+status-changed: 2026-08-18T08:04:58
 epic: e15
 commit: 66c1e54
+usage-tokens: 50675
+usage-cost: 5.144971
 ---
 
 Add optional snapping, with guide lines etc.
@@ -96,3 +98,4 @@ Schließen der Schicht hinaus.
   Schicht verdrahtet (`resolve`, Hilfslinien, Umschalter in der Kopfzeile,
   Alt setzt aus). Volle Suite 2115 Tests grün (29 neue), `vue-tsc` sauber,
   `npm run build` sauber.
+- 2026-08-18 status → review (agent)
