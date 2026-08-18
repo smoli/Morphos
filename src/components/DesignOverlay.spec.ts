@@ -855,4 +855,176 @@ describe('DesignOverlay', () => {
       expect(wrapper.get('.design-empty').text()).toContain('noch keinen Entwurf');
     });
   });
+
+  // c0114: Züge richten sich an den anderen Kästen aus — gerechnet wird das in
+  // core/snap, hier steht, WANN es gilt und was dabei zu sehen ist. Die Fläche
+  // ist 400 × 200 Pixel groß: ein Hundertstel (SNAP_RANGE) sind waagerecht vier,
+  // senkrecht zwei Pixel.
+  describe('Ausrichten (c0114)', () => {
+    /** Zwei Nachbarn, an denen sich ausrichten lässt. */
+    const NACHBARN: Block[] = [
+      { id: 'b1', name: 'Kopf', rect: { x: 0.2, y: 0.2, w: 0.3, h: 0.2 }, children: [] },
+      { id: 'b2', name: 'Fuß', rect: { x: 0.6, y: 0.6, w: 0.2, h: 0.2 }, children: [] },
+    ];
+
+    /** Ein Overlay mit Kästen, dessen Fläche 400 × 200 Pixel groß ist. */
+    function snapping(blocks: Block[] = NACHBARN) {
+      const wrapper = mount(DesignOverlay, { props: { blocks }, attachTo: document.body });
+      const stage = wrapper.get('.design-stage');
+      (stage.element as HTMLElement).getBoundingClientRect = () =>
+        ({ left: 0, top: 0, width: 400, height: 200, right: 400, bottom: 200, x: 0, y: 0 }) as DOMRect;
+      return { wrapper, stage };
+    }
+
+    /** Die Hilfslinien, wie sie gerade stehen (Achse und Anteil aus dem Stil). */
+    function guides(wrapper: ReturnType<typeof snapping>['wrapper']): string[] {
+      return wrapper.findAll('.design-guide').map((g) => {
+        const style = g.attributes('style') ?? '';
+        return `${g.classes().includes('dg-x') ? 'x' : 'y'} ${style.replace(/[^0-9.%]/g, '')}`;
+      });
+    }
+
+    /** Ein Zeichenzug über die Fläche, von Punkt zu Punkt (Pixel). */
+    async function draw(
+      { stage }: ReturnType<typeof snapping>,
+      a: [number, number],
+      b: [number, number],
+      alt = false,
+    ): Promise<void> {
+      await stage.trigger('pointerdown', { button: 0, clientX: a[0], clientY: a[1], altKey: alt });
+      await stage.trigger('pointermove', { clientX: b[0], clientY: b[1], altKey: alt });
+      await stage.trigger('pointerup', { clientX: b[0], clientY: b[1], altKey: alt });
+    }
+
+    it('legt einen gezeichneten Kasten an die Kanten seiner Nachbarn', async () => {
+      // Der Zug beginnt einen Pixel neben der linken Kante des Kopfs (0.2) und
+      // endet zwei Pixel vor der Mitte des Fensters (0.5) — beide Kanten rasten
+      // ein, senkrecht ist nichts in Reichweite.
+      const parts = snapping();
+
+      await draw(parts, [79, 90], [198, 130]);
+      await parts.wrapper.get('input.db-input').trigger('keydown.enter');
+
+      expect(parts.wrapper.emitted('draw')).toEqual([
+        [{ x: 0.2, y: 0.45, w: 0.3, h: 0.2 }, DEFAULT_BLOCK_NAME],
+      ]);
+    });
+
+    it('zeigt während des Zugs, woran er hängt — und danach nicht mehr', async () => {
+      const parts = snapping();
+      expect(guides(parts.wrapper)).toEqual([]);
+
+      await parts.stage.trigger('pointerdown', { button: 0, clientX: 79, clientY: 90 });
+      await parts.stage.trigger('pointermove', { clientX: 198, clientY: 130 });
+
+      expect(guides(parts.wrapper)).toEqual(['x 20%', 'x 50%']);
+      // Das Gummiband zeigt schon die ausgerichtete Fläche — was zu sehen ist,
+      // ist auch, was gespeichert wird.
+      expect(parts.wrapper.get('.design-band').attributes('style')).toContain('left: 20%');
+
+      await parts.stage.trigger('pointerup', { clientX: 198, clientY: 130 });
+      expect(guides(parts.wrapper)).toEqual([]);
+    });
+
+    it('lässt sich abschalten — dann liegt der Kasten, wo gezogen wurde', async () => {
+      const parts = snapping();
+
+      await parts.wrapper.get('.design-snap').trigger('click');
+      await draw(parts, [79, 90], [198, 130]);
+      await parts.wrapper.get('input.db-input').trigger('keydown.enter');
+
+      expect(parts.wrapper.emitted('draw')).toEqual([
+        [{ x: 0.1975, y: 0.45, w: 0.2975, h: 0.2 }, DEFAULT_BLOCK_NAME],
+      ]);
+      expect(guides(parts.wrapper)).toEqual([]);
+    });
+
+    it('sagt in der Kopfzeile, ob es gilt', async () => {
+      const parts = snapping();
+      const knopf = parts.wrapper.get('.design-snap');
+      expect(knopf.attributes('aria-pressed')).toBe('true');
+
+      await knopf.trigger('click');
+
+      expect(parts.wrapper.get('.design-snap').attributes('aria-pressed')).toBe('false');
+    });
+
+    it('setzt mit gedrückter Alt-Taste für den einen Zug aus', async () => {
+      const parts = snapping();
+
+      await draw(parts, [79, 90], [198, 130], true);
+      await parts.wrapper.get('input.db-input').trigger('keydown.enter');
+
+      expect(parts.wrapper.emitted('draw')).toEqual([
+        [{ x: 0.1975, y: 0.45, w: 0.2975, h: 0.2 }, DEFAULT_BLOCK_NAME],
+      ]);
+
+      // Der nächste Zug ohne Alt rastet wieder ein.
+      await draw(parts, [79, 90], [198, 130]);
+      await parts.wrapper.get('input.db-input').trigger('keydown.enter');
+      expect(parts.wrapper.emitted('draw')?.[1]).toEqual([
+        { x: 0.2, y: 0.45, w: 0.3, h: 0.2 }, DEFAULT_BLOCK_NAME,
+      ]);
+    });
+
+    it('richtet einen geschobenen Kasten aus, ohne seine Größe anzutasten', async () => {
+      // 39 Pixel nach rechts: Die rechte Kante des Kopfs (0.5975) kommt der
+      // linken Kante des Fußes (0.6) nah genug.
+      const parts = snapping();
+      const kopf = parts.wrapper.get('.design-stage > .design-block');
+      await kopf.trigger('click');
+
+      await kopf.trigger('pointerdown', { button: 0, clientX: 100, clientY: 50 });
+      await parts.stage.trigger('pointermove', { clientX: 139, clientY: 50 });
+      expect(guides(parts.wrapper)).toEqual(['x 60%']);
+      await parts.stage.trigger('pointerup', { clientX: 139, clientY: 50 });
+
+      expect(parts.wrapper.emitted('move')).toEqual([['b1', { x: 0.3, y: 0.2 }]]);
+    });
+
+    it('richtet die gezogene Kante aus und lässt die gegenüberliegende stehen', async () => {
+      const parts = snapping();
+      await parts.wrapper.get('.design-stage > .design-block').trigger('click');
+
+      await parts.wrapper.get('.db-handle.db-se').trigger('pointerdown', { button: 0, clientX: 200, clientY: 80 });
+      await parts.stage.trigger('pointermove', { clientX: 238, clientY: 80 });
+      await parts.stage.trigger('pointerup', { clientX: 238, clientY: 80 });
+
+      // 38 Pixel breiter wären 0.395 — die rechte Kante legt sich an den Fuß.
+      expect(parts.wrapper.emitted('resize')).toEqual([['b1', { x: 0.2, y: 0.2, w: 0.4, h: 0.2 }]]);
+    });
+
+    it('richtet einen Kasten nicht an sich selbst und nicht an seinen Kindern aus', async () => {
+      // Sein Zweig wandert mit ihm — er liefe sonst an seinen eigenen Kindern
+      // entlang, statt sich an den anderen auszurichten.
+      const mitKind: Block[] = [
+        {
+          ...NACHBARN[0],
+          children: [{ id: 'k', name: 'Kind', rect: { x: 0.25, y: 0.25, w: 0.1, h: 0.1 }, children: [] }],
+        },
+        NACHBARN[1],
+      ];
+      const parts = snapping(mitKind);
+      const kopf = parts.wrapper.get('.design-stage > .design-block');
+      await kopf.trigger('click');
+
+      await kopf.trigger('pointerdown', { button: 0, clientX: 100, clientY: 50 });
+      await parts.stage.trigger('pointermove', { clientX: 119, clientY: 50 });
+      expect(guides(parts.wrapper)).toEqual([]);
+      await parts.stage.trigger('pointerup', { clientX: 119, clientY: 50 });
+
+      expect(parts.wrapper.emitted('move')).toEqual([['b1', { x: 0.2475, y: 0.2 }]]);
+    });
+
+    it('macht aus einem Klick auch mit Ausrichten keinen Kasten', async () => {
+      // Ein Antippen dicht an einer Linie könnte sich sonst zu einem Kasten
+      // aufblasen — ob ein Zug ein Zug war, entscheidet der Zug selbst.
+      const parts = snapping();
+
+      await draw(parts, [80, 40], [81, 41]);
+
+      expect(parts.wrapper.find('input').exists()).toBe(false);
+      expect(parts.wrapper.emitted('draw')).toBeUndefined();
+    });
+  });
 });

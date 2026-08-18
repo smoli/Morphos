@@ -13,11 +13,13 @@ import {
   moveRect,
   pathIn,
   resizeRect,
+  round,
   type Block,
   type Handle,
   type Rect,
   type View,
 } from '@/core/design';
+import { snapLines, snapMoved, snapSized, type Guide } from '@/core/snap';
 
 /**
  * Der Entwurfs-Modus des UI-Designers (e15): eine durchscheinende Schicht über
@@ -64,6 +66,13 @@ import {
  * beides sind zwei Ebenen desselben Entwurfs. Angelegt, benannt und gelöscht
  * wird auch hier nichts: Die Schicht bittet nach oben, geschrieben wird im
  * Store.
+ *
+ * Seit c0114 richtet sich ein Zug AUS: Kanten und Mitten rasten an denen der
+ * übrigen Kästen und an Rand und Mitte des Fensters ein (core/snap), und
+ * Hilfslinien zeigen, woran. Ausgerichtet wird dabei genau einmal — an dem
+ * Gummiband, das ohnehin schon zeigt, wo der Zug landet (`resolve`). Was zu sehen
+ * ist, ist damit auch das, was gespeichert wird. Wer daneben treffen will, schaltet
+ * das Ausrichten in der Kopfzeile ab oder hält für den einen Zug Alt gedrückt.
  *
  * Die Anteile beziehen sich auf die Fläche (`.design-stage`) — dieselbe Fläche,
  * auf der auch gezeichnet wird. Was gezeichnet ist und was zu sehen ist, meint
@@ -131,6 +140,20 @@ const selectedId = ref<string | null>(null);
 /** Steht das Feld der gezeigten Ansicht offen (c0113)? */
 const viewOpen = ref(false);
 
+/** Richten sich Züge an den anderen Kästen aus (c0114)? */
+const snapping = ref(true);
+
+/**
+ * Ob die Alt-Taste gedrückt ist: Sie setzt das Ausrichten für den laufenden Zug
+ * aus — für das eine Mal, in dem der Kasten eben NICHT bündig liegen soll. Was
+ * beim Umschalter in der Kopfzeile eine Ansage für alle Züge ist, ist hier eine
+ * für diesen einen.
+ */
+const free = ref(false);
+
+/** Ob der laufende Zug ausgerichtet wird. */
+const aligns = computed(() => snapping.value && !free.value);
+
 /**
  * Die gezeigte Ansicht, stets frisch aus den Ansichten des Fensters gesucht —
  * wie der ausgewählte Kasten: Nach dem Speichern kommt ein neuer Entwurf von
@@ -176,14 +199,23 @@ const selected = computed<Block | null>(() => findBlockIn(props.blocks, selected
 const ancestors = computed<Block[]>(() => pathIn(props.blocks, selectedId.value ?? '').slice(0, -1));
 
 /**
- * Das Gummiband während des Zugs: beim Zeichnen die aufgezogene Fläche, beim
- * Anfassen der Platz, an dem der Kasten landet. Der Kasten selbst bleibt so
- * lange liegen — maßgeblich ist, was von der Platte zurückkommt.
+ * Der laufende Zug, fertig gerechnet: die Fläche, in der er landet, und die
+ * Linien, an denen sie hängt (c0114). Der Kasten selbst bleibt so lange liegen —
+ * maßgeblich ist, was von der Platte zurückkommt.
  */
-const band = computed<Rect | null>(() => {
+const drag = computed<{ rect: Rect; guides: Guide[] } | null>(() => {
   if (!from.value || !to.value) return null;
-  return gesture.value ? shaped(gesture.value, from.value, to.value) : span(from.value, to.value);
+  return resolve(from.value, to.value, gesture.value, aligns.value);
 });
+
+/**
+ * Das Gummiband während des Zugs: beim Zeichnen die aufgezogene Fläche, beim
+ * Anfassen der Platz, an dem der Kasten landet.
+ */
+const band = computed<Rect | null>(() => drag.value?.rect ?? null);
+
+/** Die Hilfslinien des laufenden Zugs — ohne Zug (und ohne Einrasten) keine. */
+const guides = computed<Guide[]>(() => drag.value?.guides ?? []);
 
 /**
  * Der Kasten, in dem der laufende Zug LANDEN würde (c0110) — sein künftiger
@@ -205,6 +237,11 @@ const draftBlock = computed<Block | null>(() =>
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
+}
+
+/** Ein Anteil als Prozentzahl fürs Stylesheet — ohne den Staub des Fließkommas. */
+function percent(share: number): string {
+  return `${+(share * 100).toFixed(2)}%`;
 }
 
 /** Wo auf der Fläche der Zeiger steht — als Anteil, nicht als Pixel (c0104). */
@@ -233,6 +270,38 @@ function shaped(g: NonNullable<typeof gesture.value>, a: { x: number; y: number 
 }
 
 /**
+ * Was ein Zug ergibt — die EINE Rechnung dahinter (c0114): erst die Fläche
+ * (gezeichnet, geschoben oder gezogen), dann das Ausrichten an den übrigen
+ * Kästen. Sie steht hier und nicht im Gummiband, weil das Ende des Zugs dasselbe
+ * braucht: Zwei Rechnungen wären zwei Wahrheiten, und gespeichert würde am Ende
+ * eine andere Fläche, als zu sehen war.
+ *
+ * Der angefasste Kasten kommt als Ziel nicht in Frage (`snapLines(…, id)`) — samt
+ * seinem Zweig, denn der wandert mit ihm. Beim Schieben wandern auch die Grenzen
+ * mit, die im Fenster bleiben müssen: Ausgerichtet wird, wo der Kasten JETZT
+ * liegt, nicht, wo er lag.
+ */
+function resolve(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  g: typeof gesture.value,
+  align: boolean,
+): { rect: Rect; guides: Guide[] } {
+  const rect = g ? shaped(g, a, b) : span(a, b);
+  if (!align) return { rect, guides: [] };
+  const lines = snapLines(props.blocks, g?.id);
+  if (g && !g.handle) {
+    const bounds = {
+      ...g.bounds,
+      x: round(g.bounds.x + (rect.x - g.rect.x)),
+      y: round(g.bounds.y + (rect.y - g.rect.y)),
+    };
+    return snapMoved(rect, lines, bounds);
+  }
+  return snapSized(rect, g?.handle ?? null, lines);
+}
+
+/**
  * Ein Kasten meldet, dass er angefasst wurde. Der erste gewinnt: Ein Druck auf
  * einen Griff läuft über den Kasten weiter (und ein Kind über seinen Elter),
  * gemeint ist aber, was zuunterst liegt.
@@ -255,6 +324,7 @@ function onPointerDown(event: PointerEvent): void {
   grabbed = null;
   dragged = false;
   if (event.button !== undefined && event.button !== 0) return;
+  free.value = !!event.altKey;
   from.value = shareAt(event);
   to.value = from.value;
   const block = grab ? findBlockIn(props.blocks, grab.id) : null;
@@ -264,29 +334,36 @@ function onPointerDown(event: PointerEvent): void {
 
 function onPointerMove(event: PointerEvent): void {
   if (!from.value) return;
+  // Alt darf mitten im Zug gedrückt (und wieder losgelassen) werden: Ob ein Zug
+  // sich ausrichtet, entscheidet sich beim Hinsehen, nicht beim Anfassen.
+  free.value = !!event.altKey;
   to.value = shareAt(event);
 }
 
 /**
  * Ende des Zugs: Was zu klein ist, war ein Klick und kein Zug — daraus wird
  * kein Kasten (sonst hinterließe jedes Antippen einen Krümel im Entwurf).
+ * Gemessen wird dafür der ROHE Zug: Sonst bliese das Ausrichten ein Antippen
+ * dicht an zwei Linien zu einem Kasten auf.
  */
 function onPointerUp(event: PointerEvent): void {
   if (!from.value) return;
   const at = shareAt(event);
   const start = from.value;
   const g = gesture.value;
+  const align = snapping.value && !event.altKey;
   from.value = null;
   to.value = null;
   gesture.value = null;
+  free.value = false;
   if (g) {
     dragged = true;
-    finish(g, shaped(g, start, at));
+    finish(g, resolve(start, at, g, align).rect);
     return;
   }
-  const rect = span(start, at);
-  if (rect.w < MIN_BLOCK_SIZE || rect.h < MIN_BLOCK_SIZE) return;
-  draft.value = rect;
+  const drawn = span(start, at);
+  if (drawn.w < MIN_BLOCK_SIZE || drawn.h < MIN_BLOCK_SIZE) return;
+  draft.value = resolve(start, at, null, align).rect;
   editingId.value = DRAFT_ID;
 }
 
@@ -383,6 +460,17 @@ function onDeleteView(): void {
         Ziehen zeichnet, ein Klick wählt aus — den ausgewählten Kasten schiebt und zieht
         man zurecht; in einen Kasten hinein heißt hinein
       </span>
+      <!-- Das Ausrichten ist ein Angebot (c0114) — abschalten muss man dürfen. -->
+      <button
+        type="button"
+        class="design-snap"
+        :class="{ on: snapping }"
+        :aria-pressed="snapping"
+        title="Kanten und Mitten rasten aneinander ein — Alt hält es für einen Zug an"
+        @click="snapping = !snapping"
+      >
+        Ausrichten
+      </button>
       <button type="button" class="design-close" @click="emit('close')">Schließen</button>
     </div>
 
@@ -422,6 +510,15 @@ function onDeleteView(): void {
         @grab="onGrab"
         @commit="onCommit"
         @cancel="onCancel"
+      />
+      <!-- Woran der laufende Zug hängt (c0114): quer über die ganze Fläche, denn
+           die Linie gilt dem Fenster und nicht nur dem einen Nachbarn. -->
+      <div
+        v-for="guide in guides"
+        :key="`${guide.axis}${guide.at}`"
+        class="design-guide"
+        :class="`dg-${guide.axis}`"
+        :style="guide.axis === 'x' ? { left: percent(guide.at) } : { top: percent(guide.at) }"
       />
       <!-- Das Gummiband des laufenden Zugs — noch kein Kasten, nur eine Absicht. -->
       <div v-if="band" class="design-band" :style="{
@@ -499,7 +596,8 @@ function onDeleteView(): void {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.design-close {
+.design-close,
+.design-snap {
   background: var(--panel-2);
   border: 1px solid var(--border);
   color: var(--text);
@@ -508,8 +606,19 @@ function onDeleteView(): void {
   font-size: 12px;
   cursor: pointer;
 }
-.design-close:hover {
+.design-close:hover,
+.design-snap:hover {
   border-color: var(--accent);
+}
+/* Der Umschalter sagt schon von sich aus, ob das Ausrichten gilt (c0114) — in
+   der Farbe der Hilfslinien, die er ein- und ausschaltet. */
+.design-snap {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.design-snap.on {
+  border-color: rgba(255, 108, 176, 0.8);
+  color: rgba(255, 108, 176, 0.95);
 }
 /* Die Fläche, auf der die Anteile des Entwurfs gelten: der Rest des Fensters.
    Zugleich die Zeichenfläche — darum das Fadenkreuz. */
@@ -530,6 +639,28 @@ function onDeleteView(): void {
   border-radius: 8px;
   background: rgba(108, 140, 255, 0.08);
   pointer-events: none;
+}
+/*
+ * Die Hilfslinien (c0114): haarfein und quer über die ganze Fläche, in einer
+ * eigenen Farbe — sie sind weder ein Kasten (blau) noch ein künftiger Elter
+ * (bernstein), sondern sagen nur: hier liegt es bündig. Sie liegen über den
+ * Kästen, damit man sie auch in einem gefüllten Entwurf sieht.
+ */
+.design-guide {
+  position: absolute;
+  z-index: 1;
+  background: rgba(255, 108, 176, 0.9);
+  pointer-events: none;
+}
+.dg-x {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+.dg-y {
+  left: 0;
+  right: 0;
+  height: 1px;
 }
 .design-empty {
   margin: 0;

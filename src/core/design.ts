@@ -201,8 +201,12 @@ function num(value: unknown, fallback: number): number {
  * Schirm und ohne den Rechenstaub des Fließkommas. So steht in der Datei 0.2
  * und nicht 0.19999999999999996, und ein Zug, der nichts verschiebt, macht
  * auch keinen Git-Diff.
+ *
+ * Öffentlich, weil das Ausrichten (core/snap) mit denselben Anteilen rechnet:
+ * Zwei Rundungen wären zwei Wahrheiten, und eine Hilfslinie läge dann knapp
+ * neben der Kante, die sie meint.
  */
-function round(value: number): number {
+export function round(value: number): number {
   return Math.round(value * 1e4) / 1e4;
 }
 
