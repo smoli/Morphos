@@ -8,6 +8,8 @@ commit: 38414bf
 created: 2026-08-18
 updated: 2026-08-18
 status-changed: 2026-08-18T07:50:36
+usage-tokens: 112423
+usage-cost: 20.362949
 ---
 
 I want to be able to define multiple views. Each view has their own title and description and can hold an arbitrary number of blocks

@@ -10,12 +10,12 @@
       "phase": "running",
       "activity": {
         "name": "Bash",
-        "arg": "git log --oneline -5 && git show --stat --oneline a910159 | head"
+        "arg": "git show --stat 38414bf && echo \"===CARD DIFF===\" && git diff .gello/epics/e15-ui-designer/c0113-define-multiple-views.md"
       },
       "model": "claude-opus-5"
     }
   ],
-  "updated": "2026-08-18T07:51:09",
+  "updated": "2026-08-18T07:51:29",
   "pickupDelay": 10,
   "owned": [
     "c0029",
