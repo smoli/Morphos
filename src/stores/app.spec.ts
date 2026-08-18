@@ -804,7 +804,7 @@ describe('useAppStore', () => {
   describe('Entwurfs-Modus (UI-Designer)', () => {
     const DESIGN = {
       version: 1,
-      blocks: [{ id: 'b1', name: 'Kopf', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [] }],
+      views: [{ id: 'v1', title: 'Ansicht 1', blocks: [{ id: 'b1', name: 'Kopf', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [] }] }],
     };
 
     /** Eine geöffnete App — nur dann gibt es überhaupt einen Entwurf. */
@@ -835,7 +835,7 @@ describe('useAppStore', () => {
 
       expect(readDesign).toHaveBeenCalledWith('/apps', 'rechner-1');
       expect(store.designOpen).toBe(true);
-      expect(store.designBlocks).toEqual(DESIGN.blocks);
+      expect(store.designBlocks).toEqual(DESIGN.views[0].blocks);
     });
 
     it('schließt wieder — und liest beim nächsten Öffnen frisch von der Platte', async () => {
@@ -852,7 +852,7 @@ describe('useAppStore', () => {
     });
 
     it('geht auch ohne Entwurf auf — leer statt gar nicht', async () => {
-      const store = await openedStore({ readDesign: vi.fn(async () => ({ version: 1, blocks: [] })) });
+      const store = await openedStore({ readDesign: vi.fn(async () => ({ version: 1, views: [] })) });
 
       await store.toggleDesign();
 
@@ -919,11 +919,11 @@ describe('useAppStore', () => {
 
         expect(id).toBeTruthy();
         expect(writeDesign).toHaveBeenCalledWith('/apps', 'rechner-1', expect.anything());
-        expect(written[0].blocks).toEqual([
+        expect(written[0].views[0].blocks).toEqual([
           { id, name: 'Kopf', rect: { x: 0.1, y: 0.2, w: 0.3, h: 0.4 }, children: [] },
         ]);
         // Und das Fenster zeigt sofort, was in der Datei steht.
-        expect(store.designBlocks).toEqual(written[0].blocks);
+        expect(store.designBlocks).toEqual(written[0].views[0].blocks);
       });
 
       it('gibt einem namenlosen Kasten den Platzhalternamen', async () => {
@@ -932,7 +932,7 @@ describe('useAppStore', () => {
 
         await store.addDesignBlock({ x: 0, y: 0, w: 0.5, h: 0.5 }, '   ');
 
-        expect(written[0].blocks[0].name).toBe(DEFAULT_BLOCK_NAME);
+        expect(written[0].views[0].blocks[0].name).toBe(DEFAULT_BLOCK_NAME);
       });
 
       it('legt den zweiten Kasten neben den ersten, ohne den ersten zu verlieren', async () => {
@@ -942,7 +942,7 @@ describe('useAppStore', () => {
         await store.addDesignBlock({ x: 0, y: 0, w: 0.5, h: 0.2 }, 'Kopf');
         await store.addDesignBlock({ x: 0, y: 0.3, w: 0.5, h: 0.2 }, 'Fuß');
 
-        expect(written[1].blocks.map((b) => b.name)).toEqual(['Kopf', 'Fuß']);
+        expect(written[1].views[0].blocks.map((b) => b.name)).toEqual(['Kopf', 'Fuß']);
         expect(store.designBlocks).toHaveLength(2);
       });
 
@@ -953,7 +953,7 @@ describe('useAppStore', () => {
 
         await store.renameDesignBlock('b1', 'Kopfzeile');
 
-        expect(written[0].blocks[0].name).toBe('Kopfzeile');
+        expect(written[0].views[0].blocks[0].name).toBe('Kopfzeile');
         expect(store.designBlocks[0].name).toBe('Kopfzeile');
       });
 
@@ -961,7 +961,7 @@ describe('useAppStore', () => {
         // Der Hauptprozess rückt zurecht (core/design) — maßgeblich ist er.
         const writeDesign = vi.fn(async (): Promise<Design> => ({
           version: 1,
-          blocks: [{ id: 'gerade', name: 'Kopf', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [] }],
+          views: [{ id: 'v1', title: 'Ansicht 1', blocks: [{ id: 'gerade', name: 'Kopf', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [] }] }],
         }));
         const store = await openedStore({ writeDesign, readDesign: vi.fn(async () => emptyDesign()) });
 
@@ -1006,12 +1006,12 @@ describe('useAppStore', () => {
         await store.describeDesignBlock('b1', { type: 'Kopfzeile' });
         await store.describeDesignBlock('b1', { instructions: 'Titel links, Suche rechts' });
 
-        expect(written[1].blocks[0]).toMatchObject({
+        expect(written[1].views[0].blocks[0]).toMatchObject({
           type: 'Kopfzeile',
           instructions: 'Titel links, Suche rechts',
         });
         // Der Name bleibt, wovon hier nicht die Rede war.
-        expect(written[1].blocks[0].name).toBe(DESIGN.blocks[0].name);
+        expect(written[1].views[0].blocks[0].name).toBe(DESIGN.views[0].blocks[0].name);
         expect(store.designBlocks[0]).toMatchObject({ type: 'Kopfzeile' });
       });
 
@@ -1021,10 +1021,10 @@ describe('useAppStore', () => {
           writeDesign,
           readDesign: vi.fn(async () => ({
             version: 1,
-            blocks: [{
+            views: [{ id: 'v1', title: 'Ansicht 1', blocks: [{
               id: 'b1', name: 'Kopf', type: 'Kopfzeile', instructions: 'weg damit',
               rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [],
-            }],
+            }] }],
           })),
         });
         await store.openDesign();
@@ -1032,8 +1032,8 @@ describe('useAppStore', () => {
         await store.describeDesignBlock('b1', { type: '  ' });
         await store.describeDesignBlock('b1', { instructions: '' });
 
-        expect('type' in written[1].blocks[0]).toBe(false);
-        expect('instructions' in written[1].blocks[0]).toBe(false);
+        expect('type' in written[1].views[0].blocks[0]).toBe(false);
+        expect('instructions' in written[1].views[0].blocks[0]).toBe(false);
       });
 
       it('beschreibt keinen Kasten ohne Entwurf', async () => {
@@ -1055,12 +1055,12 @@ describe('useAppStore', () => {
         /** Ein Kopf mit einem Kasten darin, beide im oberen Fünftel. */
         const VERSCHACHTELT = {
           version: 1,
-          blocks: [{
+          views: [{ id: 'v1', title: 'Ansicht 1', blocks: [{
             id: 'b1', name: 'Kopf', rect: { x: 0.1, y: 0.1, w: 0.4, h: 0.2 },
             children: [{
               id: 'b2', name: 'Titel', rect: { x: 0.15, y: 0.15, w: 0.1, h: 0.1 }, children: [],
             }],
-          }],
+          }] }],
         };
 
         it('schiebt einen Kasten samt seiner Kinder und schreibt ihn', async () => {
@@ -1070,8 +1070,8 @@ describe('useAppStore', () => {
 
           await store.moveDesignBlock('b1', { x: 0.5, y: 0.1 });
 
-          expect(written[0].blocks[0].rect).toEqual({ x: 0.5, y: 0.1, w: 0.4, h: 0.2 });
-          expect(written[0].blocks[0].children[0].rect).toEqual({ x: 0.55, y: 0.15, w: 0.1, h: 0.1 });
+          expect(written[0].views[0].blocks[0].rect).toEqual({ x: 0.5, y: 0.1, w: 0.4, h: 0.2 });
+          expect(written[0].views[0].blocks[0].children[0].rect).toEqual({ x: 0.55, y: 0.15, w: 0.1, h: 0.1 });
           expect(store.designBlocks[0].rect.x).toBe(0.5);
         });
 
@@ -1082,8 +1082,8 @@ describe('useAppStore', () => {
 
           await store.resizeDesignBlock('b1', { x: 0.1, y: 0.1, w: 0.8, h: 0.5 });
 
-          expect(written[0].blocks[0].rect).toEqual({ x: 0.1, y: 0.1, w: 0.8, h: 0.5 });
-          expect(written[0].blocks[0].children[0].rect).toEqual(VERSCHACHTELT.blocks[0].children[0].rect);
+          expect(written[0].views[0].blocks[0].rect).toEqual({ x: 0.1, y: 0.1, w: 0.8, h: 0.5 });
+          expect(written[0].views[0].blocks[0].children[0].rect).toEqual(VERSCHACHTELT.views[0].blocks[0].children[0].rect);
         });
 
         it('fasst ohne Entwurf nichts an', async () => {
@@ -1105,9 +1105,9 @@ describe('useAppStore', () => {
         /** Ein Inhaltskasten in der linken Hälfte — Platz für einen Kasten darin. */
         const INHALT = {
           version: 1,
-          blocks: [{
+          views: [{ id: 'v1', title: 'Ansicht 1', blocks: [{
             id: 'b1', name: 'Inhalt', rect: { x: 0.1, y: 0.1, w: 0.5, h: 0.5 }, children: [],
-          }],
+          }] }],
         };
 
         it('macht einen Kasten, der in einen anderen gezeichnet wird, zu seinem Kind', async () => {
@@ -1117,11 +1117,11 @@ describe('useAppStore', () => {
 
           const id = await store.addDesignBlock({ x: 0.2, y: 0.2, w: 0.2, h: 0.2 }, 'Liste');
 
-          expect(written[0].blocks.map((b) => b.id)).toEqual(['b1']);
-          expect(written[0].blocks[0].children.map((b) => b.name)).toEqual(['Liste']);
+          expect(written[0].views[0].blocks.map((b) => b.id)).toEqual(['b1']);
+          expect(written[0].views[0].blocks[0].children.map((b) => b.name)).toEqual(['Liste']);
           // Verschoben wird dabei nichts — die Anteile sind absolut (c0104).
-          expect(written[0].blocks[0].children[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.2, h: 0.2 });
-          expect(id).toBe(written[0].blocks[0].children[0].id);
+          expect(written[0].views[0].blocks[0].children[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.2, h: 0.2 });
+          expect(id).toBe(written[0].views[0].blocks[0].children[0].id);
         });
 
         it('lässt einen Kasten daneben an der Wurzel', async () => {
@@ -1131,8 +1131,8 @@ describe('useAppStore', () => {
 
           await store.addDesignBlock({ x: 0.7, y: 0.1, w: 0.2, h: 0.2 }, 'Seitenleiste');
 
-          expect(written[0].blocks.map((b) => b.name)).toEqual(['Inhalt', 'Seitenleiste']);
-          expect(written[0].blocks[0].children).toEqual([]);
+          expect(written[0].views[0].blocks.map((b) => b.name)).toEqual(['Inhalt', 'Seitenleiste']);
+          expect(written[0].views[0].blocks[0].children).toEqual([]);
         });
 
         it('verschachtelt einen Kasten, der in einen anderen geschoben wird', async () => {
@@ -1141,19 +1141,19 @@ describe('useAppStore', () => {
             writeDesign,
             readDesign: vi.fn(async () => ({
               version: 1,
-              blocks: [
-                INHALT.blocks[0],
+              views: [{ id: 'v1', title: 'Ansicht 1', blocks: [
+                INHALT.views[0].blocks[0],
                 { id: 'b2', name: 'Liste', rect: { x: 0.7, y: 0.2, w: 0.1, h: 0.1 }, children: [] },
-              ],
+              ] }],
             })),
           });
           await store.openDesign();
 
           await store.moveDesignBlock('b2', { x: 0.2, y: 0.2 });
 
-          expect(written[0].blocks.map((b) => b.id)).toEqual(['b1']);
-          expect(written[0].blocks[0].children.map((b) => b.id)).toEqual(['b2']);
-          expect(written[0].blocks[0].children[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.1, h: 0.1 });
+          expect(written[0].views[0].blocks.map((b) => b.id)).toEqual(['b1']);
+          expect(written[0].views[0].blocks[0].children.map((b) => b.id)).toEqual(['b2']);
+          expect(written[0].views[0].blocks[0].children[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.1, h: 0.1 });
         });
 
         it('hängt einen herausgeschobenen Kasten an die Wurzel — samt seiner Kinder', async () => {
@@ -1162,25 +1162,25 @@ describe('useAppStore', () => {
             writeDesign,
             readDesign: vi.fn(async () => ({
               version: 1,
-              blocks: [{
-                ...INHALT.blocks[0],
+              views: [{ id: 'v1', title: 'Ansicht 1', blocks: [{
+                ...INHALT.views[0].blocks[0],
                 children: [{
                   id: 'b2', name: 'Liste', rect: { x: 0.2, y: 0.2, w: 0.1, h: 0.1 },
                   children: [{
                     id: 'b3', name: 'Zeile', rect: { x: 0.22, y: 0.22, w: 0.05, h: 0.05 }, children: [],
                   }],
                 }],
-              }],
+              }] }],
             })),
           });
           await store.openDesign();
 
           await store.moveDesignBlock('b2', { x: 0.8, y: 0.8 });
 
-          expect(written[0].blocks.map((b) => b.id)).toEqual(['b1', 'b2']);
-          expect(written[0].blocks[0].children).toEqual([]);
+          expect(written[0].views[0].blocks.map((b) => b.id)).toEqual(['b1', 'b2']);
+          expect(written[0].views[0].blocks[0].children).toEqual([]);
           // Das Enkelkind ist mitgewandert und hängt weiter an seinem Elter.
-          expect(written[0].blocks[1].children[0].rect).toEqual({ x: 0.82, y: 0.82, w: 0.05, h: 0.05 });
+          expect(written[0].views[0].blocks[1].children[0].rect).toEqual({ x: 0.82, y: 0.82, w: 0.05, h: 0.05 });
         });
 
         it('hängt auch einen Kasten um, der aus seinem Elter heraus gezogen wird', async () => {
@@ -1189,12 +1189,12 @@ describe('useAppStore', () => {
             writeDesign,
             readDesign: vi.fn(async () => ({
               version: 1,
-              blocks: [{
-                ...INHALT.blocks[0],
+              views: [{ id: 'v1', title: 'Ansicht 1', blocks: [{
+                ...INHALT.views[0].blocks[0],
                 children: [{
                   id: 'b2', name: 'Liste', rect: { x: 0.2, y: 0.2, w: 0.1, h: 0.1 }, children: [],
                 }],
-              }],
+              }] }],
             })),
           });
           await store.openDesign();
@@ -1202,8 +1202,8 @@ describe('useAppStore', () => {
           // Die rechte Kante über den Elter hinaus: Der Kasten liegt nicht mehr drin.
           await store.resizeDesignBlock('b2', { x: 0.2, y: 0.2, w: 0.7, h: 0.1 });
 
-          expect(written[0].blocks.map((b) => b.id)).toEqual(['b1', 'b2']);
-          expect(written[0].blocks[1].rect).toEqual({ x: 0.2, y: 0.2, w: 0.7, h: 0.1 });
+          expect(written[0].views[0].blocks.map((b) => b.id)).toEqual(['b1', 'b2']);
+          expect(written[0].views[0].blocks[1].rect).toEqual({ x: 0.2, y: 0.2, w: 0.7, h: 0.1 });
         });
 
         it('löscht einen Kasten und hebt seine Kinder an seine Stelle', async () => {
@@ -1212,24 +1212,24 @@ describe('useAppStore', () => {
             writeDesign,
             readDesign: vi.fn(async () => ({
               version: 1,
-              blocks: [{
-                ...INHALT.blocks[0],
+              views: [{ id: 'v1', title: 'Ansicht 1', blocks: [{
+                ...INHALT.views[0].blocks[0],
                 children: [{
                   id: 'b2', name: 'Liste', rect: { x: 0.2, y: 0.2, w: 0.2, h: 0.2 },
                   children: [{
                     id: 'b3', name: 'Zeile', rect: { x: 0.25, y: 0.25, w: 0.05, h: 0.05 }, children: [],
                   }],
                 }],
-              }],
+              }] }],
             })),
           });
           await store.openDesign();
 
           await store.deleteDesignBlock('b2');
 
-          expect(written[0].blocks.map((b) => b.id)).toEqual(['b1']);
-          expect(written[0].blocks[0].children.map((b) => b.id)).toEqual(['b3']);
-          expect(written[0].blocks[0].children[0].rect).toEqual({ x: 0.25, y: 0.25, w: 0.05, h: 0.05 });
+          expect(written[0].views[0].blocks.map((b) => b.id)).toEqual(['b1']);
+          expect(written[0].views[0].blocks[0].children.map((b) => b.id)).toEqual(['b3']);
+          expect(written[0].views[0].blocks[0].children[0].rect).toEqual({ x: 0.25, y: 0.25, w: 0.05, h: 0.05 });
           expect(store.designBlocks[0].children[0].id).toBe('b3');
         });
 
@@ -1336,8 +1336,12 @@ describe('useAppStore', () => {
 
         expect(designOf(host)).toEqual({
           version: 1,
-          blocks: [{
-            id: expect.any(String), name: 'Kopfzeile', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [],
+          views: [{
+            id: expect.any(String),
+            title: 'Ansicht 1',
+            blocks: [{
+              id: expect.any(String), name: 'Kopfzeile', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [],
+            }],
           }],
         });
       });
@@ -1371,7 +1375,7 @@ describe('useAppStore', () => {
       it('liest ihn von der Platte, sobald die App entstanden ist', async () => {
         const readDesign = vi.fn(async (): Promise<Design> => ({
           version: 1,
-          blocks: [{ id: 'geschrieben', name: 'Kopfzeile', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [] }],
+          views: [{ id: 'v1', title: 'Ansicht 1', blocks: [{ id: 'geschrieben', name: 'Kopfzeile', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [] }] }],
         }));
         const { store } = draftStore({ readDesign });
         await store.addDesignBlock({ x: 0, y: 0, w: 1, h: 0.2 }, 'Kopfzeile');
@@ -1398,7 +1402,225 @@ describe('useAppStore', () => {
 
         // Und der nächste Wunsch nimmt ihn erneut mit.
         await store.generate('Doch lieber blau');
-        expect(designOf(host)).toMatchObject({ blocks: [{ name: 'Kopfzeile' }] });
+        expect(designOf(host)).toMatchObject({ views: [{ blocks: [{ name: 'Kopfzeile' }] }] });
+      });
+    });
+
+    // c0113: Ein Entwurf hat Ansichten — eine je Bildschirm der App. Das
+    // Fenster zeigt genau eine; jeder Zug mit einem Kasten gilt ihr.
+    describe('Ansichten (c0113)', () => {
+      /** Zwei Ansichten mit je einem Kasten. */
+      const ZWEI: Design = {
+        version: 1,
+        views: [
+          { id: 'v1', title: 'Liste', blocks: [{ id: 'b1', name: 'Kopf', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [] }] },
+          { id: 'v2', title: 'Detail', blocks: [{ id: 'b2', name: 'Formular', rect: { x: 0, y: 0.2, w: 1, h: 0.8 }, children: [] }] },
+        ],
+      };
+
+      /** Ein Host, der das Geschriebene festhält und zurückgibt. */
+      function writingHost() {
+        const written: Design[] = [];
+        const writeDesign = vi.fn(async (_f: string, _i: string, d: Design) => {
+          written.push(JSON.parse(JSON.stringify(d)) as Design);
+          return d;
+        });
+        return { written, writeDesign };
+      }
+
+      /** Eine geöffnete App mit offenem Entwurfs-Modus. */
+      async function designing(design: Design) {
+        const { written, writeDesign } = writingHost();
+        const store = await openedStore({ writeDesign, readDesign: vi.fn(async () => design) });
+        await store.openDesign();
+        return { store, written, writeDesign };
+      }
+
+      it('zeigt nach dem Lesen die erste Ansicht', async () => {
+        const { store } = await designing(ZWEI);
+
+        expect(store.designViews.map((v) => v.title)).toEqual(['Liste', 'Detail']);
+        expect(store.designViewId).toBe('v1');
+        expect(store.designView!.title).toBe('Liste');
+        expect(store.designBlocks.map((b) => b.id)).toEqual(['b1']);
+      });
+
+      it('wechselt die Ansicht — und zeigt fortan ihre Kästen', async () => {
+        const { store } = await designing(ZWEI);
+
+        store.selectDesignView('v2');
+
+        expect(store.designViewId).toBe('v2');
+        expect(store.designBlocks.map((b) => b.id)).toEqual(['b2']);
+      });
+
+      it('lässt sich keine Ansicht andrehen, die es nicht gibt', async () => {
+        const { store } = await designing(ZWEI);
+
+        store.selectDesignView('weg');
+
+        expect(store.designViewId).toBe('v1');
+      });
+
+      it('zeichnet in die gezeigte Ansicht — die andere bleibt unberührt', async () => {
+        const { store, written } = await designing(ZWEI);
+        store.selectDesignView('v2');
+
+        await store.addDesignBlock({ x: 0.1, y: 0.3, w: 0.2, h: 0.2 }, 'Liste');
+
+        // Die Liste liegt im Formular, also wird sie dessen Kind (c0110) — und
+        // beides steht in der zweiten Ansicht, die erste bleibt, wie sie war.
+        expect(written[0].views[0].blocks.map((b) => b.id)).toEqual(['b1']);
+        expect(written[0].views[1].blocks.map((b) => b.name)).toEqual(['Formular']);
+        expect(written[0].views[1].blocks[0].children.map((b) => b.name)).toEqual(['Liste']);
+        expect(store.designBlocks[0].children).toHaveLength(1);
+      });
+
+      it('benennt, beschreibt, schiebt und löscht in der gezeigten Ansicht', async () => {
+        const { store, written } = await designing(ZWEI);
+        store.selectDesignView('v2');
+
+        await store.renameDesignBlock('b2', 'Eingabe');
+        await store.describeDesignBlock('b2', { type: 'Formular' });
+        await store.moveDesignBlock('b2', { x: 0, y: 0.1 });
+
+        const letzte = written[written.length - 1];
+        expect(letzte.views[0].blocks[0].name).toBe('Kopf');
+        expect(letzte.views[1].blocks[0]).toMatchObject({ name: 'Eingabe', type: 'Formular', rect: { x: 0, y: 0.1 } });
+
+        await store.deleteDesignBlock('b2');
+        expect(store.designBlocks).toEqual([]);
+        expect(store.designViews[0].blocks).toHaveLength(1);
+      });
+
+      it('fasst einen Kasten der ANDEREN Ansicht nicht an', async () => {
+        const { store, writeDesign } = await designing(ZWEI);
+        store.selectDesignView('v2');
+
+        await store.renameDesignBlock('b1', 'Kopfzeile');
+
+        expect(writeDesign).not.toHaveBeenCalled();
+        expect(store.designViews[0].blocks[0].name).toBe('Kopf');
+      });
+
+      it('legt mit dem ersten Kasten auch die erste Ansicht an', async () => {
+        // Wer zeichnen will, soll nicht erst eine Ansicht anlegen müssen.
+        const { store, written } = await designing(emptyDesign());
+
+        const id = await store.addDesignBlock({ x: 0, y: 0, w: 1, h: 0.2 }, 'Kopf');
+
+        expect(id).toBeTruthy();
+        expect(written[0].views).toHaveLength(1);
+        expect(written[0].views[0].title).toBe('Ansicht 1');
+        expect(written[0].views[0].blocks[0].name).toBe('Kopf');
+        expect(store.designViewId).toBe(written[0].views[0].id);
+      });
+
+      it('legt eine weitere Ansicht an, zeigt sie und schreibt sie', async () => {
+        const { store, written } = await designing(ZWEI);
+
+        const id = await store.addDesignView();
+
+        expect(id).toBeTruthy();
+        expect(written[0].views.map((v) => v.title)).toEqual(['Liste', 'Detail', 'Ansicht 3']);
+        expect(store.designViewId).toBe(id);
+        // Die neue Ansicht ist leer — die Fläche zeigt nichts von der alten.
+        expect(store.designBlocks).toEqual([]);
+      });
+
+      it('gibt einer Ansicht Titel und Beschreibung', async () => {
+        const { store, written } = await designing(ZWEI);
+
+        await store.describeDesignView('v2', { title: '  Einzelheiten  ' });
+        await store.describeDesignView('v2', { description: 'ein Eintrag mit allem, was er hat' });
+
+        const letzte = written[written.length - 1];
+        expect(letzte.views[1]).toMatchObject({
+          title: 'Einzelheiten',
+          description: 'ein Eintrag mit allem, was er hat',
+        });
+        expect(store.designViews[1].title).toBe('Einzelheiten');
+      });
+
+      it('nimmt einer Ansicht ihren Titel nicht weg und schreibt nichts Leeres', async () => {
+        const { store, writeDesign } = await designing(ZWEI);
+
+        await store.describeDesignView('v1', { title: '   ' });
+
+        expect(store.designViews[0].title).toBe('Liste');
+        expect(writeDesign).not.toHaveBeenCalled();
+      });
+
+      it('schreibt nichts für eine Ansicht, die es nicht gibt', async () => {
+        const { store, writeDesign } = await designing(ZWEI);
+
+        await store.describeDesignView('weg', { title: 'x' });
+        await store.deleteDesignView('weg');
+
+        expect(writeDesign).not.toHaveBeenCalled();
+        expect(store.error).toBeNull();
+      });
+
+      it('löscht eine Ansicht samt ihren Kästen und zeigt die erste, die bleibt', async () => {
+        const { store, written } = await designing(ZWEI);
+
+        await store.deleteDesignView('v1');
+
+        expect(written[0].views.map((v) => v.id)).toEqual(['v2']);
+        expect(store.designViewId).toBe('v2');
+        expect(store.designBlocks.map((b) => b.id)).toEqual(['b2']);
+      });
+
+      it('darf auch die letzte löschen — dann ist der Entwurf wieder leer', async () => {
+        const { store } = await designing(ZWEI);
+
+        await store.deleteDesignView('v1');
+        await store.deleteDesignView('v2');
+
+        expect(store.designViews).toEqual([]);
+        expect(store.designViewId).toBeNull();
+        expect(store.designBlocks).toEqual([]);
+      });
+
+      it('behält die gezeigte Ansicht über ein Neulesen hinweg', async () => {
+        const { store } = await designing(ZWEI);
+        store.selectDesignView('v2');
+
+        store.closeDesign();
+        await store.openDesign();
+
+        expect(store.designViewId).toBe('v2');
+      });
+
+      it('fällt auf die erste zurück, wenn die gezeigte nicht mehr da ist', async () => {
+        // Etwa, weil sie in einem anderen Fenster gelöscht wurde.
+        const store = await openedStore({
+          readDesign: vi.fn(async () => ZWEI).mockImplementationOnce(async () => ZWEI),
+        });
+        await store.openDesign();
+        store.selectDesignView('v2');
+
+        setHost(makeHost({ readDesign: vi.fn(async () => ({ version: 1, views: [ZWEI.views[0]] })) }));
+        await store.loadDesign();
+
+        expect(store.designViewId).toBe('v1');
+        expect(store.designBlocks.map((b) => b.id)).toEqual(['b1']);
+      });
+
+      it('führt auch ein Fenster ohne App seine Ansichten (c0112)', async () => {
+        setHost(makeHost({ writeDesign: vi.fn(async (_f: string, _i: string, d: Design) => d) }));
+        const store = useAppStore();
+        store.newDraft('/apps');
+
+        await store.addDesignBlock({ x: 0, y: 0, w: 1, h: 0.2 }, 'Kopfzeile');
+        const zweite = await store.addDesignView();
+        await store.describeDesignView(zweite!, { title: 'Detail' });
+        await store.addDesignBlock({ x: 0, y: 0.2, w: 1, h: 0.8 }, 'Formular');
+
+        expect(store.designViews.map((v) => v.title)).toEqual(['Ansicht 1', 'Detail']);
+        expect(store.designViews[0].blocks.map((b) => b.name)).toEqual(['Kopfzeile']);
+        expect(store.designViews[1].blocks.map((b) => b.name)).toEqual(['Formular']);
+        expect(store.error).toBeNull();
       });
     });
   });

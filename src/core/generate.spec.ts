@@ -163,7 +163,7 @@ describe('generateApp — der Lauf im App-Ordner', () => {
     const dir = existingApp('rechner-1');
     writeDesign(dir, {
       version: DESIGN_VERSION,
-      blocks: [
+      views: [{ id: 'v1', title: 'Ansicht 1', blocks: [
         {
           id: 'b1',
           name: 'Anzeige',
@@ -172,7 +172,7 @@ describe('generateApp — der Lauf im App-Ordner', () => {
           rect: { x: 0, y: 0, w: 1, h: 0.25 },
           children: [],
         },
-      ],
+      ] }],
     });
     const runAgent = vi.fn(writingRun({ 'src/index.html': DOC('neu') }));
     await generateApp(request({ id: 'rechner-1' }), makeDeps(runAgent));
@@ -195,7 +195,7 @@ describe('generateApp — der Lauf im App-Ordner', () => {
     const dir = existingApp('rechner-1');
     writeDesign(dir, {
       version: DESIGN_VERSION,
-      blocks: [{ id: 'b1', name: 'Echter Block', rect: { x: 0, y: 0, w: 1, h: 1 }, children: [] }],
+      views: [{ id: 'v1', title: 'Ansicht 1', blocks: [{ id: 'b1', name: 'Echter Block', rect: { x: 0, y: 0, w: 1, h: 1 }, children: [] }] }],
     });
     const runAgent = vi.fn(writingRun({ 'src/index.html': DOC('neu') }));
     await generateApp(
@@ -204,7 +204,7 @@ describe('generateApp — der Lauf im App-Ordner', () => {
         context: {
           design: {
             version: DESIGN_VERSION,
-            blocks: [{ id: 'b2', name: 'Erfundener Block', rect: { x: 0, y: 0, w: 1, h: 1 }, children: [] }],
+            views: [{ id: 'v1', title: 'Ansicht 1', blocks: [{ id: 'b2', name: 'Erfundener Block', rect: { x: 0, y: 0, w: 1, h: 1 }, children: [] }] }],
           },
         },
       }),
@@ -221,10 +221,10 @@ describe('generateApp — der Lauf im App-Ordner', () => {
   describe('Der Entwurf einer neuen App (c0112)', () => {
     const KOPF: Design = {
       version: DESIGN_VERSION,
-      blocks: [{
+      views: [{ id: 'v1', title: 'Ansicht 1', blocks: [{
         id: 'b1', name: 'Kopfzeile', instructions: 'Titel links',
         rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [],
-      }],
+      }] }],
     };
 
     /** Der Ordner, den der Lauf angelegt hat (die neue App). */
@@ -241,13 +241,13 @@ describe('generateApp — der Lauf im App-Ordner', () => {
       expect(prompt).toContain('Titel links');
 
       // … und die App führt ihn von da an mit sich, unter ihrem eigenen Namen.
-      expect(readDesign(onlyApp()).blocks[0]).toMatchObject({ name: 'Kopfzeile', instructions: 'Titel links' });
+      expect(readDesign(onlyApp()).views[0].blocks[0]).toMatchObject({ name: 'Kopfzeile', instructions: 'Titel links' });
     });
 
     it('schreibt keine Datei, wenn nichts gezeichnet wurde', async () => {
       const runAgent = vi.fn(writingRun({ 'src/index.html': DOC('neu') }));
       await generateApp(
-        request({ context: { design: { version: DESIGN_VERSION, blocks: [] } } }),
+        request({ context: { design: { version: DESIGN_VERSION, views: [] } } }),
         makeDeps(runAgent),
       );
 

@@ -177,14 +177,14 @@ describe('AppWindow', () => {
   describe('Entwurfs-Modus aus der Titelleiste', () => {
     const DESIGN = {
       version: 1,
-      blocks: [
+      views: [{ id: 'v1', title: 'Ansicht 1', blocks: [
         {
           id: 'b1',
           name: 'Kopf',
           rect: { x: 0, y: 0, w: 1, h: 0.2 },
           children: [{ id: 'b2', name: 'Titel', rect: { x: 0.05, y: 0.05, w: 0.4, h: 0.1 }, children: [] }],
         },
-      ],
+      ] }],
     };
 
     it('legt den Entwurf über die App und nimmt ihn wieder fort', async () => {
@@ -197,7 +197,7 @@ describe('AppWindow', () => {
 
       expect(readDesign).toHaveBeenCalledWith('/apps', 'rechner-1');
       const overlay = wrapper.getComponent(DesignOverlay);
-      expect(overlay.props('blocks')).toEqual(DESIGN.blocks);
+      expect(overlay.props('blocks')).toEqual(DESIGN.views[0].blocks);
       expect(overlay.findAll('.db-name').map((n) => n.text())).toEqual(['Kopf', 'Titel']);
       // Der geschachtelte Kasten liegt in seinem Elter.
       expect(overlay.get('.design-block .design-block .db-name').text()).toBe('Titel');
@@ -221,7 +221,7 @@ describe('AppWindow', () => {
 
     it('zeigt ohne Entwurf eine leere Schicht (statt zu straucheln)', async () => {
       const { wrapper } = await mountFrameForApp({
-        readDesign: vi.fn(async () => ({ version: 1, blocks: [] })),
+        readDesign: vi.fn(async () => ({ version: 1, views: [] })),
       });
 
       await wrapper.get('.w-design').trigger('click');
@@ -245,7 +245,7 @@ describe('AppWindow', () => {
     it('gibt einen gezeichneten Kasten an den Host weiter', async () => {
       const writeDesign = vi.fn(async (_f: string, _i: string, d: unknown) => d);
       const { wrapper } = await mountFrameForApp({
-        readDesign: vi.fn(async () => ({ version: 1, blocks: [] })),
+        readDesign: vi.fn(async () => ({ version: 1, views: [] })),
         writeDesign: writeDesign as never,
       });
       await wrapper.get('.w-design').trigger('click');
@@ -254,9 +254,9 @@ describe('AppWindow', () => {
       wrapper.getComponent(DesignOverlay).vm.$emit('draw', { x: 0, y: 0, w: 1, h: 0.2 }, 'Kopfzeile');
       await flushPromises();
 
-      const geschrieben = writeDesign.mock.calls[0]![2] as { blocks: { name: string }[] };
+      const geschrieben = writeDesign.mock.calls[0]![2] as { views: { blocks: { name: string }[] }[] };
       expect(writeDesign).toHaveBeenCalledWith('/apps', 'rechner-1', expect.anything());
-      expect(geschrieben.blocks.map((b) => b.name)).toEqual(['Kopfzeile']);
+      expect(geschrieben.views[0].blocks.map((b) => b.name)).toEqual(['Kopfzeile']);
       expect(wrapper.getComponent(DesignOverlay).props('blocks')).toHaveLength(1);
     });
 
@@ -272,8 +272,8 @@ describe('AppWindow', () => {
       wrapper.getComponent(DesignOverlay).vm.$emit('rename', 'b1', 'Kopfzeile');
       await flushPromises();
 
-      const geschrieben = writeDesign.mock.calls[0]![2] as { blocks: { name: string }[] };
-      expect(geschrieben.blocks[0].name).toBe('Kopfzeile');
+      const geschrieben = writeDesign.mock.calls[0]![2] as { views: { blocks: { name: string }[] }[] };
+      expect(geschrieben.views[0].blocks[0].name).toBe('Kopfzeile');
     });
 
     // c0110: Auch das Löschen geht denselben Weg — die Schicht bittet, das
@@ -291,9 +291,76 @@ describe('AppWindow', () => {
       await flushPromises();
 
       // Der Kopf ist weg, sein Kind an seiner Stelle (core/design: deleteBlock).
-      const geschrieben = writeDesign.mock.calls[0]![2] as { blocks: { name: string }[] };
-      expect(geschrieben.blocks.map((b) => b.name)).toEqual(['Titel']);
+      const geschrieben = writeDesign.mock.calls[0]![2] as { views: { blocks: { name: string }[] }[] };
+      expect(geschrieben.views[0].blocks.map((b) => b.name)).toEqual(['Titel']);
       expect(wrapper.getComponent(DesignOverlay).props('blocks')).toHaveLength(1);
+    });
+
+    // c0113: Die Ansichten gehen denselben Weg — die Schicht bittet, das
+    // Fenster schreibt, und was zurückkommt, steht sogleich in den Reitern.
+    it('reicht die Ansichten an die Schicht durch', async () => {
+      const { wrapper } = await mountFrameForApp({ readDesign: vi.fn(async () => DESIGN) });
+      await wrapper.get('.w-design').trigger('click');
+      await flushPromises();
+
+      const overlay = wrapper.getComponent(DesignOverlay);
+      expect(overlay.props('views')).toEqual(DESIGN.views);
+      expect(overlay.props('viewId')).toBe('v1');
+      expect(wrapper.findAll('.dv-tab').map((t) => t.text())).toEqual(['Ansicht 1']);
+    });
+
+    it('legt eine weitere Ansicht an und wechselt zu ihr', async () => {
+      const writeDesign = vi.fn(async (_f: string, _i: string, d: unknown) => d);
+      const { wrapper } = await mountFrameForApp({
+        readDesign: vi.fn(async () => DESIGN),
+        writeDesign: writeDesign as never,
+      });
+      await wrapper.get('.w-design').trigger('click');
+      await flushPromises();
+
+      await wrapper.get('.dv-add').trigger('click');
+      await flushPromises();
+
+      const geschrieben = writeDesign.mock.calls[0]![2] as { views: { title: string }[] };
+      expect(geschrieben.views.map((v) => v.title)).toEqual(['Ansicht 1', 'Ansicht 2']);
+      expect(wrapper.get('.dv-tab.on').text()).toBe('Ansicht 2');
+      // Und ihr Feld steht offen — sie will benannt werden.
+      expect((wrapper.get('input.dvi-title').element as HTMLInputElement).value).toBe('Ansicht 2');
+    });
+
+    it('gibt Titel, Wechsel und Löschen einer Ansicht an den Host weiter', async () => {
+      const writeDesign = vi.fn(async (_f: string, _i: string, d: unknown) => d);
+      const { wrapper } = await mountFrameForApp({
+        readDesign: vi.fn(async () => ({
+          version: 1,
+          views: [
+            { id: 'v1', title: 'Liste', blocks: [] },
+            { id: 'v2', title: 'Detail', blocks: [] },
+          ],
+        })),
+        writeDesign: writeDesign as never,
+      });
+      await wrapper.get('.w-design').trigger('click');
+      await flushPromises();
+
+      // Wechseln …
+      await wrapper.findAll('.dv-tab')[1].trigger('click');
+      await flushPromises();
+      expect(wrapper.get('.dv-tab.on').text()).toBe('Detail');
+
+      // … benennen …
+      await wrapper.get('.dv-tab.on').trigger('click');
+      await wrapper.get('input.dvi-title').setValue('Einzelheiten');
+      await flushPromises();
+      const benannt = writeDesign.mock.calls[0]![2] as { views: { title: string }[] };
+      expect(benannt.views.map((v) => v.title)).toEqual(['Liste', 'Einzelheiten']);
+
+      // … und wegwerfen.
+      await wrapper.get('.dvi-delete').trigger('click');
+      await flushPromises();
+      const gelöscht = writeDesign.mock.calls[1]![2] as { views: { id: string }[] };
+      expect(gelöscht.views.map((v) => v.id)).toEqual(['v1']);
+      expect(wrapper.get('.dv-tab.on').text()).toBe('Liste');
     });
 
     it('schließt ihn über den Schließen-Knopf der Schicht', async () => {

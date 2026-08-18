@@ -8,6 +8,7 @@ import { bundle, ENTRY_FILE } from './bundle';
 import { extractHtml, extractIcon, extractTitle } from './html';
 import { extractLibs, splitLibs } from './libs';
 import { resolveFramework } from './framework';
+import { hasContent } from './design';
 import { readDesign, writeDesign } from './designstore';
 import { DEFAULT_ICON, DEFAULT_NAME, makeAppId } from './app';
 
@@ -206,7 +207,7 @@ export async function generateApp(req: GenerateRequest, deps: GenerateDeps): Pro
     // ersten Commit, und wird aus dem Entwurf nichts, verschwindet er mit
     // seinem Ordner (discardDraft).
     const brought = draft ? req.context?.design : undefined;
-    if (brought?.blocks.length) writeDesign(dir, brought);
+    if (brought && hasContent(brought)) writeDesign(dir, brought);
 
     const before = readSourceFiles(dir);
     const context: PromptContext = {

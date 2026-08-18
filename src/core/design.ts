@@ -17,6 +17,19 @@
  * allein von der Schale (dem Designer-Overlay). Weil auch das Bündeln nur src/
  * anfasst, landet die Datei nicht im Artefakt.
  *
+ * Ein Entwurf besteht aus ANSICHTEN (c0113): Eine App hat selten nur einen
+ * Bildschirm — Liste und Detail, Anmeldung und Arbeitsfläche, Einstellungen.
+ * Jede Ansicht hat ihren Titel, ihre (freiwillige) Beschreibung und ihren
+ * eigenen Baum aus Kästen; die Anteile gelten je Ansicht für dasselbe Fenster,
+ * denn zu sehen ist stets eine von ihnen. Ein Entwurf aus der Zeit davor hatte
+ * seine Kästen unmittelbar am Entwurf (`blocks`) — `normalizeDesign` macht
+ * daraus eine Ansicht, alte Dateien bleiben also lesbar.
+ *
+ * Die Baum-Helfer arbeiten darum an einer ANSICHT, nicht am ganzen Entwurf;
+ * `inView` setzt eine solche Änderung in den Entwurf zurück. Das ist die Grenze
+ * zwischen den beiden Ebenen: Was mit Kästen zu tun hat, kennt nur seine
+ * Ansicht, und was mit Ansichten zu tun hat, rührt keine Kästen an.
+ *
  * Ein Block ist ein benannter Kasten mit optionalen Anweisungen und einer
  * optionalen Rolle (`type`), dazu seine Geometrie und seine Kinder. Die
  * Geometrie ist bewusst KEINE Pixelangabe, sondern ein Anteil des App-Fensters
@@ -58,10 +71,24 @@ export interface Block {
   children: Block[];
 }
 
-/** Der Entwurf einer App: der Baum plus die Fassung des Schemas. */
+/**
+ * Eine Ansicht: ein Bildschirm der App (c0113) — mit ihrem Titel, ihrer
+ * freiwilligen Beschreibung und ihrem eigenen Baum aus Kästen.
+ */
+export interface View {
+  /** Eindeutig im ganzen Entwurf. */
+  id: string;
+  /** Wie diese Ansicht heißt — sie hat immer einen Titel. */
+  title: string;
+  /** Wofür diese Ansicht da ist — geht so in den Prompt. */
+  description?: string;
+  blocks: Block[];
+}
+
+/** Der Entwurf einer App: ihre Ansichten plus die Fassung des Schemas. */
 export interface Design {
   version: number;
-  blocks: Block[];
+  views: View[];
 }
 
 /**
@@ -99,6 +126,17 @@ export const MAX_TYPE_LENGTH = 60;
 export const MAX_INSTRUCTIONS_LENGTH = 4000;
 
 /**
+ * So viele Ansichten darf ein Entwurf haben (c0113) — was darüber steht, fällt
+ * beim Lesen weg. Wie jede Grenze hier ist es eine des Prompts: Der ganze
+ * Entwurf geht in jeden Lauf.
+ */
+export const MAX_VIEWS = 24;
+
+/** Obergrenzen für die Texte einer Ansicht (sie gehen ebenfalls in jeden Prompt). */
+export const MAX_VIEW_TITLE_LENGTH = 120;
+export const MAX_VIEW_DESCRIPTION_LENGTH = 4000;
+
+/**
  * Rollen, die zur Wahl stehen (c0108). Die Rolle ist und bleibt freier Text —
  * das hier ist nur der Vorrat, aus dem sich das Feld bedienen lässt: Wer eine
  * andere Rolle meint, schreibt sie hin. Der Nutzen der Liste ist die
@@ -118,12 +156,31 @@ export const BLOCK_ROLES = [
 
 /** Noch kein Entwurf (jeder Aufruf liefert einen eigenen). */
 export function emptyDesign(): Design {
-  return { version: DESIGN_VERSION, blocks: [] };
+  return { version: DESIGN_VERSION, views: [] };
 }
 
 /** Eine neue Block-Id (vgl. core/app: makeAppId). */
 export function makeBlockId(): string {
   return `b${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/** Eine neue Ansicht-Id — am Buchstaben zu erkennen wie die eines Kastens. */
+export function makeViewId(): string {
+  return `v${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/**
+ * Wie die `count + 1`-te Ansicht heißt, solange ihr niemand einen Titel gegeben
+ * hat. Eine Ansicht ohne Titel gibt es nicht: Sie steht als Überschrift im
+ * Prompt, und „Ansicht 2“ sagt wenigstens, welche gemeint ist.
+ */
+export function viewTitleFor(count: number): string {
+  return `Ansicht ${count + 1}`;
+}
+
+/** Eine neue, leere Ansicht (jeder Aufruf liefert eine eigene). */
+export function emptyView(title = viewTitleFor(0)): View {
+  return { id: makeViewId(), title, blocks: [] };
 }
 
 /* ------------------------------------------------------------------ */
@@ -249,31 +306,170 @@ function readBlock(raw: unknown, depth: number, seen: Set<string>): Block | null
 }
 
 /**
+ * Eine gelesene Ansicht. Was fehlt, wird ergänzt; eine schon vergebene Id
+ * bekommt eine neue. `blockIds` läuft über den GANZEN Entwurf: Zwei Ansichten
+ * sollen sich keine Id teilen, sonst fände ein Zug in der einen den Kasten der
+ * anderen. `null` heißt: das war gar keine Ansicht.
+ */
+function readView(raw: unknown, index: number, seen: Set<string>, blockIds: Set<string>): View | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const v = raw as Record<string, unknown>;
+
+  let id = text(v.id, 100);
+  if (!id || seen.has(id)) {
+    do {
+      id = makeViewId();
+    } while (seen.has(id));
+  }
+  seen.add(id);
+
+  const description = text(v.description, MAX_VIEW_DESCRIPTION_LENGTH);
+
+  return {
+    id,
+    title: text(v.title, MAX_VIEW_TITLE_LENGTH) || viewTitleFor(index),
+    ...(description ? { description } : {}),
+    blocks: Array.isArray(v.blocks)
+      ? v.blocks.map((b) => readBlock(b, 0, blockIds)).filter((b): b is Block => b !== null)
+      : [],
+  };
+}
+
+/**
  * Nimmt (fremde) Eingaben als Entwurf entgegen: eine halb geschriebene, von
  * Hand verbogene oder aus einer anderen Fassung stammende Datei wird zu einem
  * heilen Baum. Eine gültige Fassungsnummer bleibt erhalten (ein neuerer Stand
  * soll beim Lesen nicht verlorengehen).
+ *
+ * Ein Entwurf aus der Zeit vor den Ansichten (c0113) trägt seine Kästen
+ * unmittelbar an sich (`blocks`) — daraus wird eine Ansicht. Eine alte Datei
+ * liest sich damit wie eh und je, nur eben als die eine Ansicht, die sie war.
  */
 export function normalizeDesign(raw: unknown): Design {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return emptyDesign();
   const d = raw as Record<string, unknown>;
   const version = d.version;
+  const rawViews = Array.isArray(d.views)
+    ? d.views
+    : Array.isArray(d.blocks)
+      ? [{ blocks: d.blocks }]
+      : [];
+
   const seen = new Set<string>();
+  const blockIds = new Set<string>();
+  const views: View[] = [];
+  for (const raw of rawViews) {
+    if (views.length >= MAX_VIEWS) break;
+    const view = readView(raw, views.length, seen, blockIds);
+    if (view) views.push(view);
+  }
+
   return {
     version: typeof version === 'number' && Number.isInteger(version) && version > 0 ? version : DESIGN_VERSION,
-    blocks: Array.isArray(d.blocks)
-      ? d.blocks.map((b) => readBlock(b, 0, seen)).filter((b): b is Block => b !== null)
-      : [],
+    views,
   };
 }
 
 /* ------------------------------------------------------------------ */
-/* Baum-Helfer (rein)                                                  */
+/* Ansichten (c0113)                                                   */
+/* ------------------------------------------------------------------ */
+
+/** Die Ansicht zu einer Id — null, wenn es sie nicht (mehr) gibt. */
+export function findView(design: Design, id: string | null): View | null {
+  if (!id) return null;
+  return design.views.find((v) => v.id === id) ?? null;
+}
+
+/**
+ * Sagt der Entwurf überhaupt etwas? Das tut er, sobald irgendeine Ansicht einen
+ * Kasten hat oder beschrieben ist — beides geht in den Prompt und beides ist
+ * Arbeit des Anwenders. Eine frisch angelegte, leere Ansicht zählt dagegen
+ * nicht: „Ansicht 2“ ohne Inhalt ist ein Platzhalter, kein Entwurf.
+ *
+ * Daran hängt, ob eine `design.ui.json` überhaupt entsteht (c0112) und ob im
+ * Prompt ein `UI-LAYOUT` steht (c0106).
+ */
+export function hasContent(design: Design): boolean {
+  return design.views.some((v) => v.blocks.length > 0 || !!v.description);
+}
+
+/**
+ * Hängt eine Ansicht an den Entwurf. Ohne Angabe entsteht eine leere mit dem
+ * nächsten Titel („Ansicht 3“). Eine belegte Id oder die erreichte Obergrenze
+ * lassen den Entwurf unverändert — wie bei den Kästen kann ein Griff daneben
+ * nichts zerstören.
+ */
+export function addView(design: Design, view?: View): Design {
+  if (design.views.length >= MAX_VIEWS) return design;
+  const next = view ?? emptyView(viewTitleFor(design.views.length));
+  if (findView(design, next.id)) return design;
+  const clean = readView(next, design.views.length, new Set(design.views.map((v) => v.id)), allBlockIds(design));
+  if (!clean) return design;
+  return { ...design, views: [...design.views, clean] };
+}
+
+/** Entfernt eine Ansicht samt ihren Kästen. Unbekannte Id: nichts ändert sich. */
+export function removeView(design: Design, id: string): Design {
+  if (!findView(design, id)) return design;
+  return { ...design, views: design.views.filter((v) => v.id !== id) };
+}
+
+/**
+ * Ändert Titel oder Beschreibung einer Ansicht. Nicht genannte Felder bleiben,
+ * leere Beschreibung nimmt das Feld weg — ein leerer Titel wird dagegen NICHT
+ * übernommen: Eine Ansicht ohne Titel wäre im Prompt eine Überschrift ohne
+ * Wort, also behält sie den alten.
+ *
+ * Ändert sich dabei nichts, kommt der übergebene Entwurf unverändert zurück —
+ * so schreibt ein Feld, das man ohne Änderung verlässt, die Datei nicht neu.
+ */
+export function updateView(
+  design: Design,
+  id: string,
+  patch: { title?: string; description?: string },
+): Design {
+  const view = findView(design, id);
+  if (!view) return design;
+
+  const next: View = { ...view };
+  if (patch.title !== undefined) {
+    const value = text(patch.title, MAX_VIEW_TITLE_LENGTH);
+    if (value) next.title = value;
+  }
+  if (patch.description !== undefined) {
+    const value = text(patch.description, MAX_VIEW_DESCRIPTION_LENGTH);
+    if (value) next.description = value;
+    else delete next.description;
+  }
+  if (next.title === view.title && next.description === view.description) return design;
+
+  return { ...design, views: design.views.map((v) => (v.id === id ? next : v)) };
+}
+
+/**
+ * Setzt eine Änderung an EINER Ansicht in den Entwurf zurück — die Brücke
+ * zwischen den beiden Ebenen: Die Baum-Helfer (`addBlock` und Genossen) kennen
+ * nur ihre Ansicht, geschrieben wird aber der ganze Entwurf.
+ *
+ * Eine unbekannte Id lässt den Entwurf unverändert, und ändert die Funktion
+ * nichts, kommt der übergebene Entwurf unverändert zurück (das Vergleichen auf
+ * Gleichheit im Store bleibt damit brauchbar).
+ */
+export function inView(design: Design, viewId: string | null, change: (view: View) => View): Design {
+  const view = findView(design, viewId);
+  if (!view) return design;
+  const next = change(view);
+  if (next === view) return design;
+  return { ...design, views: design.views.map((v) => (v.id === view.id ? next : v)) };
+}
+
+/* ------------------------------------------------------------------ */
+/* Baum-Helfer (rein) — sie arbeiten an EINER Ansicht                  */
 /* ------------------------------------------------------------------ */
 
 /** Läuft den Baum in Lesereihenfolge ab — mit Elter (null an der Wurzel) und Tiefe. */
 export function walkBlocks(
-  design: Design,
+  view: View,
   visit: (block: Block, parent: Block | null, depth: number) => void,
 ): void {
   const step = (blocks: readonly Block[], parent: Block | null, depth: number): void => {
@@ -282,14 +478,19 @@ export function walkBlocks(
       step(b.children, b, depth + 1);
     }
   };
-  step(design.blocks, null, 0);
+  step(view.blocks, null, 0);
 }
 
-/** Alle Blöcke des Entwurfs in Lesereihenfolge. */
-export function listBlocks(design: Design): Block[] {
+/** Alle Blöcke einer Ansicht in Lesereihenfolge. */
+export function listBlocks(view: View): Block[] {
   const all: Block[] = [];
-  walkBlocks(design, (b) => all.push(b));
+  walkBlocks(view, (b) => all.push(b));
   return all;
+}
+
+/** Die Ids aller Kästen des ganzen Entwurfs — über alle Ansichten hinweg. */
+function allBlockIds(design: Design): Set<string> {
+  return new Set(design.views.flatMap((v) => listBlocks(v).map((b) => b.id)));
 }
 
 /**
@@ -307,9 +508,9 @@ export function findBlockIn(blocks: readonly Block[], id: string): Block | null 
   return null;
 }
 
-/** Der Block zu einer Id — null, wenn es ihn nicht (mehr) gibt. */
-export function findBlock(design: Design, id: string): Block | null {
-  return findBlockIn(design.blocks, id);
+/** Der Block zu einer Id in einer Ansicht — null, wenn es ihn nicht (mehr) gibt. */
+export function findBlock(view: View, id: string): Block | null {
+  return findBlockIn(view.blocks, id);
 }
 
 /**
@@ -366,58 +567,58 @@ function subtreeIds(block: Block): Set<string> {
 
 /**
  * Baut den Baum neu und ersetzt dabei die Kinderliste eines Knotens: Der
- * gemeinsame Weg aller Helfer — jeder gibt einen neuen Entwurf zurück, der
+ * gemeinsame Weg aller Helfer — jeder gibt eine neue Ansicht zurück, die
  * übergebene bleibt unangetastet. `parentId` null meint die Wurzel.
  */
 function withChildren(
-  design: Design,
+  view: View,
   parentId: string | null,
   change: (children: readonly Block[]) => Block[],
-): Design {
+): View {
   const step = (blocks: readonly Block[]): Block[] =>
     blocks.map((b) => (b.id === parentId ? { ...b, children: change(b.children) } : { ...b, children: step(b.children) }));
   return parentId === null
-    ? { ...design, blocks: change(design.blocks) }
-    : { ...design, blocks: step(design.blocks) };
+    ? { ...view, blocks: change(view.blocks) }
+    : { ...view, blocks: step(view.blocks) };
 }
 
 /** Denselben Block ersetzen, überall im Baum. */
-function withBlock(design: Design, id: string, change: (block: Block) => Block): Design {
+function withBlock(view: View, id: string, change: (block: Block) => Block): View {
   const step = (blocks: readonly Block[]): Block[] =>
     blocks.map((b) => (b.id === id ? change(b) : { ...b, children: step(b.children) }));
-  return { ...design, blocks: step(design.blocks) };
+  return { ...view, blocks: step(view.blocks) };
 }
 
 /**
  * Hängt einen neuen Block an (an die Wurzel oder unter `parentId`). Der Block
- * wird zurechtgerückt; eine belegte Id oder ein unbekannter Elter lassen den
- * Entwurf unverändert — so kann ein Zeichenzug nichts zerstören.
+ * wird zurechtgerückt; eine belegte Id oder ein unbekannter Elter lassen die
+ * Ansicht unverändert — so kann ein Zeichenzug nichts zerstören.
  */
-export function addBlock(design: Design, block: Block, parentId: string | null = null): Design {
-  if (findBlock(design, block.id)) return design;
-  if (parentId !== null && !findBlock(design, parentId)) return design;
-  const seen = new Set(listBlocks(design).map((b) => b.id));
+export function addBlock(view: View, block: Block, parentId: string | null = null): View {
+  if (findBlock(view, block.id)) return view;
+  if (parentId !== null && !findBlock(view, parentId)) return view;
+  const seen = new Set(listBlocks(view).map((b) => b.id));
   const clean = readBlock(block, 0, seen);
-  if (!clean) return design;
-  return withChildren(design, parentId, (children) => [...children, clean]);
+  if (!clean) return view;
+  return withChildren(view, parentId, (children) => [...children, clean]);
 }
 
 /** Entfernt einen Block samt seiner Kinder. Unbekannte Id: nichts ändert sich. */
-export function removeBlock(design: Design, id: string): Design {
-  if (!findBlock(design, id)) return design;
+export function removeBlock(view: View, id: string): View {
+  if (!findBlock(view, id)) return view;
   const step = (blocks: readonly Block[]): Block[] =>
     blocks.filter((b) => b.id !== id).map((b) => ({ ...b, children: step(b.children) }));
-  return { ...design, blocks: step(design.blocks) };
+  return { ...view, blocks: step(view.blocks) };
 }
 
 /**
  * Verschiebt bzw. verändert die Größe eines Blocks. Übergeben wird, was sich
  * ändert; der Rest bleibt stehen. Die neue Lage wird zurechtgerückt.
  */
-export function moveBlock(design: Design, id: string, rect: Partial<Rect>): Design {
-  const block = findBlock(design, id);
-  if (!block) return design;
-  return withBlock(design, id, (b) => ({ ...b, rect: clampRect({ ...b.rect, ...rect }, b.rect) }));
+export function moveBlock(view: View, id: string, rect: Partial<Rect>): View {
+  const block = findBlock(view, id);
+  if (!block) return view;
+  return withBlock(view, id, (b) => ({ ...b, rect: clampRect({ ...b.rect, ...rect }, b.rect) }));
 }
 
 /**
@@ -430,9 +631,9 @@ export function moveBlock(design: Design, id: string, rect: Partial<Rect>): Desi
  * (c0104), also müssen sie mitwandern — sonst rutschte das Kind aus seinem
  * Elter, und der Baum sagte etwas anderes als das Bild.
  */
-export function placeBlock(design: Design, id: string, x: number, y: number): Design {
-  const block = findBlock(design, id);
-  if (!block) return design;
+export function placeBlock(view: View, id: string, x: number, y: number): View {
+  const block = findBlock(view, id);
+  if (!block) return view;
   const moved = moveRect(
     block.rect,
     num(x, block.rect.x) - block.rect.x,
@@ -446,7 +647,7 @@ export function placeBlock(design: Design, id: string, x: number, y: number): De
     rect: { ...b.rect, x: round(b.rect.x + dx), y: round(b.rect.y + dy) },
     children: b.children.map(shift),
   });
-  return withBlock(design, id, shift);
+  return withBlock(view, id, shift);
 }
 
 /**
@@ -454,12 +655,12 @@ export function placeBlock(design: Design, id: string, x: number, y: number): De
  * bleiben, leerer Text löscht das jeweilige Feld.
  */
 export function updateBlock(
-  design: Design,
+  view: View,
   id: string,
   patch: { name?: string; instructions?: string; type?: string },
-): Design {
-  if (!findBlock(design, id)) return design;
-  return withBlock(design, id, (b) => {
+): View {
+  if (!findBlock(view, id)) return view;
+  return withBlock(view, id, (b) => {
     const next: Block = { ...b };
     if (patch.name !== undefined) next.name = text(patch.name, MAX_NAME_LENGTH);
     if (patch.instructions !== undefined) {
@@ -482,14 +683,14 @@ export function updateBlock(
  * (ohne Angabe: ans Ende). Ein Block wird dabei nie sein eigener Nachfahre:
  * Ein solcher Zug lässt den Entwurf unverändert, ebenso eine unbekannte Id.
  */
-export function reparentBlock(design: Design, id: string, parentId: string | null, index?: number): Design {
-  const block = findBlock(design, id);
-  if (!block) return design;
+export function reparentBlock(view: View, id: string, parentId: string | null, index?: number): View {
+  const block = findBlock(view, id);
+  if (!block) return view;
   if (parentId !== null) {
-    const parent = findBlock(design, parentId);
-    if (!parent || subtreeIds(block).has(parentId)) return design;
+    const parent = findBlock(view, parentId);
+    if (!parent || subtreeIds(block).has(parentId)) return view;
   }
-  const detached = removeBlock(design, id);
+  const detached = removeBlock(view, id);
   return withChildren(detached, parentId, (children) => {
     const at = index === undefined ? children.length : clamp(Math.trunc(index), 0, children.length);
     return [...children.slice(0, at), block, ...children.slice(at)];
@@ -556,23 +757,23 @@ export function containerIn(blocks: readonly Block[], rect: Rect, skipId?: strin
 }
 
 /** Der Kasten, in den eine Fläche gehört (siehe `containerIn`). */
-export function containerFor(design: Design, rect: Rect, skipId?: string): Block | null {
-  return containerIn(design.blocks, rect, skipId);
+export function containerFor(view: View, rect: Rect, skipId?: string): Block | null {
+  return containerIn(view.blocks, rect, skipId);
 }
 
 /** Der Elter eines Kastens — `null` an der Wurzel (und für einen, den es nicht gibt). */
-export function parentOf(design: Design, id: string): Block | null {
+export function parentOf(view: View, id: string): Block | null {
   let found: Block | null = null;
-  walkBlocks(design, (b, parent) => {
+  walkBlocks(view, (b, parent) => {
     if (b.id === id) found = parent;
   });
   return found;
 }
 
 /** Wie tief ein Kasten liegt (0 an der Wurzel) — -1: Es gibt ihn nicht. */
-function depthOf(design: Design, id: string): number {
+function depthOf(view: View, id: string): number {
   let at = -1;
-  walkBlocks(design, (b, _parent, depth) => {
+  walkBlocks(view, (b, _parent, depth) => {
     if (b.id === id) at = depth;
   });
   return at;
@@ -589,9 +790,9 @@ function heightOf(block: Block): number {
  * zurechtgerückt — was tiefer läge, wäre beim nächsten Speichern still
  * verloren. Darum wird gar nicht erst so tief geschachtelt.
  */
-export function canNestUnder(design: Design, parentId: string | null, height = 0): boolean {
+export function canNestUnder(view: View, parentId: string | null, height = 0): boolean {
   if (parentId === null) return height < MAX_DESIGN_DEPTH;
-  const depth = depthOf(design, parentId);
+  const depth = depthOf(view, parentId);
   if (depth < 0) return false;
   return depth + 1 + height < MAX_DESIGN_DEPTH;
 }
@@ -602,18 +803,18 @@ export function canNestUnder(design: Design, parentId: string | null, height = 0
  * Kinder kommen mit, verschoben wird nichts (die Anteile sind absolut, c0104) —
  * das Umhängen ist eine reine Aussage über die Gliederung.
  *
- * Hängt er schon richtig, kommt der übergebene Entwurf unverändert zurück; das
+ * Hängt er schon richtig, kommt die übergebene Ansicht unverändert zurück; das
  * gilt auch für einen Zug, der nicht geht: ein Kreis (den `containerIn` gar nicht
  * erst anbietet) oder eine Schachtelung, die zu tief würde.
  */
-export function nestBlock(design: Design, id: string): Design {
-  const block = findBlock(design, id);
-  if (!block) return design;
-  const target = containerFor(design, block.rect, id);
+export function nestBlock(view: View, id: string): View {
+  const block = findBlock(view, id);
+  if (!block) return view;
+  const target = containerFor(view, block.rect, id);
   const parentId = target?.id ?? null;
-  if (parentId === (parentOf(design, id)?.id ?? null)) return design;
-  if (!canNestUnder(design, parentId, heightOf(block))) return design;
-  return reparentBlock(design, id, parentId);
+  if (parentId === (parentOf(view, id)?.id ?? null)) return view;
+  if (!canNestUnder(view, parentId, heightOf(block))) return view;
+  return reparentBlock(view, id, parentId);
 }
 
 /**
@@ -623,11 +824,11 @@ export function nestBlock(design: Design, id: string): Design {
  * absolut sind (c0104), bleibt dabei alles liegen, wo es liegt. Wer einen ganzen
  * Zweig los sein will, löscht ihn von innen nach außen.
  *
- * Eine unbekannte Id lässt den Entwurf unverändert.
+ * Eine unbekannte Id lässt die Ansicht unverändert.
  */
-export function deleteBlock(design: Design, id: string): Design {
-  if (!findBlock(design, id)) return design;
+export function deleteBlock(view: View, id: string): View {
+  if (!findBlock(view, id)) return view;
   const step = (blocks: readonly Block[]): Block[] =>
     blocks.flatMap((b) => (b.id === id ? b.children : [{ ...b, children: step(b.children) }]));
-  return { ...design, blocks: step(design.blocks) };
+  return { ...view, blocks: step(view.blocks) };
 }

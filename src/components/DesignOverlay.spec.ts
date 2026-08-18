@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import DesignOverlay from './DesignOverlay.vue';
-import { DEFAULT_BLOCK_NAME, type Block } from '@/core/design';
+import { DEFAULT_BLOCK_NAME, type Block, type View } from '@/core/design';
 
 /** Ein kleiner Entwurf: Kopf, Inhalt — und im Inhalt eine Liste. */
 const BLOCKS: Block[] = [
@@ -737,6 +737,122 @@ describe('DesignOverlay', () => {
 
       expect(wrapper.find('.design-inspector').exists()).toBe(true);
       expect(wrapper.emitted('describe')).toBeUndefined();
+    });
+  });
+  // c0113: Der Entwurf hat Ansichten — die Fläche zeigt eine, die Leiste sagt
+  // welche, und das Feld links unten gibt ihr Titel und Beschreibung.
+  describe('Ansichten (c0113)', () => {
+    const VIEWS: View[] = [
+      { id: 'v1', title: 'Liste', blocks: BLOCKS },
+      { id: 'v2', title: 'Detail', description: 'ein Eintrag', blocks: [] },
+    ];
+
+    /** Die Schicht mit zwei Ansichten; gezeigt wird die erste. */
+    function withViews(viewId: string | null = 'v1') {
+      const blocks = VIEWS.find((v) => v.id === viewId)?.blocks ?? [];
+      return mount(DesignOverlay, { props: { blocks, views: VIEWS, viewId } });
+    }
+
+    it('zeigt die Reiter der Ansichten über der Fläche', () => {
+      const wrapper = withViews();
+
+      expect(wrapper.findAll('.dv-tab').map((t) => t.text())).toEqual(['Liste', 'Detail ·']);
+      expect(wrapper.get('.dv-tab.on').text()).toBe('Liste');
+    });
+
+    it('bittet um den Wechsel und hebt dabei die Auswahl auf', async () => {
+      // Der ausgewählte Kasten gehört der alten Ansicht — drüben gibt es ihn nicht.
+      const wrapper = withViews();
+      await wrapper.get('.design-stage > .design-block').trigger('click');
+      expect(wrapper.find('.design-inspector').exists()).toBe(true);
+
+      await wrapper.findAll('.dv-tab')[1].trigger('click');
+
+      expect(wrapper.emitted('select-view')).toEqual([['v2']]);
+      expect(wrapper.find('.design-inspector').exists()).toBe(false);
+    });
+
+    it('bittet um eine weitere Ansicht und öffnet sogleich ihr Feld', async () => {
+      // Das Erste, was man mit einer neuen Ansicht tun will, ist, sie zu benennen.
+      const wrapper = withViews();
+
+      await wrapper.get('.dv-add').trigger('click');
+
+      expect(wrapper.emitted('add-view')).toHaveLength(1);
+      expect(wrapper.find('.design-view-inspector').exists()).toBe(true);
+    });
+
+    it('öffnet das Feld der gezeigten Ansicht über ihren Reiter', async () => {
+      const wrapper = withViews();
+      expect(wrapper.find('.design-view-inspector').exists()).toBe(false);
+
+      await wrapper.get('.dv-tab.on').trigger('click');
+
+      const feld = wrapper.get('.design-view-inspector');
+      expect((feld.get('input.dvi-title').element as HTMLInputElement).value).toBe('Liste');
+    });
+
+    it('reicht Titel und Beschreibung mit der Id der Ansicht nach oben', async () => {
+      const wrapper = withViews('v2');
+      await wrapper.get('.dv-tab.on').trigger('click');
+
+      await wrapper.get('input.dvi-title').setValue('Einzelheiten');
+      await wrapper.get('textarea.dvi-description').setValue('alles zu einem Eintrag');
+
+      expect(wrapper.emitted('describe-view')).toEqual([
+        ['v2', { title: 'Einzelheiten' }],
+        ['v2', { description: 'alles zu einem Eintrag' }],
+      ]);
+    });
+
+    it('reicht das Löschen der Ansicht nach oben und schließt ihr Feld', async () => {
+      const wrapper = withViews('v2');
+      await wrapper.get('.dv-tab.on').trigger('click');
+
+      await wrapper.get('.dvi-delete').trigger('click');
+
+      expect(wrapper.emitted('delete-view')).toEqual([['v2']]);
+      expect(wrapper.find('.design-view-inspector').exists()).toBe(false);
+    });
+
+    it('lässt beide Felder nebeneinander bestehen', async () => {
+      const wrapper = withViews();
+      await wrapper.get('.dv-tab.on').trigger('click');
+
+      await wrapper.get('.design-stage > .design-block').trigger('click');
+
+      expect(wrapper.find('.design-view-inspector').exists()).toBe(true);
+      expect(wrapper.find('.design-inspector').exists()).toBe(true);
+    });
+
+    it('zeichnet nicht, wenn im Feld der Ansicht geklickt wird', async () => {
+      const wrapper = withViews();
+      await wrapper.get('.dv-tab.on').trigger('click');
+
+      // Zum Vergleich: Auf der Fläche selbst beginnt derselbe Druck einen Zug.
+      await wrapper.get('.design-stage').trigger('pointerdown', { button: 0, clientX: 5, clientY: 5 });
+      expect(wrapper.find('.design-band').exists()).toBe(true);
+      await wrapper.get('.design-stage').trigger('pointerup', { clientX: 5, clientY: 5 });
+
+      await wrapper.get('.design-view-inspector').trigger('pointerdown', { button: 0, clientX: 5, clientY: 5 });
+      await wrapper.get('.design-view-inspector').trigger('click');
+
+      expect(wrapper.find('.design-band').exists()).toBe(false);
+      expect(wrapper.emitted('draw')).toBeUndefined();
+    });
+
+    it('sagt bei einer leeren Ansicht, dass sie leer ist — nicht, dass es keinen Entwurf gibt', () => {
+      const wrapper = withViews('v2');
+
+      expect(wrapper.get('.design-empty').text()).toContain('Diese Ansicht ist noch leer');
+    });
+
+    it('kommt ohne Ansichten aus wie eh und je', () => {
+      const wrapper = mount(DesignOverlay, { props: { blocks: [] } });
+
+      expect(wrapper.find('.design-views').exists()).toBe(false);
+      expect(wrapper.find('.design-view-inspector').exists()).toBe(false);
+      expect(wrapper.get('.design-empty').text()).toContain('noch keinen Entwurf');
     });
   });
 });

@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue';
 import DesignBlock from './DesignBlock.vue';
 import DesignInspector from './DesignInspector.vue';
+import DesignViewBar from './DesignViewBar.vue';
+import DesignViewInspector from './DesignViewInspector.vue';
 import {
   DEFAULT_BLOCK_NAME,
   MIN_BLOCK_SIZE,
@@ -14,6 +16,7 @@ import {
   type Block,
   type Handle,
   type Rect,
+  type View,
 } from '@/core/design';
 
 /**
@@ -54,12 +57,25 @@ import {
  * Auf der Fläche ist stets das Unterste gemeint, ein Elter unter lauter Kindern
  * ist dort also nicht mehr zu treffen — im Feld schon.
  *
+ * Seit c0113 hat ein Entwurf ANSICHTEN: Die Fläche zeigt stets EINE von ihnen
+ * (`blocks` sind ihre Kästen), gewechselt wird in der Reiterleiste darüber
+ * (DesignViewBar), und ihr Titel samt Beschreibung steht im Feld links unten
+ * (DesignViewInspector) — gegenüber dem Feld des ausgewählten Kastens, denn
+ * beides sind zwei Ebenen desselben Entwurfs. Angelegt, benannt und gelöscht
+ * wird auch hier nichts: Die Schicht bittet nach oben, geschrieben wird im
+ * Store.
+ *
  * Die Anteile beziehen sich auf die Fläche (`.design-stage`) — dieselbe Fläche,
  * auf der auch gezeichnet wird. Was gezeichnet ist und was zu sehen ist, meint
  * damit dasselbe.
  */
 const props = defineProps<{
+  /** Die Kästen der GEZEIGTEN Ansicht (stores/app: designBlocks). */
   blocks: Block[];
+  /** Alle Ansichten des Entwurfs (c0113) — ohne Entwurf schlicht keine. */
+  views?: View[];
+  /** Welche davon auf der Fläche liegt; null, solange es keine gibt. */
+  viewId?: string | null;
   /**
    * Es entsteht gerade eine NEUE App (c0112): Ihr Entwurf liegt dann nicht in
    * einem Ordner, sondern im Fenster, und geht mit dem ersten Wunsch mit.
@@ -84,6 +100,14 @@ const emit = defineEmits<{
   resize: [id: string, rect: Rect];
   /** Ein Kasten soll weg (c0110) — seine Kinder rücken an seine Stelle. */
   delete: [id: string];
+  /** Fortan soll jene Ansicht zu sehen sein (c0113). */
+  'select-view': [id: string];
+  /** Eine weitere Ansicht, bitte. */
+  'add-view': [];
+  /** Titel bzw. Beschreibung einer Ansicht sind fortan andere. */
+  'describe-view': [id: string, patch: { title?: string; description?: string }];
+  /** Eine Ansicht soll weg — samt ihren Kästen. */
+  'delete-view': [id: string];
 }>();
 
 /** Die Id des noch ungeborenen Kastens — er steht in keinem Entwurf. */
@@ -103,6 +127,18 @@ const editingId = ref<string | null>(null);
 
 /** Welcher Kasten ausgewählt ist — sein Feld steht offen (c0108). */
 const selectedId = ref<string | null>(null);
+
+/** Steht das Feld der gezeigten Ansicht offen (c0113)? */
+const viewOpen = ref(false);
+
+/**
+ * Die gezeigte Ansicht, stets frisch aus den Ansichten des Fensters gesucht —
+ * wie der ausgewählte Kasten: Nach dem Speichern kommt ein neuer Entwurf von
+ * der Platte, und das Feld soll DEN zeigen.
+ */
+const view = computed<View | null>(
+  () => props.views?.find((v) => v.id === props.viewId) ?? null,
+);
 
 /**
  * Der laufende Zug an einem Kasten (c0109): welcher, woran, und wie er dalag,
@@ -303,6 +339,38 @@ function onCancel(): void {
   editingId.value = null;
   draft.value = null;
 }
+
+/**
+ * Eine andere Ansicht (c0113). Die Auswahl bleibt nicht: Sie galt einem Kasten
+ * der alten Ansicht, und drüben gibt es ihn nicht.
+ */
+function onSelectView(id: string): void {
+  selectedId.value = null;
+  emit('select-view', id);
+}
+
+/**
+ * Eine weitere Ansicht — ihr Feld geht sogleich auf: Eine neue Ansicht heißt
+ * vorerst „Ansicht 2“, und das Erste, was man mit ihr tun will, ist, ihr einen
+ * Namen zu geben.
+ */
+function onAddView(): void {
+  selectedId.value = null;
+  viewOpen.value = true;
+  emit('add-view');
+}
+
+/**
+ * Die gezeigte Ansicht soll weg. Ihr Feld geht zu — es redete sonst von einer
+ * Ansicht, die es nicht mehr gibt; welche danach zu sehen ist, sagt das Fenster.
+ */
+function onDeleteView(): void {
+  const gone = view.value;
+  if (!gone) return;
+  viewOpen.value = false;
+  selectedId.value = null;
+  emit('delete-view', gone.id);
+}
 </script>
 
 <template>
@@ -318,6 +386,15 @@ function onCancel(): void {
       <button type="button" class="design-close" @click="emit('close')">Schließen</button>
     </div>
 
+    <!-- Welche Ansicht auf der Fläche liegt (c0113) — und wo es noch mehr gibt. -->
+    <DesignViewBar
+      :views="views ?? []"
+      :view-id="viewId ?? null"
+      @select="onSelectView"
+      @add="onAddView"
+      @edit="viewOpen = true"
+    />
+
     <div
       ref="stage"
       class="design-stage"
@@ -329,7 +406,9 @@ function onCancel(): void {
       <p v-if="!blocks.length && !draftBlock" class="design-empty">
         {{ newApp
           ? 'Zieh die Kästen auf, die diese App haben soll — der Agent baut danach.'
-          : 'Für diese App gibt es noch keinen Entwurf — zieh einen Kasten auf.' }}
+          : view
+            ? 'Diese Ansicht ist noch leer — zieh einen Kasten auf.'
+            : 'Für diese App gibt es noch keinen Entwurf — zieh einen Kasten auf.' }}
       </p>
       <DesignBlock
         v-for="block in blocks"
@@ -367,6 +446,15 @@ function onCancel(): void {
         @delete="selected && emit('delete', selected.id)"
         @select="onSelect"
         @close="selectedId = null"
+      />
+      <!-- Und das Feld zur gezeigten Ansicht: Titel und Beschreibung (c0113).
+           Es liegt gegenüber, damit beide Felder nebeneinander bestehen. -->
+      <DesignViewInspector
+        v-if="viewOpen && view"
+        :view="view"
+        @update="(patch) => view && emit('describe-view', view.id, patch)"
+        @delete="onDeleteView"
+        @close="viewOpen = false"
       />
     </div>
   </div>

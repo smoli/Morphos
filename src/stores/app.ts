@@ -6,20 +6,29 @@ import type { AgentEvent, AppDocs, Attachment, ChatMessage, ElementRef, Framewor
 import {
   DEFAULT_BLOCK_NAME,
   addBlock,
+  addView,
   canNestUnder,
   clampRect,
   containerFor,
   deleteBlock,
   emptyDesign,
+  emptyView,
+  findView,
+  hasContent,
+  inView,
   makeBlockId,
   moveBlock,
   nestBlock,
   normalizeDesign,
   placeBlock,
+  removeView,
   updateBlock,
+  updateView,
+  viewTitleFor,
   type Block,
   type Design,
   type Rect,
+  type View,
 } from '@/core/design';
 import { getHost } from '@/services/host';
 import { agentEventLabel } from '@/core/agent';
@@ -76,6 +85,13 @@ interface AppState {
    */
   design: Design | null;
   /**
+   * Welche Ansicht des Entwurfs das Fenster gerade zeigt (c0113); null, solange
+   * es keine gibt. Sie gehört dem FENSTER und nicht der Datei: Wo man beim
+   * Zeichnen gerade steht, ist kein Teil des Entwurfs — zwei Fenster derselben
+   * App dürfen an verschiedenen Ansichten arbeiten.
+   */
+  designViewId: string | null;
+  /**
    * Womit eine NEUE App gebaut werden soll — die Wahl im Composer, die es nur
    * beim Anlegen gibt (Vorgabe: Preact). Eine bestehende App trägt ihre Wahl in
    * ihrem eigenen Quelltext; dieser Wert bleibt dann ohne Wirkung.
@@ -120,6 +136,7 @@ export function useAppWindow(instanceId: string) {
     composerOpen: false,
     designOpen: false,
     design: null,
+    designViewId: null,
     newFramework: DEFAULT_FRAMEWORK,
     activity: [],
     runStartedAt: null,
@@ -134,8 +151,17 @@ export function useAppWindow(instanceId: string) {
     /** Gibt es überhaupt etwas zu lesen (Konzept oder Anleitung)? */
     hasDocs: (s): boolean => s.docs.concept.length > 0 || s.docs.userdoc.length > 0,
     versionCount: (s): number => s.versions.length,
-    /** Die Kästen des Entwurfs — ohne Entwurf schlicht keine. */
-    designBlocks: (s): Block[] => s.design?.blocks ?? [],
+    /** Die Ansichten des Entwurfs (c0113) — ohne Entwurf schlicht keine. */
+    designViews: (s): View[] => s.design?.views ?? [],
+    /** Die gezeigte Ansicht — null, solange es keine gibt. */
+    designView: (s): View | null => (s.design ? findView(s.design, s.designViewId) : null),
+    /**
+     * Die Kästen der gezeigten Ansicht: Zu sehen ist stets eine, und die Anteile
+     * gelten je Ansicht für dasselbe Fenster.
+     */
+    designBlocks(s): Block[] {
+      return (s.design ? findView(s.design, s.designViewId)?.blocks : null) ?? [];
+    },
     isDraft: (s): boolean => s.id === null,
     /** Der aktive Stand ist immer der neueste Commit (HEAD). */
     activeSha: (s): string | null => s.versions[0]?.sha ?? null,
@@ -187,12 +213,76 @@ export function useAppWindow(instanceId: string) {
       if (!this.folder) return;
       try {
         const design = await getHost().readDesign?.(this.folder, this.id);
-        // Was über die Brücke kommt, wird hier nur noch als Baum angenommen,
+        // Was über die Brücke kommt, wird hier nur noch als Entwurf angenommen,
         // wenn es einer ist (zurechtgerückt hat es der Hauptprozess).
-        if (design && Array.isArray(design.blocks)) this.design = design;
+        if (design && Array.isArray(design.views)) this.design = design;
       } catch {
         /* kein Entwurf ist kein Fehler */
       }
+      this.keepDesignView();
+    },
+
+    /**
+     * Sorgt dafür, dass das Fenster eine Ansicht zeigt, die es auch gibt
+     * (c0113): Die bisherige bleibt, solange sie im neuen Entwurf steht — sonst
+     * ist es die erste. Ohne Ansichten ist es keine.
+     *
+     * Nötig nach jedem neuen Stand: Der Entwurf kommt frisch von der Platte
+     * (oder aus dem Hauptprozess zurück), die gezeigte Ansicht steht dagegen im
+     * Fenster — beides muss zusammenpassen, sonst zeigte die Schicht die Kästen
+     * einer Ansicht, die es nicht mehr gibt.
+     */
+    keepDesignView(id?: string | null): void {
+      const wanted = id === undefined ? this.designViewId : id;
+      const views = this.design?.views ?? [];
+      this.designViewId = (views.find((v) => v.id === wanted) ?? views[0])?.id ?? null;
+    },
+
+    /** Zeigt eine andere Ansicht (c0113) — eine unbekannte Id ändert nichts. */
+    selectDesignView(id: string): void {
+      if (!this.design || !findView(this.design, id)) return;
+      this.designViewId = id;
+    },
+
+    /**
+     * Legt eine weitere Ansicht an (c0113) und zeigt sie. Sie ist leer und heißt
+     * vorerst nach ihrer Nummer — Titel und Beschreibung gibt ihr der Anwender.
+     * Zurück kommt ihre Id, oder null, wenn nichts geschrieben wurde.
+     */
+    async addDesignView(): Promise<string | null> {
+      const design = this.design ?? emptyDesign();
+      const view = emptyView(viewTitleFor(design.views.length));
+      const next = addView(design, view);
+      if (next === design) return null;
+      const ok = await this.saveDesign(next);
+      if (!ok) return null;
+      this.keepDesignView(view.id);
+      return this.designViewId === view.id ? view.id : null;
+    },
+
+    /**
+     * Gibt einer Ansicht ihren Titel bzw. ihre Beschreibung (c0113). Ein leerer
+     * Titel bleibt unbeachtet — eine Ansicht ohne Titel gibt es nicht
+     * (core/design: updateView); eine leere Beschreibung nimmt das Feld weg.
+     */
+    async describeDesignView(id: string, patch: { title?: string; description?: string }): Promise<void> {
+      if (!this.design) return;
+      const next = updateView(this.design, id, patch);
+      if (next === this.design) return;
+      await this.saveDesign(next);
+    },
+
+    /**
+     * Wirft eine Ansicht samt ihren Kästen weg (c0113). Gezeigt wird danach die
+     * erste, die übrig ist — und war es die letzte, hat der Entwurf eben keine
+     * mehr: Der nächste gezeichnete Kasten legt wieder eine an.
+     */
+    async deleteDesignView(id: string): Promise<void> {
+      if (!this.design) return;
+      const next = removeView(this.design, id);
+      if (next === this.design) return;
+      await this.saveDesign(next);
+      this.keepDesignView();
     },
 
     /**
@@ -202,7 +292,10 @@ export function useAppWindow(instanceId: string) {
      * neuen Kastens, oder null, wenn nichts geschrieben wurde.
      *
      * Wo er landet, sagt seine Lage (c0110): In einen bestehenden Kasten
-     * gezeichnet wird er dessen Kind, sonst hängt er an der Wurzel.
+     * gezeichnet wird er dessen Kind, sonst hängt er an der Wurzel. Und er
+     * landet in der GEZEIGTEN Ansicht (c0113) — gibt es noch keine, entsteht
+     * sie mit ihm: Wer zeichnen will, soll nicht erst eine Ansicht anlegen
+     * müssen.
      */
     async addDesignBlock(rect: Rect, name = ''): Promise<string | null> {
       const block: Block = {
@@ -211,19 +304,40 @@ export function useAppWindow(instanceId: string) {
         rect: clampRect(rect),
         children: [],
       };
-      const design = this.design ?? emptyDesign();
-      const parent = containerFor(design, block.rect)?.id ?? null;
-      // Zu tief geschachtelt fiele der Kasten beim Speichern weg — dann hängt er
-      // lieber an der Wurzel als nirgends.
-      const at = canNestUnder(design, parent) ? parent : null;
-      const ok = await this.saveDesign(addBlock(design, block, at));
-      return ok ? block.id : null;
+      let design = this.design ?? emptyDesign();
+      let viewId = findView(design, this.designViewId)?.id ?? null;
+      if (!viewId) {
+        const first = emptyView(viewTitleFor(design.views.length));
+        design = addView(design, first);
+        viewId = findView(design, first.id)?.id ?? null;
+        if (!viewId) return null;
+      }
+      const next = inView(design, viewId, (view) => {
+        const parent = containerFor(view, block.rect)?.id ?? null;
+        // Zu tief geschachtelt fiele der Kasten beim Speichern weg — dann hängt
+        // er lieber an der Wurzel als nirgends.
+        return addBlock(view, block, canNestUnder(view, parent) ? parent : null);
+      });
+      const ok = await this.saveDesign(next);
+      if (!ok) return null;
+      this.keepDesignView(viewId);
+      return block.id;
     },
 
     /** Gibt einem Kasten einen neuen Namen (leer: der Platzhalter). */
     async renameDesignBlock(id: string, name: string): Promise<void> {
+      await this.changeDesignView((view) => updateBlock(view, id, { name: name.trim() || DEFAULT_BLOCK_NAME }));
+    },
+
+    /**
+     * Der gemeinsame Weg aller Kasten-Züge (c0113): Sie gelten der GEZEIGTEN
+     * Ansicht, und was sich nicht ändert, wird nicht geschrieben.
+     */
+    async changeDesignView(change: (view: View) => View): Promise<void> {
       if (!this.design) return;
-      await this.saveDesign(updateBlock(this.design, id, { name: name.trim() || DEFAULT_BLOCK_NAME }));
+      const next = inView(this.design, this.designViewId, change);
+      if (next === this.design) return;
+      await this.saveDesign(next);
     },
 
     /**
@@ -233,8 +347,7 @@ export function useAppWindow(instanceId: string) {
      * gibt es hier keinen Platzhalter — nichts zu sagen ist der Normalfall.
      */
     async describeDesignBlock(id: string, patch: { instructions?: string; type?: string }): Promise<void> {
-      if (!this.design) return;
-      await this.saveDesign(updateBlock(this.design, id, patch));
+      await this.changeDesignView((view) => updateBlock(view, id, patch));
     },
 
     /**
@@ -247,8 +360,7 @@ export function useAppWindow(instanceId: string) {
      * um — bis zur Wurzel.
      */
     async moveDesignBlock(id: string, to: { x: number; y: number }): Promise<void> {
-      if (!this.design) return;
-      await this.saveDesign(nestBlock(placeBlock(this.design, id, to.x, to.y), id));
+      await this.changeDesignView((view) => nestBlock(placeBlock(view, id, to.x, to.y), id));
     },
 
     /**
@@ -258,8 +370,7 @@ export function useAppWindow(instanceId: string) {
      * (c0110): Wer seinen Kasten aus dem Elter herauszieht, meint das.
      */
     async resizeDesignBlock(id: string, rect: Partial<Rect>): Promise<void> {
-      if (!this.design) return;
-      await this.saveDesign(nestBlock(moveBlock(this.design, id, rect), id));
+      await this.changeDesignView((view) => nestBlock(moveBlock(view, id, rect), id));
     },
 
     /**
@@ -268,10 +379,7 @@ export function useAppWindow(instanceId: string) {
      * Kasten nicht (mehr), wird nichts geschrieben.
      */
     async deleteDesignBlock(id: string): Promise<void> {
-      if (!this.design) return;
-      const next = deleteBlock(this.design, id);
-      if (next === this.design) return;
-      await this.saveDesign(next);
+      await this.changeDesignView((view) => deleteBlock(view, id));
     },
 
     /**
@@ -291,20 +399,23 @@ export function useAppWindow(instanceId: string) {
       // etwas anderes, als hinterher in der Datei stünde.
       if (this.id === null) {
         this.design = normalizeDesign(plain);
+        this.keepDesignView();
         return true;
       }
       const host = getHost();
       if (!host.writeDesign) {
         this.design = plain;
+        this.keepDesignView();
         return true;
       }
       try {
         const written = await host.writeDesign(this.folder, this.id, plain);
-        if (!written || !Array.isArray(written.blocks)) {
+        if (!written || !Array.isArray(written.views)) {
           this.error = 'Der Entwurf konnte nicht gespeichert werden.';
           return false;
         }
         this.design = written;
+        this.keepDesignView();
         return true;
       } catch {
         this.error = 'Der Entwurf konnte nicht gespeichert werden.';
@@ -443,7 +554,7 @@ export function useAppWindow(instanceId: string) {
         // Sie hat noch keinen Ordner, in dem er läge. Eine bestehende App hat
         // ihre design.ui.json — dort liest der Lauf ihn selbst, und was das
         // Fenster mitschickte, wäre bestenfalls dasselbe.
-        const plainDesign = this.id === null && this.design?.blocks.length
+        const plainDesign = this.id === null && this.design && hasContent(this.design)
           ? (JSON.parse(JSON.stringify(this.design)) as Design)
           : undefined;
 

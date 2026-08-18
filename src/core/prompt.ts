@@ -3,7 +3,7 @@ import { CONCEPT_FILE, USERDOC_FILE } from './docs';
 import { mcpToolId } from './mcptools';
 import { PREACT_LIB } from './framework';
 import { formatElementRefs } from './pick';
-import { DESIGN_FILE, type Block, type Design } from './design';
+import { DESIGN_FILE, hasContent, type Block, type Design } from './design';
 
 /** Für den Prompt aufbereitete Referenzdatei: Text inline, Bild als Pfad. */
 export interface PromptAttachment {
@@ -176,6 +176,12 @@ export const SYSTEM_PROMPT = [
   '  unten unter "UI-LAYOUT" — und er ist VERBINDLICH: Jeder Kasten wird zu einem',
   '  Bereich der App, an seinem Platz, in seiner Größe, mit seinen Anweisungen; die',
   '  Schachtelung des Entwurfs wird zur Verschachtelung im Markup.',
+  '- Ein Entwurf hat eine oder mehrere ANSICHTEN, jede mit Titel und (freiwilliger)',
+  '  Beschreibung. Eine Ansicht ist ein Bildschirm der App — Liste und Detail,',
+  '  Anmeldung und Arbeitsfläche. Sie teilen sich dasselbe Fenster: Zu sehen ist immer',
+  '  genau eine. Gibt es mehrere, baue sie ALLE und mach sie erreichbar (Reiter,',
+  '  Navigation, Router — was zur App passt); die erste ist die, mit der sie startet.',
+  '  Eine Ansicht ohne Kästen gestaltest du frei nach ihrer Beschreibung.',
   '- Die Maße sind Anteile des App-Fensters (als Prozent angegeben), keine Pixel — auch',
   '  die eines geschachtelten Kastens beziehen sich auf das ganze Fenster. Setze sie',
   '  entsprechend relativ um (Prozent, Grid, Flexbox), damit der Aufbau jede',
@@ -275,16 +281,25 @@ function pct(value: number): string {
  * Kinder eingerückt unter ihrem Elter — die Einrückung IST die Gliederung.
  * Ohne Entwurf (oder mit einem leeren) kommt nichts zurück: Dann soll im Prompt
  * auch kein Wort darüber stehen.
+ *
+ * Seit c0113 hat ein Entwurf ANSICHTEN: Jede steht mit ihrem Titel als eigener
+ * Abschnitt da, darunter ihre Beschreibung und ihr Baum. Eine Ansicht ist ein
+ * Bildschirm der App, und die Anteile jeder Ansicht meinen dasselbe Fenster —
+ * zu sehen ist stets eine von ihnen. Genannt werden alle, auch eine noch leere:
+ * Auch sie ist eine Ansage darüber, was die App haben soll.
  */
 export function formatDesign(design?: Design): string[] {
-  const blocks = design?.blocks ?? [];
-  if (blocks.length === 0) return [];
+  const views = design?.views ?? [];
+  if (!design || !hasContent(design)) return [];
 
   const parts: string[] = [
     'UI-LAYOUT (der Anwender hat den Aufbau der Oberfläche gezeichnet — er ist VERBINDLICH):',
     '(Die Maße sind Anteile des App-Fensters, keine Pixel; auch die eines eingerückten',
     ' Kastens beziehen sich auf das ganze Fenster. Die Einrückung sagt, was zu was gehört.',
-    ` Der Entwurf steht in ${DESIGN_FILE} und gehört dem Anwender: NUR ZUM LESEN, niemals ändern.)`,
+    ' Jede ANSICHT ist ein eigener Bildschirm der App; ihre Maße meinen dasselbe Fenster,',
+    ' denn zu sehen ist immer nur eine. Gibt es mehrere, baue sie alle und mach sie',
+    ` erreichbar. Der Entwurf steht in ${DESIGN_FILE} und gehört dem Anwender: NUR ZUM`,
+    ' LESEN, niemals ändern.)',
   ];
 
   const step = (list: readonly Block[], depth: number): void => {
@@ -305,7 +320,18 @@ export function formatDesign(design?: Design): string[] {
       step(b.children, depth + 1);
     }
   };
-  step(blocks, 0);
+
+  for (const view of views) {
+    parts.push('');
+    parts.push(`ANSICHT: ${view.title || '(ohne Titel)'}`);
+    if (view.description) {
+      const [first, ...rest] = view.description.split('\n');
+      parts.push(`Beschreibung: ${first}`);
+      for (const line of rest) parts.push(`  ${line}`);
+    }
+    if (view.blocks.length) step(view.blocks, 0);
+    else parts.push('(noch keine Kästen gezeichnet — gestalte sie nach ihrer Beschreibung)');
+  }
 
   parts.push('');
   return parts;

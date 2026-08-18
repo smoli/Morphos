@@ -392,7 +392,11 @@ describe('DesktopView', () => {
   describe('Entwurfs-Modus (UI-Designer)', () => {
     const DESIGN = {
       version: 1,
-      blocks: [{ id: 'b1', name: 'Kopf', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [] }],
+      views: [{
+        id: 'v1',
+        title: 'Ansicht 1',
+        blocks: [{ id: 'b1', name: 'Kopf', rect: { x: 0, y: 0, w: 1, h: 0.2 }, children: [] }],
+      }],
     };
 
     /** Der Rechner im Vordergrund, mit einem Entwurf auf der Platte. */

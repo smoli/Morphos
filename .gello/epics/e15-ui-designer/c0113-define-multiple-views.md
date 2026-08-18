@@ -4,6 +4,7 @@ title: Define multiple views
 status: review
 ref: c0105
 epic: e15
+commit: 312a242
 created: 2026-08-18
 updated: 2026-08-18
 status-changed: 2026-08-18T07:50:36

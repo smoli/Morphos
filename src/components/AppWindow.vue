@@ -263,6 +263,8 @@ async function onIcon(icon: string | null): Promise<void> {
     <DesignOverlay
       v-if="store.designOpen"
       :blocks="store.designBlocks"
+      :views="store.designViews"
+      :view-id="store.designViewId"
       :new-app="store.isDraft"
       @close="store.closeDesign()"
       @draw="(rect, name) => store.addDesignBlock(rect, name)"
@@ -271,6 +273,10 @@ async function onIcon(icon: string | null): Promise<void> {
       @move="(id, to) => store.moveDesignBlock(id, to)"
       @resize="(id, rect) => store.resizeDesignBlock(id, rect)"
       @delete="(id) => store.deleteDesignBlock(id)"
+      @select-view="(id) => store.selectDesignView(id)"
+      @add-view="store.addDesignView()"
+      @describe-view="(id, patch) => store.describeDesignView(id, patch)"
+      @delete-view="(id) => store.deleteDesignView(id)"
     />
 
     <div v-if="store.busy || runningElsewhere" class="w-loading">

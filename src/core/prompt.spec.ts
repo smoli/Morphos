@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildPrompt, formatDesign, SYSTEM_PROMPT } from './prompt';
 import { mcpToolId } from './mcp';
-import { DESIGN_FILE, DESIGN_VERSION, emptyDesign, type Block, type Rect } from './design';
+import { DESIGN_FILE, DESIGN_VERSION, emptyDesign, type Block, type Design, type Rect } from './design';
 import type { ChatMessage } from '@/types';
 
 describe('SYSTEM_PROMPT', () => {
@@ -220,19 +220,23 @@ function block(name: string, rect: Rect, over: Partial<Block> = {}): Block {
   return { id: `b-${name}`, name, rect, children: [], ...over };
 }
 
+/** Ein Entwurf mit EINER Ansicht — der Normalfall (c0113). */
+function design(...blocks: Block[]): Design {
+  return { version: DESIGN_VERSION, views: [{ id: 'v1', title: 'Ansicht 1', blocks }] };
+}
+
 describe('formatDesign', () => {
   it('schweigt ohne Entwurf und bei einem leeren Entwurf', () => {
     expect(formatDesign(undefined)).toEqual([]);
     expect(formatDesign(emptyDesign())).toEqual([]);
+    // Auch eine angelegte, aber noch stumme Ansicht ist keine Ansage.
+    expect(formatDesign(design())).toEqual([]);
   });
 
   it('nennt Namen, Rolle, Lage und Anweisungen eines Blocks', () => {
-    const text = formatDesign({
-      version: DESIGN_VERSION,
-      blocks: [
-        block('Kopfzeile', { x: 0, y: 0, w: 1, h: 0.125 }, { type: 'header', instructions: 'Titel links' }),
-      ],
-    }).join('\n');
+    const text = formatDesign(
+      design(block('Kopfzeile', { x: 0, y: 0, w: 1, h: 0.125 }, { type: 'header', instructions: 'Titel links' })),
+    ).join('\n');
     expect(text).toContain('UI-LAYOUT');
     expect(text).toContain('Kopfzeile');
     expect(text).toContain('header');
@@ -243,9 +247,8 @@ describe('formatDesign', () => {
   });
 
   it('rückt Kinder unter ihrem Elter ein und behält die Reihenfolge', () => {
-    const lines = formatDesign({
-      version: DESIGN_VERSION,
-      blocks: [
+    const lines = formatDesign(
+      design(
         block('Rumpf', { x: 0, y: 0.1, w: 1, h: 0.9 }, {
           children: [
             block('Liste', { x: 0, y: 0.1, w: 0.3, h: 0.9 }, {
@@ -254,8 +257,8 @@ describe('formatDesign', () => {
             block('Inhalt', { x: 0.3, y: 0.1, w: 0.7, h: 0.9 }),
           ],
         }),
-      ],
-    });
+      ),
+    );
     const at = (name: string): number => lines.findIndex((l) => l.includes(`- ${name}`));
     expect(lines[at('Rumpf')]).toBe('- Rumpf');
     expect(lines[at('Liste')]).toBe('  - Liste');
@@ -268,42 +271,83 @@ describe('formatDesign', () => {
   });
 
   it('rückt auch die Folgezeilen mehrzeiliger Anweisungen ein', () => {
-    const lines = formatDesign({
-      version: DESIGN_VERSION,
-      blocks: [
+    const lines = formatDesign(
+      design(
         block('Rumpf', { x: 0, y: 0, w: 1, h: 1 }, {
           children: [block('Liste', { x: 0, y: 0, w: 0.5, h: 1 }, { instructions: 'erste Zeile\nzweite Zeile' })],
         }),
-      ],
-    });
+      ),
+    );
     expect(lines).toContain('    Anweisungen: erste Zeile');
     expect(lines).toContain('      zweite Zeile');
   });
 
   it('nennt einen namenlosen Block trotzdem und lässt die Rolle weg', () => {
-    const text = formatDesign({
-      version: DESIGN_VERSION,
-      blocks: [block('', { x: 0, y: 0, w: 0.5, h: 0.5 })],
-    }).join('\n');
+    const text = formatDesign(design(block('', { x: 0, y: 0, w: 0.5, h: 0.5 }))).join('\n');
     expect(text).toMatch(/- \(ohne Namen\)/);
     expect(text).not.toContain('()');
+  });
+
+  // c0113: Jede Ansicht ist ein eigener Abschnitt — Titel, Beschreibung, Baum.
+  it('nennt jede Ansicht mit ihrem Titel und ihrer Beschreibung', () => {
+    const lines = formatDesign({
+      version: DESIGN_VERSION,
+      views: [
+        {
+          id: 'v1',
+          title: 'Liste',
+          description: 'alle Einträge\nnach Datum',
+          blocks: [block('Kopfzeile', { x: 0, y: 0, w: 1, h: 0.1 })],
+        },
+        { id: 'v2', title: 'Detail', blocks: [block('Formular', { x: 0, y: 0.1, w: 1, h: 0.9 })] },
+      ],
+    });
+    const text = lines.join('\n');
+    expect(text).toContain('ANSICHT: Liste');
+    expect(text).toContain('ANSICHT: Detail');
+    expect(lines).toContain('Beschreibung: alle Einträge');
+    expect(lines).toContain('  nach Datum');
+    // Jeder Kasten steht unter SEINER Ansicht.
+    const at = (needle: string): number => lines.findIndex((l) => l.includes(needle));
+    expect(at('ANSICHT: Liste')).toBeLessThan(at('- Kopfzeile'));
+    expect(at('- Kopfzeile')).toBeLessThan(at('ANSICHT: Detail'));
+    expect(at('ANSICHT: Detail')).toBeLessThan(at('- Formular'));
+    // Und die Kästen jeder Ansicht beginnen wieder an der Wurzel.
+    expect(lines).toContain('- Formular');
+  });
+
+  it('nennt auch eine Ansicht ohne Kästen, wenn sie beschrieben ist', () => {
+    const lines = formatDesign({
+      version: DESIGN_VERSION,
+      views: [
+        { id: 'v1', title: 'Liste', blocks: [block('Kopfzeile', { x: 0, y: 0, w: 1, h: 0.1 })] },
+        { id: 'v2', title: 'Einstellungen', description: 'Sprache und Farben', blocks: [] },
+      ],
+    });
+    const text = lines.join('\n');
+    expect(text).toContain('ANSICHT: Einstellungen');
+    expect(text).toContain('Sprache und Farben');
+    expect(text).toContain('noch keine Kästen');
+  });
+
+  it('sagt dem Agenten, was eine Ansicht ist und dass er alle bauen soll', () => {
+    const text = formatDesign(design(block('Kopfzeile', { x: 0, y: 0, w: 1, h: 0.1 }))).join('\n');
+    expect(text).toMatch(/ANSICHT ist ein eigener Bildschirm/);
+    expect(text).toMatch(/baue sie alle/i);
   });
 });
 
 describe('buildPrompt mit Entwurf', () => {
-  const design = {
-    version: DESIGN_VERSION,
-    blocks: [
-      block('Kopfzeile', { x: 0, y: 0, w: 1, h: 0.1 }, {
-        type: 'header',
-        instructions: 'Der Name der App',
-        children: [block('Suchfeld', { x: 0.6, y: 0.02, w: 0.35, h: 0.06 })],
-      }),
-    ],
-  };
+  const entwurf = design(
+    block('Kopfzeile', { x: 0, y: 0, w: 1, h: 0.1 }, {
+      type: 'header',
+      instructions: 'Der Name der App',
+      children: [block('Suchfeld', { x: 0.6, y: 0.02, w: 0.35, h: 0.06 })],
+    }),
+  );
 
   it('legt den Entwurf als UI-LAYOUT vor den Wunsch', () => {
-    const p = buildPrompt('Baue die Oberfläche', [], { hasApp: true, design });
+    const p = buildPrompt('Baue die Oberfläche', [], { hasApp: true, design: entwurf });
     expect(p).toContain('UI-LAYOUT');
     expect(p).toContain('Kopfzeile');
     expect(p).toContain('Suchfeld');
@@ -312,7 +356,7 @@ describe('buildPrompt mit Entwurf', () => {
   });
 
   it('sagt im Abschnitt selbst, dass der Entwurf verbindlich und nur zu lesen ist', () => {
-    const p = buildPrompt('x', [], { hasApp: true, design });
+    const p = buildPrompt('x', [], { hasApp: true, design: entwurf });
     expect(p).toContain(DESIGN_FILE);
     expect(p).toMatch(/verbindlich/i);
     expect(p).toMatch(/NIEMALS|nicht ändern|Nur zum Lesen/i);

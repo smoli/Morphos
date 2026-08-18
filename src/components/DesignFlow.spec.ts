@@ -99,9 +99,9 @@ describe('Entwurf zeichnen, speichern, wiederfinden (c0107)', () => {
     await store.addDesignBlock(rect, name);
 
     const onDisk = JSON.parse(fs.readFileSync(designPath(dir), 'utf8')) as Design;
-    expect(onDisk.blocks).toHaveLength(1);
-    expect(onDisk.blocks[0].name).toBe('Kopfzeile');
-    expect(onDisk.blocks[0].rect).toEqual({ x: 0, y: 0, w: 1, h: 0.2 });
+    expect(onDisk.views[0].blocks).toHaveLength(1);
+    expect(onDisk.views[0].blocks[0].name).toBe('Kopfzeile');
+    expect(onDisk.views[0].blocks[0].rect).toEqual({ x: 0, y: 0, w: 1, h: 0.2 });
     expect(store.error).toBeNull();
   });
 
@@ -129,7 +129,7 @@ describe('Entwurf zeichnen, speichern, wiederfinden (c0107)', () => {
     const [id, neu] = wrapper.emitted('rename')![0] as [string, string];
     await zweites.renameDesignBlock(id, neu);
 
-    expect(readDesign(dir).blocks[0].name).toBe('Titelzeile');
+    expect(readDesign(dir).views[0].blocks[0].name).toBe('Titelzeile');
   });
 
   it('gibt einem Kasten Rolle und Anweisungen — bis in den Prompt (c0108)', async () => {
@@ -150,7 +150,7 @@ describe('Entwurf zeichnen, speichern, wiederfinden (c0107)', () => {
 
     // Speichern: beides steht in der Datei — und nur dort, wo es hingehört.
     const onDisk = readDesign(dir);
-    expect(onDisk.blocks[0]).toMatchObject({
+    expect(onDisk.views[0].blocks[0]).toMatchObject({
       name: 'Kopfzeile',
       type: 'Kopfzeile',
       instructions: 'Links das Logo, rechts die Suche',
@@ -205,7 +205,7 @@ describe('Entwurf zeichnen, speichern, wiederfinden (c0107)', () => {
     const [id, to] = wrapper.emitted('move')![0] as [string, { x: number; y: number }];
     await store.moveDesignBlock(id, to);
 
-    expect(readDesign(dir).blocks[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.4, h: 0.2 });
+    expect(readDesign(dir).views[0].blocks[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.4, h: 0.2 });
 
     // Größe ändern: Die Fläche bekommt den Kasten so, wie er nun in der Datei
     // steht, und zieht ihn an der rechten unteren Ecke auf.
@@ -217,7 +217,7 @@ describe('Entwurf zeichnen, speichern, wiederfinden (c0107)', () => {
     expect(gleicheId).toBe(id);
     await store.resizeDesignBlock(gleicheId, rect);
 
-    expect(readDesign(dir).blocks[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.5, h: 0.3 });
+    expect(readDesign(dir).views[0].blocks[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.5, h: 0.3 });
 
     // Und wiederfinden: Der Entwurfs-Modus geht zu und wieder auf.
     store.closeDesign();
@@ -246,9 +246,9 @@ describe('Entwurf zeichnen, speichern, wiederfinden (c0107)', () => {
 
     // In der Datei steht der Baum: die Liste IM Inhalt.
     const drin = readDesign(dir);
-    expect(drin.blocks.map((b) => b.name)).toEqual(['Inhalt']);
-    expect(drin.blocks[0].children.map((b) => b.name)).toEqual(['Liste']);
-    expect(drin.blocks[0].children[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.2, h: 0.2 });
+    expect(drin.views[0].blocks.map((b) => b.name)).toEqual(['Inhalt']);
+    expect(drin.views[0].blocks[0].children.map((b) => b.name)).toEqual(['Liste']);
+    expect(drin.views[0].blocks[0].children[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.2, h: 0.2 });
 
     // Und der Agent sieht die Gliederung als Einrückung.
     const prompt = buildPrompt('Bau die Liste', [], { design: drin });
@@ -258,19 +258,19 @@ describe('Entwurf zeichnen, speichern, wiederfinden (c0107)', () => {
     // Umhängen: dieselbe Liste nach rechts unten aus dem Inhalt heraus.
     await store.moveDesignBlock(liste!, { x: 0.7, y: 0.7 });
     const raus = readDesign(dir);
-    expect(raus.blocks.map((b) => b.name)).toEqual(['Inhalt', 'Liste']);
-    expect(raus.blocks[0].children).toEqual([]);
+    expect(raus.views[0].blocks.map((b) => b.name)).toEqual(['Inhalt', 'Liste']);
+    expect(raus.views[0].blocks[0].children).toEqual([]);
     expect(buildPrompt('Weiter', [], { design: raus })).toContain('- Liste\n');
 
     // Wieder hinein — und dann den Elter löschen: Der Rahmen fällt weg, das
     // Kind bleibt liegen, wo es liegt.
     await store.moveDesignBlock(liste!, { x: 0.2, y: 0.2 });
-    expect(readDesign(dir).blocks[0].children).toHaveLength(1);
+    expect(readDesign(dir).views[0].blocks[0].children).toHaveLength(1);
 
     await store.deleteDesignBlock(inhalt!);
     const nach = readDesign(dir);
-    expect(nach.blocks.map((b) => b.name)).toEqual(['Liste']);
-    expect(nach.blocks[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.2, h: 0.2 });
+    expect(nach.views[0].blocks.map((b) => b.name)).toEqual(['Liste']);
+    expect(nach.views[0].blocks[0].rect).toEqual({ x: 0.2, y: 0.2, w: 0.2, h: 0.2 });
     expect(store.error).toBeNull();
 
     // Und wiederfinden: Der Entwurfs-Modus geht zu und wieder auf.
@@ -342,13 +342,80 @@ describe('Entwurf zeichnen, speichern, wiederfinden (c0107)', () => {
 
     // Und er liegt fortan im Ordner der neuen App — das Fenster liest ihn von dort.
     const appDir = path.join(root, store.id!);
-    expect(readDesign(appDir).blocks[0]).toMatchObject({ name: 'Kopfzeile', rect: { x: 0, y: 0, w: 1, h: 0.2 } });
+    expect(readDesign(appDir).views[0].blocks[0]).toMatchObject({ name: 'Kopfzeile', rect: { x: 0, y: 0, w: 1, h: 0.2 } });
     expect(store.designBlocks.map((b) => b.name)).toEqual(['Kopfzeile']);
 
     // Von hier an ist es der Entwurf einer ganz gewöhnlichen App.
     await store.renameDesignBlock(store.designBlocks[0].id, 'Titelzeile');
-    expect(readDesign(appDir).blocks[0].name).toBe('Titelzeile');
+    expect(readDesign(appDir).views[0].blocks[0].name).toBe('Titelzeile');
     fs.rmSync(journal, { force: true });
+  });
+
+  /**
+   * c0113: Dieselbe Scheibe über MEHRERE Ansichten — jede mit ihrem Titel, ihrer
+   * Beschreibung und ihren eigenen Kästen; alles in einer Datei, alles im
+   * Prompt.
+   */
+  it('führt mehrere Ansichten — in der Datei und im Prompt (c0113)', async () => {
+    const store = await openWindow('flow');
+
+    // Erste Ansicht: Sie entsteht mit dem ersten Kasten, ohne Zutun.
+    const { wrapper, stage } = overlay(() => store.designBlocks);
+    await stage.trigger('pointerdown', { button: 0, clientX: 0, clientY: 0 });
+    await stage.trigger('pointermove', { clientX: 400, clientY: 40 });
+    await stage.trigger('pointerup', { clientX: 400, clientY: 40 });
+    const eingabe = wrapper.get('input.db-input');
+    (eingabe.element as HTMLInputElement).value = 'Kopfzeile';
+    await eingabe.trigger('keydown.enter');
+    const [rect, name] = wrapper.emitted('draw')![0] as [Rect, string];
+    await store.addDesignBlock(rect, name);
+    await store.describeDesignView(store.designViewId!, { title: 'Liste', description: 'alle Notizen' });
+
+    // Zweite Ansicht: über die Leiste angelegt, benannt und beschrieben.
+    await wrapper.setProps({ blocks: store.designBlocks, views: store.designViews, viewId: store.designViewId });
+    await wrapper.get('.dv-add').trigger('click');
+    expect(wrapper.emitted('add-view')).toHaveLength(1);
+    const zweite = await store.addDesignView();
+    await wrapper.setProps({ blocks: store.designBlocks, views: store.designViews, viewId: store.designViewId });
+    await wrapper.get('input.dvi-title').setValue('Detail');
+    await wrapper.get('textarea.dvi-description').setValue('eine Notiz für sich');
+    for (const [id, patch] of wrapper.emitted('describe-view') as [string, { title?: string; description?: string }][]) {
+      await store.describeDesignView(id, patch);
+    }
+    // Und ein Kasten hinein — er gehört DIESER Ansicht.
+    await store.addDesignBlock({ x: 0, y: 0.2, w: 1, h: 0.8 }, 'Formular');
+
+    // In der Datei stehen beide Ansichten, jede mit ihrem Eigenen.
+    const onDisk = readDesign(dir);
+    expect(onDisk.views.map((v) => v.title)).toEqual(['Liste', 'Detail']);
+    expect(onDisk.views[0].blocks.map((b) => b.name)).toEqual(['Kopfzeile']);
+    expect(onDisk.views[1].blocks.map((b) => b.name)).toEqual(['Formular']);
+    expect(onDisk.views[1].description).toBe('eine Notiz für sich');
+    expect(store.error).toBeNull();
+
+    // Der Agent sieht beide Bildschirme, jeden mit seinen Kästen.
+    const prompt = buildPrompt('Bau die App', [], { design: onDisk });
+    expect(prompt).toContain('ANSICHT: Liste');
+    expect(prompt).toContain('Beschreibung: alle Notizen');
+    expect(prompt).toContain('ANSICHT: Detail');
+    expect(prompt).toContain('eine Notiz für sich');
+    expect(prompt.indexOf('- Kopfzeile')).toBeLessThan(prompt.indexOf('ANSICHT: Detail'));
+    expect(prompt.indexOf('ANSICHT: Detail')).toBeLessThan(prompt.indexOf('- Formular'));
+
+    // Wiederfinden: Ein frisch geöffnetes Fenster liest beide von der Platte und
+    // steht bei der ersten.
+    const zweites = await openWindow('flow-2');
+    expect(zweites.designViews.map((v) => v.title)).toEqual(['Liste', 'Detail']);
+    expect(zweites.designBlocks.map((b) => b.name)).toEqual(['Kopfzeile']);
+    zweites.selectDesignView(zweite!);
+    expect(zweites.designBlocks.map((b) => b.name)).toEqual(['Formular']);
+
+    // Und wegwerfen nimmt die Kästen dieser Ansicht mit — nur die.
+    await zweites.deleteDesignView(zweite!);
+    const nach = readDesign(dir);
+    expect(nach.views.map((v) => v.title)).toEqual(['Liste']);
+    expect(nach.views[0].blocks.map((b) => b.name)).toEqual(['Kopfzeile']);
+    expect(buildPrompt('Weiter', [], { design: nach })).not.toContain('Formular');
   });
 
   it('gibt den gezeichneten Kasten an den Agenten weiter (UI-LAYOUT, c0106)', async () => {
