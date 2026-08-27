@@ -1,12 +1,12 @@
 ---
 id: c0105
 title: "Overlay design mode — toggle + read-only render"
-status: review
+status: done
 epic: e15
 depends: [c0104]
 created: 2026-08-16
-updated: 2026-08-17
-status-changed: 2026-08-17T06:54:35
+updated: 2026-08-27
+status-changed: 2026-08-27T22:33:33
 usage-tokens: 51208
 usage-cost: 7.990597
 ---
@@ -129,3 +129,4 @@ Checked: alle fünf Akzeptanzkriterien am Code, der Diff von e9776e7, `npm test`
   `Strg/⌘ + ⇧ + D` and Escape in `DesktopView`. Full suite 1808 tests green,
   `vue-tsc` clean, `npm run build` clean.
 - 2026-08-17 status → review (agent)
+- 2026-08-27 status → done (app)

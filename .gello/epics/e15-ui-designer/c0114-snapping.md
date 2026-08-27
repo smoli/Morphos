@@ -1,10 +1,10 @@
 ---
 id: c0114
 title: Snapping
-status: review
+status: done
 created: 2026-08-18
-updated: 2026-08-18
-status-changed: 2026-08-18T08:11:32
+updated: 2026-08-27
+status-changed: 2026-08-27T22:33:58
 epic: e15
 commit: 517372a
 usage-tokens: 82078
@@ -183,3 +183,4 @@ also keins gelaufen.
   neuen Alt-Tests fallen gegen den alten Stand. Volle Suite 2118 Tests grün,
   `vue-tsc` sauber, `npm run build` sauber.
 - 2026-08-18 status → review (agent)
+- 2026-08-27 status → done (app)

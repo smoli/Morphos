@@ -1,12 +1,12 @@
 ---
 id: c0106
 title: "Prompt injection — UI-LAYOUT section when design exists"
-status: review
+status: done
 epic: e15
 depends: [c0104]
 created: 2026-08-16
-updated: 2026-08-17
-status-changed: 2026-08-17T07:02:18
+updated: 2026-08-27
+status-changed: 2026-08-27T22:33:34
 usage-tokens: 37226
 usage-cost: 3.167691
 ---
@@ -120,3 +120,4 @@ Checked: alle fünf Akzeptanzkriterien gegen den Code, Diff von `ec0ae6b`,
   1820 grün, `vue-tsc` sauber.
 - 2026-08-17 status → in-progress (agent)
 - 2026-08-17 status → review (agent)
+- 2026-08-27 status → done (app)

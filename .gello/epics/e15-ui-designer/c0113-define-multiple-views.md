@@ -1,13 +1,13 @@
 ---
 id: c0113
 title: Define multiple views
-status: review
+status: done
 ref: c0105
 epic: e15
 commit: 38414bf
 created: 2026-08-18
-updated: 2026-08-18
-status-changed: 2026-08-18T07:50:36
+updated: 2026-08-27
+status-changed: 2026-08-27T22:33:57
 usage-tokens: 122423
 usage-cost: 21.969337
 ---
@@ -170,3 +170,4 @@ Geprüft: alle acht Akzeptanzkriterien am Code, der Diff von `38414bf`, sowie
   grün (78 neue), `vue-tsc` sauber, `npm run build` sauber (kein node:fs im
   Renderer-Bündel).
 - 2026-08-18 status → review (agent)
+- 2026-08-27 status → done (app)

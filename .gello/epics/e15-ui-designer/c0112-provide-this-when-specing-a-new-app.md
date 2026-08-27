@@ -1,13 +1,13 @@
 ---
 id: c0112
 title: Provide this when specing a new app
-status: review
+status: done
 ref: c0105
 epic: e15
 commit: 7dc4784
 created: 2026-08-17
-updated: 2026-08-17
-status-changed: 2026-08-17T21:33:14
+updated: 2026-08-27
+status-changed: 2026-08-27T22:33:53
 usage-tokens: 61586
 usage-cost: 10.844187
 ---
@@ -145,3 +145,4 @@ Projekt nicht).
   grün (24 neue), `vue-tsc` sauber, `npm run build` sauber (kein node:fs im
   Renderer-Bündel).
 - 2026-08-17 status → review (agent)
+- 2026-08-27 status → done (app)

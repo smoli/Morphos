@@ -1,13 +1,13 @@
 ---
 id: c0109
 title: "Move + resize blocks"
-status: review
+status: done
 epic: e15
 depends: [c0107]
 created: 2026-08-16
 commit: 9e6e7dd
-updated: 2026-08-17
-status-changed: 2026-08-17T19:11:29
+updated: 2026-08-27
+status-changed: 2026-08-27T22:33:43
 usage-tokens: 71628
 usage-cost: 8.296765
 ---
@@ -142,3 +142,4 @@ Checked: alle fünf Akzeptanzkriterien gegen den Code, den Diff von `9e6e7dd`,
   `npm run build` sauber. Nebenbei die uncommittete Leerzeile in `TopBar.vue`
   zurückgenommen, die zwei Reviews angemerkt hatten.
 - 2026-08-17 status → review (agent)
+- 2026-08-27 status → done (app)

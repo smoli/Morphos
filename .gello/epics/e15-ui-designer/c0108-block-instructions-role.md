@@ -1,13 +1,13 @@
 ---
 id: c0108
 title: "Block instructions + type/role editing"
-status: review
+status: done
 epic: e15
 depends: [c0107]
 created: 2026-08-16
 commit: d08a622
-updated: 2026-08-17
-status-changed: 2026-08-17T18:56:08
+updated: 2026-08-27
+status-changed: 2026-08-27T22:33:40
 usage-tokens: 58081
 usage-cost: 7.488299
 ---
@@ -132,3 +132,4 @@ eslint/prettier/biome-Konfiguration, `package.json` kennt nur `dev`, `build`,
   `@describe` im `AppWindow`. Volle Suite 1874 Tests grün (29 neue),
   `vue-tsc` sauber, `npm run build` sauber.
 - 2026-08-17 status → review (agent)
+- 2026-08-27 status → done (app)

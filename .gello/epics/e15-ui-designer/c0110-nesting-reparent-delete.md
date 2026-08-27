@@ -1,13 +1,13 @@
 ---
 id: c0110
 title: "Nesting + reparent + delete"
-status: review
+status: done
 epic: e15
 depends: [c0108, c0109]
 created: 2026-08-16
 commit: f2dd7fb
-updated: 2026-08-17
-status-changed: 2026-08-17T19:34:31
+updated: 2026-08-27
+status-changed: 2026-08-27T22:33:45
 usage-tokens: 88882
 usage-cost: 11.200422
 ---
@@ -178,3 +178,4 @@ einen Entwurf verändert, ist das harmlos, weicht aber vom `.map`-Kopieren der
   seinen Elter zu schieben. Volle Suite 1967 Tests grün (51 neue), `vue-tsc`
   sauber, `npm run build` sauber.
 - 2026-08-17 status → review (agent)
+- 2026-08-27 status → done (app)

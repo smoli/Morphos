@@ -1,13 +1,13 @@
 ---
 id: i0009
 title: When speccing a new app make design mode. more accessible
-status: review
+status: done
 type: issue
 ref: c0112
 epic: e15
 created: 2026-08-17
-updated: 2026-08-17
-status-changed: 2026-08-17T21:59:50
+updated: 2026-08-27
+status-changed: 2026-08-27T22:33:56
 commit: 002783e
 usage-tokens: 19149
 usage-cost: 2.889492
@@ -85,3 +85,4 @@ eslint-Abhängigkeit oder -Konfiguration) — nichts auszuführen.
   Volle Suite 2008 Tests grün (11 neue), `vue-tsc` sauber, `npm run build`
   sauber.
 - 2026-08-17 status → review (agent)
+- 2026-08-27 status → done (app)

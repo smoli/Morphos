@@ -1,14 +1,14 @@
 ---
 id: i0008
 title: Block detail not fully visible when creating new app
-status: review
+status: done
 type: issue
 ref: c0112
 epic: e15
 commit: a08d061
 created: 2026-08-17
-updated: 2026-08-17
-status-changed: 2026-08-17T21:50:59
+updated: 2026-08-27
+status-changed: 2026-08-27T22:33:54
 usage-tokens: 43078
 usage-cost: 4.925661
 ---
@@ -118,3 +118,4 @@ je stören sollte, wäre eine Untergrenze (`max(…, 120px)`) der Ort dafür.
   var(...))` darüber und begrenzt seine Höhe auf den Rest. 2002 Tests grün
   (5 neue), `vue-tsc` und `npm run build` sauber.
 - 2026-08-17 status → review (agent)
+- 2026-08-27 status → done (app)

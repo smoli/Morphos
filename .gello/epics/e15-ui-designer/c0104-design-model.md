@@ -1,12 +1,12 @@
 ---
 id: c0104
 title: "Design model + persistence (core/design.ts)"
-status: review
+status: done
 epic: e15
 depends: []
 created: 2026-08-16
-updated: 2026-08-16
-status-changed: 2026-08-16T23:15:23
+updated: 2026-08-27
+status-changed: 2026-08-27T22:33:32
 usage-tokens: 39764
 usage-cost: 3.220551
 ---
@@ -120,3 +120,4 @@ not run — the repo has no lint script or eslint/prettier/biome config.
   1781 tests green, `vue-tsc` clean.
 - 2026-08-16 status → in-progress (agent)
 - 2026-08-16 status → review (agent)
+- 2026-08-27 status → done (app)

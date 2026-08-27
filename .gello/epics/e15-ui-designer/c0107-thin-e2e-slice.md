@@ -1,12 +1,12 @@
 ---
 id: c0107
 title: "Thin end-to-end slice — draw + name + persist one block"
-status: review
+status: done
 epic: e15
 depends: [c0105, c0106]
 created: 2026-08-16
-updated: 2026-08-17
-status-changed: 2026-08-17T07:15:50
+updated: 2026-08-27
+status-changed: 2026-08-27T22:33:36
 usage-tokens: 64220
 usage-cost: 7.314065
 ---
@@ -143,3 +143,4 @@ Zwei Randnotizen, kein Grund zum Durchfallen:
   Volle Suite 1845 Tests grün, `vue-tsc` sauber, `npm run build` sauber (kein
   node:fs im Renderer-Bündel).
 - 2026-08-17 status → review (agent)
+- 2026-08-27 status → done (app)

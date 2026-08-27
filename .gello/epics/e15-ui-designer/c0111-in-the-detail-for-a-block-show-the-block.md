@@ -1,13 +1,13 @@
 ---
 id: c0111
 title: In the detail for a block show the block hierarchy
-status: review
+status: done
 ref: c0110
 epic: e15
 commit: 4015dd2
 created: 2026-08-17
-updated: 2026-08-17
-status-changed: 2026-08-17T21:19:29
+updated: 2026-08-27
+status-changed: 2026-08-27T22:33:51
 usage-tokens: 30781
 usage-cost: 3.610606
 ---
@@ -113,3 +113,4 @@ nicht vorhanden.
   Weiterreichung der Auswahl im `DesignOverlay`. Volle Suite 1984 Tests grün
   (17 neue), `vue-tsc` sauber, `npm run build` sauber.
 - 2026-08-17 status → review (agent)
+- 2026-08-27 status → done (app)
