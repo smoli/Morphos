@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { addAsset, assetsDir, listAssets, readAsset, removeAsset } from './assetstore';
+import { addAsset, assetDataUris, assetsDir, listAssets, readAsset, removeAsset } from './assetstore';
 import { readSourceFiles, writeAppState } from './appstore';
 import { listVersions, restoreVersion } from './gitstore';
 import type { AppMeta } from '@/types';
@@ -178,5 +178,39 @@ describe('Assets und Git', () => {
     await restoreVersion(dir, sha, 'Zurück zu: Asset hinzugefügt');
 
     expect(Buffer.from(readAsset(dir, added.path)!.data).equals(BINARY)).toBe(true);
+  });
+});
+
+describe('assetDataUris — die Karte fürs Bündeln', () => {
+  it('bildet jeden in-App-Pfad auf eine data:-URI mit dem richtigen Medientyp ab', async () => {
+    await addAsset(dir, 'logo.png', BINARY);
+    await addAsset(dir, 'schrift.woff2', Buffer.from('wOF2'));
+    await addAsset(dir, 'daten.json', Buffer.from('{"a":1}'));
+    await addAsset(dir, 'zeichen.svg', Buffer.from('<svg/>'));
+
+    const map = assetDataUris(dir);
+
+    expect(Object.keys(map).sort()).toEqual([
+      'assets/daten.json',
+      'assets/logo.png',
+      'assets/schrift.woff2',
+      'assets/zeichen.svg',
+    ]);
+    expect(map['assets/logo.png']).toBe(`data:image/png;base64,${BINARY.toString('base64')}`);
+    expect(map['assets/schrift.woff2']).toBe('data:font/woff2;base64,d09GMg==');
+    expect(map['assets/daten.json'].startsWith('data:application/json;base64,')).toBe(true);
+    // Auch das SVG kommt als base64 — eine Form für alle Typen.
+    expect(map['assets/zeichen.svg']).toBe('data:image/svg+xml;base64,PHN2Zy8+');
+  });
+
+  it('lässt einen unbekannten Typ aus der Karte — die Referenz bleibt dann stehen', async () => {
+    await addAsset(dir, 'logo.png', BINARY);
+    await addAsset(dir, 'unbekannt.bin', BINARY);
+
+    expect(Object.keys(assetDataUris(dir))).toEqual(['assets/logo.png']);
+  });
+
+  it('liefert eine leere Karte, wenn die App keine Assets hat', () => {
+    expect(assetDataUris(dir)).toEqual({});
   });
 });

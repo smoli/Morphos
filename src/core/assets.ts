@@ -183,7 +183,15 @@ const MIME: Readonly<Record<string, string>> = {
   mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
 };
 
+/**
+ * Der Medientyp für alles, was die Tabelle nicht kennt. Ein Asset mit diesem Typ
+ * wird beim Bündeln NICHT eingebettet (c0117): Ohne zu wissen, was es ist,
+ * bringt eine `data:`-URI die Datei nur aufgeblasen ins Artefakt, ohne dass ein
+ * Browser damit etwas anfangen könnte — die Referenz bleibt dann lieber stehen.
+ */
+export const UNKNOWN_MIME = 'application/octet-stream';
+
 /** Der Medientyp eines Assets, an seiner Endung erkannt. */
 export function assetMime(pathOrName: string): string {
-  return MIME[extensionOf(String(pathOrName ?? ''))] ?? 'application/octet-stream';
+  return MIME[extensionOf(String(pathOrName ?? ''))] ?? UNKNOWN_MIME;
 }

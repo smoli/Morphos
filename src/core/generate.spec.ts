@@ -391,6 +391,22 @@ describe('generateApp — ein Lauf, der geschrieben hat', () => {
     expect(res.app.html).toContain('window.preact = {};');
     expect(deps.builtinLib).toHaveBeenCalledWith('preact');
   });
+
+  it('bettet die Assets der App als data:-URI ein (c0117)', async () => {
+    const dir = existingApp('rechner-1');
+    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    fs.mkdirSync(path.join(dir, 'assets'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'assets', 'logo.png'), bytes);
+
+    const deps = makeDeps(writingRun({ 'src/index.html': DOC('<img src="assets/logo.png">') }));
+    const res = await generateApp(request({ id: 'rechner-1' }), deps);
+
+    if (!res.ok || !res.app) throw new Error('erwartet: ein neuer Stand');
+    expect(res.app.html).toContain(`src="data:image/png;base64,${bytes.toString('base64')}"`);
+    expect(res.app.html).not.toContain('src="assets/logo.png"');
+    // Das Asset selbst bleibt eine Datei — die Karte liest es nur.
+    expect(fs.readFileSync(path.join(dir, 'assets', 'logo.png')).equals(bytes)).toBe(true);
+  });
 });
 
 describe('generateApp — wenn etwas schiefgeht', () => {

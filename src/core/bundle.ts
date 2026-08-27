@@ -66,15 +66,127 @@ export function annotateSource(html: string, path: string): string {
 }
 
 /**
+ * Die Beigaben der App fürs Bündeln: in-App-Pfad → fertige `data:`-URI
+ * (`{ 'assets/logo.png': 'data:image/png;base64,…' }`). `bundle` bleibt damit
+ * rein — es rechnet mit einer Karte, so wie es das bei `libs` schon tut; wer
+ * sie füllt, liest die Bytes von der Platte (core/assetstore: assetDataUris).
+ */
+export type AssetMap = Record<string, string>;
+
+/**
+ * Löst EINE Referenz gegen die Asset-Karte auf — die eine Stelle, an der aus
+ * `assets/logo.png` die `data:`-URI wird. Alle Formen unten (src, srcset,
+ * poster, href, url(…)) gehen hier hindurch; was die Karte nicht kennt, bleibt
+ * stehen, damit die Schreibweise des Agenten unangetastet bleibt.
+ */
+function assetUri(assets: AssetMap, ref: string): string | undefined {
+  const cleaned = String(ref ?? '').trim().replace(/^\.\//, '');
+  return Object.prototype.hasOwnProperty.call(assets, cleaned) ? assets[cleaned] : undefined;
+}
+
+/** Ein `url(...)` in CSS — in Anführungszeichen oder ohne. */
+const CSS_URL = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)'"\s]*))\s*\)/gi;
+
+/**
+ * Die `url(...)` eines CSS-Stücks. Eingesetzt wird OHNE Anführungszeichen: Eine
+ * base64-`data:`-URI enthält weder Klammer noch Leerzeichen noch Anführungszeichen
+ * und ist so auch im style-Attribut sicher, gleich womit dieses zitiert ist.
+ */
+function inlineCssUrls(css: string, assets: AssetMap): string {
+  return css.replace(CSS_URL, (whole, quoted: string, single: string, bare: string) => {
+    const uri = assetUri(assets, quoted ?? single ?? bare ?? '');
+    return uri ? `url(${uri})` : whole;
+  });
+}
+
+/**
+ * Ein srcset: Kandidaten durch Komma getrennt, jeder mit Deskriptor („1x“,
+ * „640w“). Ersetzt wird nur die URL, der Deskriptor bleibt — ein Asset-Name
+ * trägt nie ein Komma (core/assets), das Trennen ist also eindeutig.
+ */
+function inlineSrcset(value: string, assets: AssetMap): string {
+  return value
+    .split(',')
+    .map((candidate) =>
+      candidate.replace(/^(\s*)(\S+)/, (whole, space: string, ref: string) => {
+        const uri = assetUri(assets, ref);
+        return uri ? `${space}${uri}` : whole;
+      }),
+    )
+    .join(',');
+}
+
+/**
+ * Die Attribute, die auf ein Asset zeigen können: `src` (img, video, audio,
+ * source), `srcset`, `poster`, `href` (nur am SVG-<image> — ein <a href> ist
+ * ein Verweis, kein eingebetteter Inhalt) und `style` mit seinen `url(...)`.
+ * Vor dem Namen muss Weißraum oder ein Doppelpunkt stehen (`xlink:href`),
+ * sonst spräche `data-morphos-src` mit an.
+ */
+const ASSET_ATTR = /(^|[\s:])(src|srcset|poster|href|style)(\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s"'`=<>]+))/gi;
+
+/** Die Attribute EINES öffnenden Tags. */
+function inlineAttrs(attrs: string, tag: string, assets: AssetMap): string {
+  return attrs.replace(
+    ASSET_ATTR,
+    (whole, lead: string, name: string, eq: string, quoted: string, single: string, bare: string) => {
+      const value = quoted ?? single ?? bare ?? '';
+      const quote = quoted !== undefined ? '"' : single !== undefined ? "'" : '';
+      const key = name.toLowerCase();
+      if (key === 'href' && tag !== 'image') return whole;
+
+      const next =
+        key === 'style'
+          ? inlineCssUrls(value, assets)
+          : key === 'srcset'
+            ? inlineSrcset(value, assets)
+            : (assetUri(assets, value) ?? value);
+      return next === value ? whole : `${lead}${name}${eq}${quote}${next}${quote}`;
+    },
+  );
+}
+
+/**
+ * Ein Durchgang durch das Dokument, in dem jede Referenz auf `assets/…` zu
+ * ihrer `data:`-URI wird: Attribute an öffnenden Tags, `url(...)` in
+ * <style>-Blöcken (also auch in einer eben eingebetteten src/*.css samt ihrer
+ * @font-face) und in style-Attributen. Skripte bleiben unangetastet — was dort
+ * steht, ist Code, kein Markup; ein Kommentar ebenso.
+ *
+ * Ein Fehlgriff ist kein Fehler: Was die Karte nicht kennt (ein gelöschtes
+ * Asset, eine fremde URL), bleibt Zeichen für Zeichen stehen und scheitert
+ * höchstens zur Laufzeit an der CSP. Eine Obergrenze gibt es nicht — die
+ * base64-Fracht im Artefakt ist hingenommen (e16).
+ */
+const ASSET_TOKEN =
+  /<!--[\s\S]*?-->|<(script|style)\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)(<\/\1\s*>)|<([a-zA-Z][a-zA-Z0-9-]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/gi;
+
+function inlineAssets(html: string, assets: AssetMap): string {
+  return html.replace(
+    ASSET_TOKEN,
+    (whole, block: string, blockAttrs: string, body: string, close: string, tag: string, attrs: string) => {
+      if (block) {
+        return block.toLowerCase() === 'style'
+          ? `<${block}${blockAttrs}>${inlineCssUrls(body, assets)}${close}`
+          : whole;
+      }
+      if (!tag) return whole; // Kommentar
+      return `<${tag}${inlineAttrs(attrs, tag.toLowerCase(), assets)}>`;
+    },
+  );
+}
+
+/**
  * Bündelt den Quelldatei-Satz einer App zu EINEM in sich geschlossenen
  * HTML-Dokument: <link>-Stylesheets und <script src>-Referenzen auf eigene
  * Quelldateien werden inline eingebettet, morphos:lib-Metatags durch den
  * (von der Shell gecacht gelieferten) Bibliotheks-Code ersetzt.
  *
- * `libs` bildet Bibliotheks-URL → Inhalt ab; nicht auflösbare Referenzen
- * bleiben unangetastet (und scheitern zur Laufzeit an der CSP).
+ * `libs` bildet Bibliotheks-URL → Inhalt ab, `assets` in-App-Pfad → `data:`-URI
+ * (core/assetstore baut sie von der Platte); nicht auflösbare Referenzen bleiben
+ * in beiden Fällen unangetastet (und scheitern zur Laufzeit an der CSP).
  */
-export function bundle(files: SourceFile[], libs: Record<string, string> = {}): string {
+export function bundle(files: SourceFile[], libs: Record<string, string> = {}, assets: AssetMap = {}): string {
   const byPath = new Map(files.map((f) => [f.path, f.content]));
   const entry = byPath.get(ENTRY_FILE);
   if (!entry) return '';
@@ -105,5 +217,8 @@ export function bundle(files: SourceFile[], libs: Record<string, string> = {}): 
     return content !== undefined ? `<script data-morphos-lib="${url}">${escapeScript(content)}</script>` : tag;
   });
 
-  return html;
+  // Zuletzt die Assets: Erst jetzt steht das ganze Dokument da — auch das CSS
+  // aus src/*.css, das eben zum <style>-Block wurde und seine Schriften noch
+  // per url(assets/…) sucht.
+  return Object.keys(assets).length ? inlineAssets(html, assets) : html;
 }

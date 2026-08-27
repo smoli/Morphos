@@ -4,6 +4,7 @@ import type { AgentResult, AppMeta, AppSnapshot, GenerateResult } from '@/types'
 import { agentMcpArgs, mcpLaunch, parseRunLog, wroteSomething, type McpRunLog } from './mcp';
 import { buildPrompt, type PromptContext } from './prompt';
 import { readDocs, readManifest, readSourceFiles, writeAppArtifact } from './appstore';
+import { assetDataUris } from './assetstore';
 import { bundle, ENTRY_FILE } from './bundle';
 import { extractHtml, extractIcon, extractTitle } from './html';
 import { extractLibs, splitLibs } from './libs';
@@ -155,9 +156,14 @@ function nextMeta(dir: string, id: string, html: string, now: number): AppMeta {
   };
 }
 
-/** Bündelt den Dateisatz zum eigenständigen Artefakt (mit allen Bibliotheken). */
+/**
+ * Bündelt den Dateisatz zum eigenständigen Artefakt — mit allen Bibliotheken und
+ * allen Beigaben der App. Die Assets kommen als fertige `data:`-Karte von der
+ * Platte (core/assetstore); `bundle` selbst rechnet nur mit ihr.
+ */
 async function bundleApp(
   files: { path: string; content: string }[],
+  dir: string,
   deps: GenerateDeps,
 ): Promise<{ ok: true; html: string } | { ok: false; error: string }> {
   const entry = files.find((f) => f.path === ENTRY_FILE);
@@ -178,7 +184,7 @@ async function bundleApp(
   if (!external_.ok) return external_;
   Object.assign(libs, external_.libs);
 
-  const html = bundle(files, libs);
+  const html = bundle(files, libs, assetDataUris(dir));
   if (!html) return { ok: false, error: 'Das Bündeln der App ist fehlgeschlagen.' };
   return { ok: true, html };
 }
@@ -253,7 +259,7 @@ export async function generateApp(req: GenerateRequest, deps: GenerateDeps): Pro
     }
 
     const files = readSourceFiles(dir);
-    const bundled = await bundleApp(files, deps);
+    const bundled = await bundleApp(files, dir, deps);
     if (!bundled.ok) {
       // Bei einem Entwurf gibt es nichts zu retten (er hat keine Id, unter der
       // der Anwender ihn wiederfände). Eine bestehende App behält die Arbeit des

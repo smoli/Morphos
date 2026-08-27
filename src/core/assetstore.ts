@@ -8,6 +8,7 @@ import {
   isAssetPath,
   sanitizeAssetName,
   uniqueAssetName,
+  UNKNOWN_MIME,
   type AssetFile,
   type AssetInfo,
 } from './assets';
@@ -142,4 +143,24 @@ export async function removeAsset(dir: string, pathOrName: string): Promise<bool
   await ensureRepo(dir);
   await commitAll(dir, `Asset entfernt: ${path.basename(target)}`);
   return true;
+}
+
+/**
+ * Die Asset-Karte fürs Bündeln (c0117): in-App-Pfad → `data:`-URI, genau das,
+ * was `bundle` als dritten Satz erwartet. Hier — und nur hier — treffen sich
+ * Bytes und Medientyp; `bundle` selbst bleibt rein und weiß von keiner Platte.
+ *
+ * Ausgelassen wird, was die Typtabelle nicht kennt (UNKNOWN_MIME): Die Referenz
+ * darauf bleibt im Artefakt stehen, statt als Fracht ohne Verwendung darin zu
+ * liegen. Eine Obergrenze gibt es nicht — die base64-Fracht ist hingenommen.
+ */
+export function assetDataUris(dir: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const info of listAssets(dir)) {
+    if (info.mime === UNKNOWN_MIME) continue;
+    const file = readAsset(dir, info.name);
+    if (!file) continue; // zwischenzeitlich verschwunden
+    map[info.path] = `data:${info.mime};base64,${Buffer.from(file.data).toString('base64')}`;
+  }
+  return map;
 }

@@ -138,3 +138,90 @@ describe('bundle — Quellorte', () => {
     expect(out).toContain('<div data-morphos-src=');
   });
 });
+
+describe('bundle — Assets als data:-URI', () => {
+  const PNG = 'data:image/png;base64,iVBORw0KGgo=';
+  const WOFF = 'data:font/woff2;base64,d09GMgAB';
+  const SVG = 'data:image/svg+xml;base64,PHN2Zy8+';
+  const ASSETS = { 'assets/logo.png': PNG, 'assets/schrift.woff2': WOFF, 'assets/zeichen.svg': SVG };
+
+  /** Bündelt ein Dokument mit dem Standard-Asset-Satz. */
+  function withAssets(index: string, extra: SourceFile[] = []): string {
+    return bundle(makeFiles(index, extra), {}, ASSETS);
+  }
+
+  it('bettet <img src> ein — auch mit ./ davor', () => {
+    const out = withAssets('<html><body><img src="assets/logo.png"><img src=\'./assets/logo.png\'></body></html>');
+    expect(out).toContain(`src="${PNG}"`);
+    expect(out).toContain(`src='${PNG}'`);
+    expect(out).not.toContain('assets/logo.png');
+  });
+
+  it('bettet jeden Kandidaten eines srcset ein und behält die Deskriptoren', () => {
+    const out = withAssets('<html><body><img srcset="assets/logo.png 1x, assets/zeichen.svg 2x"></body></html>');
+    expect(out).toContain(`srcset="${PNG} 1x, ${SVG} 2x"`);
+  });
+
+  it('bettet src und poster an video/audio/source ein', () => {
+    const html =
+      '<html><body><video poster="assets/logo.png"><source src="assets/logo.png"></video>' +
+      '<audio src="assets/logo.png"></audio></body></html>';
+    const out = withAssets(html);
+    expect(out).toContain(`poster="${PNG}"`);
+    expect(out.match(new RegExp(`src="${PNG}"`, 'g'))).toHaveLength(2);
+  });
+
+  it('bettet href am SVG-<image> ein, lässt href sonst in Ruhe', () => {
+    const html = '<html><body><svg><image href="assets/logo.png"></svg><a href="assets/logo.png">x</a></body></html>';
+    const out = withAssets(html);
+    // Beide Tags tragen nach annotateSource noch ihren Quellort — gezählt wird das href.
+    expect(out).toContain(`href="${PNG}"`);
+    expect(out.match(/href="assets\/logo\.png"/g)).toHaveLength(1);
+  });
+
+  it('bettet url() im style-Attribut ein', () => {
+    const out = withAssets('<html><body><div style="background: url(assets/logo.png) no-repeat"></div></body></html>');
+    expect(out).toContain(`style="background: url(${PNG}) no-repeat"`);
+  });
+
+  it('bettet url() in einem <style>-Block ein — in jeder Schreibweise', () => {
+    const html =
+      '<html><head><style>.a{background:url(assets/logo.png)}' +
+      ".b{background:url('assets/logo.png')}.c{background:url( \"assets/zeichen.svg\" )}</style></head></html>";
+    const out = withAssets(html);
+    expect(out.match(new RegExp(`url\\(${PNG}\\)`, 'g'))).toHaveLength(2);
+    expect(out).toContain(`url(${SVG})`);
+    expect(out).not.toContain('assets/logo.png');
+  });
+
+  it('bettet url() auch in einer eingebundenen src/*.css ein (@font-face)', () => {
+    const html = '<html><head><link rel="stylesheet" href="style.css"></head><body></body></html>';
+    const css = "@font-face{font-family:X;src:url('assets/schrift.woff2') format('woff2')}";
+    const out = withAssets(html, [{ path: 'src/style.css', content: css }]);
+    expect(out).toContain(`src:url(${WOFF}) format('woff2')`);
+  });
+
+  it('lässt ein fehlendes oder fremdes Asset unangetastet und wirft nicht', () => {
+    const html =
+      '<html><head><style>.a{background:url(assets/fehlt.png)}</style></head>' +
+      '<body><img src="assets/fehlt.png"><img src="https://x.example/assets/logo.png">' +
+      '<img src="/assets/logo.png"></body></html>';
+    const out = withAssets(html);
+    expect(out).toContain('url(assets/fehlt.png)');
+    expect(out).toContain('src="assets/fehlt.png"');
+    expect(out).toContain('src="https://x.example/assets/logo.png"');
+    expect(out).toContain('src="/assets/logo.png"');
+  });
+
+  it('rührt den Inhalt von Skripten nicht an', () => {
+    const html = '<html><body><script src="app.js"></script></body></html>';
+    const js = 'const p = "assets/logo.png";';
+    const out = withAssets(html, [{ path: 'src/app.js', content: js }]);
+    expect(out).toContain(`<script>${js}</script>`);
+  });
+
+  it('lässt das Dokument ohne Assets Zeichen für Zeichen, wie es war', () => {
+    const html = '<html><body><img src="assets/logo.png" data-morphos-src="x"></body></html>';
+    expect(bundle(makeFiles(html), {}, {})).toBe(bundle(makeFiles(html)));
+  });
+});
