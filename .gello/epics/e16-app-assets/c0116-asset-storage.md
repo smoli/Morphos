@@ -1,13 +1,12 @@
 ---
 id: c0116
 title: "Asset storage — assets/ folder, binary IO, git, survive src/ sync"
-status: ready
+status: in-progress
 epic: e16
 depends: []
 created: 2026-08-27
 updated: 2026-08-27
-status-changed: 2026-08-27T23:29:02
-order: 10
+status-changed: 2026-08-27T23:29:30
 ---
 
 # Asset storage — assets/ folder, binary IO, git, survive src/ sync
@@ -57,3 +56,4 @@ storage model and ops defined here.
 
 - 2026-08-27 created from the e16 epic breakdown.
 - 2026-08-27 status → ready (app)
+- 2026-08-27 status → in-progress (agent)
