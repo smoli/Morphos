@@ -6,7 +6,9 @@ epic: e16
 depends: []
 created: 2026-08-27
 updated: 2026-08-27
-status-changed: 2026-08-27T23:38:05
+status-changed: 2026-08-27T23:46:46
+usage-tokens: 47804
+usage-cost: 5.035977
 ---
 
 # Asset storage — assets/ folder, binary IO, git, survive src/ sync
@@ -81,11 +83,85 @@ storage model and ops defined here.
   down. The agent also cannot write there: `isValidOutputPath` (core/files)
   keeps him inside `src/` + the two docs.
 
-Specs: `src/core/assets.spec.ts` (17), `src/core/assetstore.spec.ts` (14 —
+**Nachbesserung nach dem Review (2026-08-27)**
+
+Die Namenslänge wurde an zwei Stellen getrennt gerechnet, und genau dazwischen
+lag der Fehler: `sanitizeAssetName` schöpfte die 80 Zeichen aus, `uniqueAssetName`
+hängte danach `-2` an — 82 Zeichen, die `assetName` nicht mehr annimmt. Die Datei
+wurde geschrieben und committet, tauchte aber in `listAssets` nicht mehr auf und
+ließ sich weder lesen noch entfernen; der nächste gleiche Name überschrieb sie
+dann stillschweigend. Ebenso konnte eine überlange ENDUNG allein schon einen zu
+langen Namen liefern.
+
+- Beides geht jetzt durch EIN `fitName(stem, ext, suffix)`: die einzige Stelle,
+  an der über die Länge entschieden wird. Gekürzt wird zuerst der Name, die
+  Endung nur, wenn sie allein den Platz beansprucht; der Zusatz bleibt ganz —
+  er ist es, der die Dateien unterscheidet.
+- `addAsset` schreibt zusätzlich nur noch, was `isAssetPath` auch wieder
+  annimmt (Riegel gegen einen Rückfall).
+- Neue Specs: überlange Endung, Zählung an der Längengrenze (auch über zwölf
+  Runden), und auf der Platte — derselbe überlange Name dreimal hinzugefügt
+  ergibt drei auffindbare Dateien mit ihren eigenen Bytes, jede entfernbar;
+  dazu die Zusicherung, dass im Asset-Ordner nichts liegt, was die Liste nicht
+  kennt.
+
+Specs: `src/core/assets.spec.ts` (21), `src/core/assetstore.spec.ts` (16 —
 binary round-trip with 0x00/0x80/0xFF, survival across a `src/` sync, sanitize
-and collision, remove-only-that-file, both commits, revert), plus one in
-`appstore.spec.ts` for the metadata in `AppData`. Full suite green (2150),
-`vue-tsc` clean.
+und collision — auch dort, wo beides zusammentrifft —, remove-only-that-file,
+both commits, revert), plus one in `appstore.spec.ts` for the metadata in
+`AppData`. Full suite green (2156), `vue-tsc` clean.
+
+## Review
+
+### 2026-08-27T23:40:49 — fail
+
+Checked: acceptance criteria against `src/core/assets.ts`, `src/core/assetstore.ts`,
+`src/types/index.ts`, `electron/main.ts`, `electron/preload.ts`; the diff of 8e079cc;
+`npm test` (2150 passed / 101 files, green); `npm run typecheck` (`vue-tsc --noEmit`,
+clean). No lint step exists in this repo (no `lint` script, no eslint config) — not run.
+
+- Criterion "name collisions are handled (no silent overwrite)" is unmet at the
+  length boundary. `sanitizeAssetName` (`src/core/assets.ts`) truncates every name
+  to exactly `MAX_ASSET_NAME_LENGTH` (80), but `uniqueAssetName` then appends
+  `-2` **without** re-applying that budget, so the collision name is 82 chars —
+  longer than `isValidAssetName` allows. `addAsset` writes and commits that file,
+  and from then on it is invisible and unreachable: verified against the real code
+  in a temporary spec — after `addAsset(dir, 'x'.repeat(76) + '.png')` twice,
+  `readdirSync(assetsDir(dir))` shows both files, `listAssets` returns only the
+  80-char one, `readAsset(dir, second.path)` is `null` and
+  `removeAsset(dir, second.path)` is `false`. The user adds an asset, it lands in
+  a commit, and it never shows up in the panel (c0119) nor can be deleted there.
+- Worse, the same path then **does** silently overwrite. A third `addAsset` of the
+  same long name sees only the 80-char entry in `listAssets`, so `uniqueAssetName`
+  hands back `…-2.png` again and `writeFileSync` replaces the second asset's bytes
+  (probe: `[[82, 3], [80, 1]]` on disk — the byte `2` written by the second add is
+  gone). That is exactly the silent overwrite the criterion forbids.
+  This is not an exotic input: any name over 80 chars is truncated to the same
+  80-char prefix, so long filenames are precisely the ones that collide, and
+  colliding is precisely what breaks them. Fix by bounding the result of
+  `uniqueAssetName` (or re-sanitizing after it) to `MAX_ASSET_NAME_LENGTH`, and
+  consider making `addAsset` refuse to write a name `isAssetPath` would reject.
+- Same root cause, second reachable input: an extension of 80+ chars makes
+  `sanitizeAssetName` return a name longer than the maximum on its own
+  (`room = Math.max(1, MAX - cleanExt.length)`; probe: `a.` + `'b'*100` → 102 chars).
+  The existing spec "kürzt einen überlangen Namen und behält dabei die Endung"
+  only covers a long *stem*, so nothing catches this.
+- Criterion "Specs cover: … name sanitize/collision" is therefore unmet in
+  substance: `assets.spec.ts` tests truncation and collision separately but never
+  together, so the boundary where they interact is untested.
+
+Verified as passing, for the record: binary IO is genuinely binary (`readFileSync`
+without an encoding, `writeFileSync` of the `Uint8Array`) and the round-trip is
+pinned with 0x00/0x80/0xFF in `assetstore.spec.ts`; assets survive a `src/` sync
+(`readSourceFiles` walks only `src/`, `syncSourceFiles` `rmSync`s only `src/`, both
+covered by spec); `removeAsset` deletes only the named file; add and remove are each
+one `ensureRepo` + `commitAll`, and the revert spec shows assets come back with a
+version; the `AssetInfo`/`AssetFile` split is real, `AppData.assets` is
+metadata-only and assets never enter `files: SourceFile[]` (`appstore.spec.ts`);
+all four IPC handlers exist in main + preload + `MorphosHost` and read bytes on
+demand with no size cap; path escapes (`assets/../app.json`, absolute paths) are
+rejected at the name; the diff is additive only (732 insertions, 0 deletions) — no
+test weakened, skipped or `.only`'d, and nothing outside the card's What.
 
 ## Log
 
@@ -94,4 +170,11 @@ and collision, remove-only-that-file, both commits, revert), plus one in
 - 2026-08-27 status → in-progress (agent)
 - 2026-08-27 core/assets + core/assetstore gebaut, AppData.assets, IPC-Vierer;
   Specs grün (2150), typecheck sauber.
+- 2026-08-27 Review abgelehnt: Namenslänge und Zählung getrennt gerechnet —
+  ein hochgezählter Name konnte 82 Zeichen lang und damit unauffindbar werden
+  (und wurde beim nächsten Mal stillschweigend überschrieben).
+- 2026-08-27 behoben: ein gemeinsames `fitName` für beide Wege, Riegel in
+  `addAsset`, sechs neue Specs an der Grenze. Suite grün (2156).
+- 2026-08-27 status → review (agent)
+- 2026-08-27 status → in-progress (agent)
 - 2026-08-27 status → review (agent)
