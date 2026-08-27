@@ -81,3 +81,7 @@ so the app uses them offline under the sandbox CSP.
 ## Log
 
 - 2026-08-27 status → discuss (app)
+- 2026-08-27 discussed: refined What, drafted acceptance criteria, recorded
+  decisions (top-level `assets/`, `data:`-URI inlining, user-owned, per-wish
+  attach).
+- 2026-08-27 moved to standalone `cards/`, status → backlog
