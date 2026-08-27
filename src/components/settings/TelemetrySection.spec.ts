@@ -44,15 +44,15 @@ function stubQueue(): void {
   agents.jobs = [
     {
       jobId: 'job-1', appKey: 'rechner', state: 'running', instanceId: 'w1', appId: 'rechner',
-      label: 'Rechner', prompt: 'Wurzel ziehen', attachments: [], elements: [], cancelled: false,
+      label: 'Rechner', prompt: 'Wurzel ziehen', attachments: [], elements: [], assets: [], cancelled: false,
     },
     {
       jobId: 'job-2', appKey: 'notizen', state: 'queued', instanceId: 'w2', appId: 'notizen',
-      label: 'Notizen', prompt: 'Suche einbauen', attachments: [], elements: [], cancelled: false,
+      label: 'Notizen', prompt: 'Suche einbauen', attachments: [], elements: [], assets: [], cancelled: false,
     },
     {
       jobId: 'job-3', appKey: 'uhr', state: 'queued', instanceId: 'w3', appId: 'uhr',
-      label: 'Uhr', prompt: 'Wecker', attachments: [], elements: [], cancelled: false,
+      label: 'Uhr', prompt: 'Wecker', attachments: [], elements: [], assets: [], cancelled: false,
     },
   ];
 }

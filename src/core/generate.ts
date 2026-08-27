@@ -4,7 +4,7 @@ import type { AgentResult, AppMeta, AppSnapshot, GenerateResult } from '@/types'
 import { agentMcpArgs, mcpLaunch, parseRunLog, wroteSomething, type McpRunLog } from './mcp';
 import { buildPrompt, type PromptContext } from './prompt';
 import { readDocs, readManifest, readSourceFiles, writeAppArtifact } from './appstore';
-import { assetDataUris } from './assetstore';
+import { assetDataUris, pickAssets } from './assetstore';
 import { bundle, ENTRY_FILE } from './bundle';
 import { extractHtml, extractIcon, extractTitle } from './html';
 import { extractLibs, splitLibs } from './libs';
@@ -56,6 +56,13 @@ export interface GenerateRequest {
   /** Der Wunsch des Anwenders: Kern des Prompts und Botschaft des Commits. */
   wish: string;
   context?: PromptContext;
+  /**
+   * Die Beigaben, die der Anwender zu DIESEM Wunsch mitschickt (c0118) — als
+   * ihre Pfade in der App (`assets/logo.png`). Was daraus im Prompt steht,
+   * entscheidet der Ordner der App und nicht der Aufrufer: Aufgelöst wird hier
+   * gegen die Platte (pickAssets), wie beim UI-Entwurf auch.
+   */
+  assets?: string[];
   libWhitelist?: string[];
   /** Das Programm, mit dem der MCP-Server startet (Morphos selbst). */
   execPath: string;
@@ -225,6 +232,10 @@ export async function generateApp(req: GenerateRequest, deps: GenerateDeps): Pro
       // Auch der mitgebrachte — er steht eine Zeile weiter oben schon in der
       // Datei, und was der Agent liest, ist stets das, was dort steht.
       design: readDesign(dir),
+      // Ebenso die mitgeschickten Beigaben (c0118): Der Anwender wählt aus, was
+      // in der App liegt — was davon in den Prompt kommt, sagt der Ordner. Ein
+      // Entwurf hat noch keine, seiner ist eben erst entstanden.
+      assets: pickAssets(dir, req.assets ?? []),
     };
     const images = (req.context?.attachments ?? [])
       .filter((a) => a.kind === 'image' && a.path)

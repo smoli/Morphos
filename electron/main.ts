@@ -450,6 +450,7 @@ async function generate(
   onEvent: (event: AgentEvent) => void = () => {},
   runId = '',
   design?: Design,
+  assets: string[] = [],
 ): Promise<GenerateResult> {
   const whitelist = readSettings().libWhitelist ?? [];
 
@@ -481,6 +482,9 @@ async function generate(
       id: appId,
       wish: userRequest,
       context,
+      // Nur die Auswahl geht hinüber; was davon wirklich in der App liegt,
+      // sagt deren Asset-Ordner (core/generate: pickAssets).
+      assets,
       libWhitelist: whitelist,
       // Der MCP-Server ist Morphos selbst, als schlichtes Node gestartet
       // (core/mcp: mcpLaunch) — der Anwender braucht dafür kein eigenes Node.
@@ -557,6 +561,7 @@ ipcMain.handle('morphos:generate', async (
     framework?: Framework;
     elements?: ElementRef[];
     design?: Design;
+    assets?: string[];
   },
 ): Promise<GenerateResult> => {
   if (!payload?.prompt?.trim()) return { ok: false, error: 'Bitte gib einen Wunsch ein.' };
@@ -585,6 +590,12 @@ ipcMain.handle('morphos:generate', async (
   // Renderer und wird darum hier zurechtgerückt, bevor er irgendwohin geht —
   // wie alles, was von dort einen Weg auf die Platte hat.
   const design = payload.design ? normalizeDesign(payload.design) : undefined;
+  // Die mitgeschickten Beigaben kommen als bloße Pfade (c0118). Geprüft werden
+  // sie dort, wo es darauf ankommt: Der Lauf löst sie gegen den Asset-Ordner
+  // der App auf, und was dort nicht liegt, steht auch in keinem Prompt.
+  const assets = Array.isArray(payload.assets)
+    ? payload.assets.filter((a): a is string => typeof a === 'string')
+    : [];
   // Der Fortschritt geht an genau das Fenster zurück, das den Lauf gestartet
   // hat — die Lauf-Id ordnet ihn dort dem richtigen App-Fenster zu.
   const runId = typeof payload.runId === 'string' ? payload.runId : '';
@@ -597,7 +608,7 @@ ipcMain.handle('morphos:generate', async (
   // und wartet daher auf nichts.
   const key = id === null ? `entwurf:${runId}` : `${folder} :: ${id}`;
   return appRuns.run(key, () =>
-    generate(payload.prompt, folder, id, chat, attachments, elements, framework, onEvent, runId, design),
+    generate(payload.prompt, folder, id, chat, attachments, elements, framework, onEvent, runId, design, assets),
   );
 });
 

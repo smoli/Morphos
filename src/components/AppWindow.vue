@@ -105,8 +105,8 @@ watch(() => store.composerOpen, (open) => { if (!open) picking.value = false; })
 
 // Jeder Wunsch dieses Fensters — aus dem Chat oder vom WelcomeScreen eines
 // leeren Entwurfs — geht in die zentrale Warteschlange (siehe stores/agents).
-function onPrompt(text: string, attachments: Attachment[] = []): void {
-  agents.submit(props.win.instanceId, text, attachments, elementRefs.value.map((r) => ({ ...r })));
+function onPrompt(text: string, attachments: Attachment[] = [], assets: string[] = []): void {
+  agents.submit(props.win.instanceId, text, attachments, elementRefs.value.map((r) => ({ ...r })), assets);
   // Die Markierungen gehören zu genau diesem Wunsch — danach ist der Tisch leer.
   elementRefs.value = [];
   picking.value = false;
@@ -237,6 +237,7 @@ async function onIcon(icon: string | null): Promise<void> {
         :can-pick="store.hasApp"
         :picking="picking"
         :elements="elementRefs"
+        :assets="store.assets"
         :design-open="store.designOpen"
         @update:framework="store.newFramework = $event"
         @update:picking="picking = $event"

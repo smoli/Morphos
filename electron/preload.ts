@@ -49,9 +49,10 @@ contextBridge.exposeInMainWorld('morphos', {
     framework?: Framework,
     elements?: ElementRef[],
     design?: Design,
+    assets?: string[],
   ): Promise<GenerateResult> =>
     ipcRenderer.invoke('morphos:generate', {
-      prompt, folder, id, chat, attachments, runId, framework, elements, design,
+      prompt, folder, id, chat, attachments, runId, framework, elements, design, assets,
     }),
 
   // Fortschritt eines laufenden Agentenlaufs (Strom der Claude CLI).

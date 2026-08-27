@@ -15,6 +15,7 @@ const job = (over: Partial<AgentJob> = {}): AgentJob => ({
   prompt: 'Mach eine Wurzeltaste',
   attachments: [],
   elements: [],
+  assets: [],
   cancelled: false,
   ...over,
 });

@@ -36,6 +36,12 @@ export interface ChatMessage {
   text: string;
   /** Dateinamen mitgeschickter Referenzen (nur zur Anzeige). */
   attachments?: string[];
+  /**
+   * Pfade mitgeschickter Beigaben der App (`assets/logo.png`, nur zur Anzeige —
+   * siehe c0118). Sie stehen neben den Referenzen und nicht bei ihnen: Eine
+   * Beigabe liegt IN der App, eine Referenz kam von außen.
+   */
+  assets?: string[];
   /** Beschriftungen mitgeschickter markierter Elemente (nur zur Anzeige, siehe core/pick). */
   elements?: string[];
   time: number;
@@ -599,6 +605,9 @@ export interface MorphosHost {
    * der UI-Entwurf, den ein Entwurf mitbringt (c0112): Er hat noch keinen
    * Ordner, in dem er läge, und wird vom Lauf in den der neuen App gelegt —
    * eine bestehende App schickt ihn nicht mit, dort ist die Datei maßgeblich.
+   * `assets` sind die zu diesem Wunsch mitgeschickten Beigaben der App (c0118),
+   * als ihre Pfade in der App — der Hauptprozess löst sie gegen deren
+   * Asset-Ordner auf.
    */
   generate(
     prompt: string,
@@ -610,6 +619,7 @@ export interface MorphosHost {
     framework?: Framework,
     elements?: ElementRef[],
     design?: Design,
+    assets?: string[],
   ): Promise<GenerateResult>;
 
   /**

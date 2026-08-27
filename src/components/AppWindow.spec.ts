@@ -668,7 +668,7 @@ describe('AppWindow', () => {
       await wrapper.get('textarea').setValue('Mach die Tasten blau');
       await wrapper.get('textarea').trigger('keydown', { key: 'Enter' });
 
-      expect(spy).toHaveBeenCalledWith(win.instanceId, 'Mach die Tasten blau', [], []);
+      expect(spy).toHaveBeenCalledWith(win.instanceId, 'Mach die Tasten blau', [], [], []);
     });
 
     it('bleibt nach dem Absenden offen (der Dialog geht weiter)', async () => {
@@ -743,7 +743,7 @@ describe('AppWindow', () => {
 
       useAgentsStore().jobs = [{
         jobId: 'job-1', appKey: 'rechner-1', state: 'running', instanceId: win.instanceId,
-        appId: 'rechner-1', label: 'Rechner', prompt: 'Mach was', attachments: [], elements: [], cancelled: false,
+        appId: 'rechner-1', label: 'Rechner', prompt: 'Mach was', attachments: [], elements: [], assets: [], cancelled: false,
       }];
       await flushPromises();
 
@@ -831,7 +831,7 @@ describe('AppWindow — Elemente markieren', () => {
     await wrapper.get('textarea').setValue('mach das größer');
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' });
 
-    expect(spy).toHaveBeenCalledWith(win.instanceId, 'mach das größer', [], [REF]);
+    expect(spy).toHaveBeenCalledWith(win.instanceId, 'mach das größer', [], [REF], []);
     await flushPromises();
     expect(wrapper.findAll('.ref-chip')).toHaveLength(0);
     expect(wrapper.getComponent(AppCanvas).props('picking')).toBe(false);

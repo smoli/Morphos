@@ -31,6 +31,9 @@ import {
   type View,
 } from '@/core/design';
 import { getHost } from '@/services/host';
+// Die Beigaben der App (e16) liegen auf der Platte; hierher kommt nur die
+// Auskunft über sie — gelesen hat sie der Hauptprozess (core/assetstore).
+import type { AssetInfo } from '@/core/assets';
 import { agentEventLabel } from '@/core/agent';
 import { refLabel } from '@/core/pick';
 import { extractIcon } from '@/core/html';
@@ -64,6 +67,12 @@ interface AppState {
   versions: VersionInfo[];
   /** Dialogverlauf mit dem LLM (persistiert als chat.json, ohne Revert). */
   chat: ChatMessage[];
+  /**
+   * Die Beigaben der App (e16) — nur die Auskunft über die Dateien unter
+   * `assets/`, nie ihre Bytes. Sie sind die Auswahl, aus der der Composer eine
+   * zum Wunsch mitschickt (c0118); ein Entwurf hat noch keine.
+   */
+  assets: AssetInfo[];
   /** Offene Rückfrage des LLM — die Oberfläche klappt dann den Chat auf. */
   pendingQuestion: string | null;
   /**
@@ -132,6 +141,7 @@ export function useAppWindow(instanceId: string) {
     docs: { ...EMPTY_DOCS },
     versions: [],
     chat: [],
+    assets: [],
     pendingQuestion: null,
     composerOpen: false,
     designOpen: false,
@@ -458,6 +468,7 @@ export function useAppWindow(instanceId: string) {
         this.currentHtml = data.html;
         this.docs = toDocs(data.docs);
         this.chat = data.chat ?? [];
+        this.assets = data.assets ?? [];
         this.pendingQuestion = null;
         this.activity = [];
         this.runStartedAt = null;
@@ -510,7 +521,12 @@ export function useAppWindow(instanceId: string) {
      * Während der Lauf arbeitet, strömen seine Fortschrittsereignisse herein
      * (activity) — der Chat zeigt live, was der Agent gerade tut.
      */
-    async generate(prompt: string, attachments: Attachment[] = [], elements: ElementRef[] = []): Promise<void> {
+    async generate(
+      prompt: string,
+      attachments: Attachment[] = [],
+      elements: ElementRef[] = [],
+      assets: string[] = [],
+    ): Promise<void> {
       if (this.busy) return;
       const text = prompt.trim();
       if (!text) {
@@ -538,6 +554,9 @@ export function useAppWindow(instanceId: string) {
         // Reine Werte übergeben (kein reaktiver Proxy) — Electron-IPC nutzt structured clone.
         const plainAtts = attachments.map((a) => ({ path: a.path, name: a.name, kind: a.kind }));
         const plainRefs = JSON.parse(JSON.stringify(elements)) as ElementRef[];
+        // Die mitgeschickten Beigaben sind bloße Pfade in der App (c0118) — was
+        // dahinter liegt, holt sich der Hauptprozess aus ihrem Ordner.
+        const plainAssets = assets.map((a) => String(a));
         // Der bisherige Dialog OHNE den aktuellen Wunsch — der geht separat in den Prompt.
         const priorChat = JSON.parse(JSON.stringify(this.chat)) as ChatMessage[];
 
@@ -546,6 +565,7 @@ export function useAppWindow(instanceId: string) {
           text,
           ...(plainAtts.length ? { attachments: plainAtts.map((a) => a.name) } : {}),
           ...(plainRefs.length ? { elements: plainRefs.map(refLabel) } : {}),
+          ...(plainAssets.length ? { assets: [...plainAssets] } : {}),
           time: Date.now(),
         });
         this.pendingQuestion = null;
@@ -562,6 +582,7 @@ export function useAppWindow(instanceId: string) {
         // ohnehin deren eigener Quelltext (siehe core/framework).
         const res = await getHost().generate(
           text, this.folder, this.id, priorChat, plainAtts, runId, this.newFramework, plainRefs, plainDesign,
+          plainAssets,
         );
         // Abgebrochen: Das (Teil-)Ergebnis wird verworfen und der Wunsch aus dem
         // Dialog genommen — die App bleibt, wie sie war, und der Abbruch selbst

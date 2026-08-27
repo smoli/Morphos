@@ -3,6 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils';
 import ChatDock from './ChatDock.vue';
 import { setHost } from '@/services/host';
 import type { ChatMessage, ElementRef, MorphosHost } from '@/types';
+import type { AssetInfo } from '@/core/assets';
 
 const messages: ChatMessage[] = [
   { role: 'user', text: 'Ein Spiel', time: 1 },
@@ -52,7 +53,7 @@ describe('ChatDock', () => {
     await input.trigger('keydown', { key: 'Enter' });
 
     expect(wrapper.emitted('submit')).toBeTruthy();
-    expect(wrapper.emitted('submit')![0]).toEqual(['Ein Taschenrechner', []]);
+    expect(wrapper.emitted('submit')![0]).toEqual(['Ein Taschenrechner', [], []]);
     expect((input.element as HTMLTextAreaElement).value).toBe('');
   });
 
@@ -78,7 +79,7 @@ describe('ChatDock', () => {
     expect(wrapper.get('.send').attributes('disabled')).toBeUndefined();
 
     await input.trigger('keydown', { key: 'Enter' });
-    expect(wrapper.emitted('submit')![0]).toEqual(['und noch das hier', []]);
+    expect(wrapper.emitted('submit')![0]).toEqual(['und noch das hier', [], []]);
   });
 
   it('führt wartende Wünsche im Fortschritt mit auf', async () => {
@@ -205,6 +206,7 @@ describe('ChatDock', () => {
     expect(wrapper.emitted('submit')![0]).toEqual([
       'Baue das nach',
       [{ path: '/tmp/shot.png', name: 'shot.png', kind: 'image' }],
+      [],
     ]);
     // Nach dem Senden sind die Chips geleert.
     expect(wrapper.text()).not.toContain('shot.png');
@@ -379,6 +381,7 @@ describe('ChatDock', () => {
       expect(wrapper.emitted('submit')![0]).toEqual([
         'Baue das nach',
         [{ path: '/tmp/einfuegen-1.png', name: 'einfuegen-1.png', kind: 'image' }],
+        [],
       ]);
     });
 
@@ -523,7 +526,7 @@ describe('ChatDock', () => {
       expect(wrapper.get('.send').attributes('disabled')).toBeUndefined();
 
       await input.trigger('keydown', { key: 'Enter' });
-      expect(wrapper.emitted('submit')![0]).toEqual(['Mach den Knopf grün', []]);
+      expect(wrapper.emitted('submit')![0]).toEqual(['Mach den Knopf grün', [], []]);
       openSpy.mockRestore();
     });
 
@@ -622,5 +625,118 @@ describe('ChatDock — markierte Elemente', () => {
       messages: [{ role: 'user', text: 'mach das größer', elements: ['<button> „Los“'], time: 1 }],
     });
     expect(wrapper.text()).toContain('<button> „Los“');
+  });
+});
+
+/** Die Beigaben einer App, wie sie der Composer zur Auswahl bekommt (c0118). */
+const ASSETS: AssetInfo[] = [
+  { name: 'logo.png', path: 'assets/logo.png', mime: 'image/png', size: 12 },
+  { name: 'schrift.woff2', path: 'assets/schrift.woff2', mime: 'font/woff2', size: 40 },
+];
+
+describe('ChatDock — Beigaben der App anhängen (c0118)', () => {
+  beforeEach(() => setHost(makeHost()));
+
+  it('bietet die Beigaben der App gar nicht erst an, wenn sie keine hat', () => {
+    expect(mountDock().find('.attach-asset').exists()).toBe(false);
+    expect(mountDock({ assets: [] }).find('.attach-asset').exists()).toBe(false);
+  });
+
+  it('listet die Beigaben der App zur Auswahl auf', async () => {
+    const wrapper = mountDock({ assets: ASSETS });
+    await wrapper.get('.attach-asset').trigger('click');
+
+    const items = wrapper.findAll('.asset-option');
+    expect(items).toHaveLength(2);
+    expect(items[0].text()).toContain('logo.png');
+    expect(items[1].text()).toContain('schrift.woff2');
+  });
+
+  it('hängt die gewählte Beigabe an und schickt ihren Pfad in der App mit', async () => {
+    const wrapper = mountDock({ assets: ASSETS });
+    await wrapper.get('.attach-asset').trigger('click');
+    await wrapper.findAll('.asset-option')[0].trigger('click');
+
+    expect(wrapper.get('.asset-chip').text()).toContain('logo.png');
+
+    const input = wrapper.get('textarea');
+    await input.setValue('nimm das Logo in die Kopfzeile');
+    await input.trigger('keydown', { key: 'Enter' });
+
+    expect(wrapper.emitted('submit')![0]).toEqual(['nimm das Logo in die Kopfzeile', [], ['assets/logo.png']]);
+    // Nach dem Senden ist der Tisch leer — die Beigabe galt genau diesem Wunsch.
+    expect(wrapper.find('.asset-chip').exists()).toBe(false);
+  });
+
+  it('hängt auch mehrere an — und dieselbe nur einmal', async () => {
+    const wrapper = mountDock({ assets: ASSETS });
+    await wrapper.get('.attach-asset').trigger('click');
+    await wrapper.findAll('.asset-option')[0].trigger('click');
+    await wrapper.get('.attach-asset').trigger('click');
+    await wrapper.findAll('.asset-option')[0].trigger('click');
+
+    expect(wrapper.findAll('.asset-chip')).toHaveLength(2);
+
+    const input = wrapper.get('textarea');
+    await input.setValue('beides');
+    await input.trigger('keydown', { key: 'Enter' });
+    expect(wrapper.emitted('submit')![0][2]).toEqual(['assets/logo.png', 'assets/schrift.woff2']);
+  });
+
+  it('bietet eine schon angehängte Beigabe nicht noch einmal an', async () => {
+    const wrapper = mountDock({ assets: ASSETS });
+    await wrapper.get('.attach-asset').trigger('click');
+    await wrapper.findAll('.asset-option')[0].trigger('click');
+    await wrapper.get('.attach-asset').trigger('click');
+
+    const items = wrapper.findAll('.asset-option');
+    expect(items).toHaveLength(1);
+    expect(items[0].text()).toContain('schrift.woff2');
+  });
+
+  it('nimmt eine angehängte Beigabe über ihren Chip wieder weg', async () => {
+    const wrapper = mountDock({ assets: ASSETS });
+    await wrapper.get('.attach-asset').trigger('click');
+    await wrapper.findAll('.asset-option')[0].trigger('click');
+
+    await wrapper.get('.asset-chip .chip-del').trigger('click');
+    expect(wrapper.find('.asset-chip').exists()).toBe(false);
+  });
+
+  it('hält Beigabe und Referenzdatei auseinander — beides geht nebeneinander mit', async () => {
+    setHost(makeHost({
+      chooseAttachment: vi.fn(async () => ({
+        ok: true,
+        attachment: { path: '/tmp/shot.png', name: 'shot.png', kind: 'image' as const },
+      })),
+    }));
+    const wrapper = mountDock({ assets: ASSETS });
+
+    await wrapper.get('.attach').trigger('click');
+    await flushPromises();
+    await wrapper.get('.attach-asset').trigger('click');
+    await wrapper.findAll('.asset-option')[0].trigger('click');
+
+    // Zwei Kärtchen, aber nur EINES ist eine Beigabe.
+    expect(wrapper.findAll('.chip')).toHaveLength(2);
+    expect(wrapper.findAll('.asset-chip')).toHaveLength(1);
+
+    const input = wrapper.get('textarea');
+    await input.setValue('beides');
+    await input.trigger('keydown', { key: 'Enter' });
+
+    expect(wrapper.emitted('submit')![0]).toEqual([
+      'beides',
+      [{ path: '/tmp/shot.png', name: 'shot.png', kind: 'image' }],
+      ['assets/logo.png'],
+    ]);
+  });
+
+  it('zeigt die Beigaben einer Nachricht im Verlauf an', () => {
+    const msgs: ChatMessage[] = [
+      { role: 'user', text: 'nimm das Logo', assets: ['assets/logo.png'], time: 1 },
+    ];
+    const wrapper = mountDock({ messages: msgs });
+    expect(wrapper.get('.msg.user').text()).toContain('assets/logo.png');
   });
 });

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildPrompt, formatDesign, SYSTEM_PROMPT } from './prompt';
 import { mcpToolId } from './mcp';
 import { DESIGN_FILE, DESIGN_VERSION, emptyDesign, type Block, type Design, type Rect } from './design';
+import type { AssetInfo } from './assets';
 import type { ChatMessage } from '@/types';
 
 describe('SYSTEM_PROMPT', () => {
@@ -100,6 +101,15 @@ describe('SYSTEM_PROMPT', () => {
     expect(SYSTEM_PROMPT).toMatch(/verbindlich/i);
     expect(SYSTEM_PROMPT).toMatch(/NUR ZUM LESEN/i);
     expect(SYSTEM_PROMPT).toMatch(/Anteile des App-Fensters/);
+  });
+
+  it('erklärt die Beigaben unter assets/ — Verweis im Code, nur zum Lesen (c0118)', () => {
+    expect(SYSTEM_PROMPT).toContain('BEIGABEN DER APP');
+    expect(SYSTEM_PROMPT).toContain('assets/');
+    // Der Verweis auf eine Beigabe ist die Ausnahme von „nur data:-URIs“ —
+    // sonst traute sich der Agent nicht, sie überhaupt zu benutzen.
+    expect(SYSTEM_PROMPT).toMatch(/data:-URI/);
+    expect(SYSTEM_PROMPT).toMatch(/assets\/[a-z.]+/);
   });
 
   it('nimmt die Dokumente bei einer reinen Rückfrage ausdrücklich aus', () => {
@@ -212,6 +222,74 @@ describe('buildPrompt', () => {
 
   it('lässt den Abschnitt weg, wenn nichts markiert ist', () => {
     expect(buildPrompt('x', [], { hasApp: true })).not.toContain('REFERENZIERTE ELEMENTE');
+  });
+});
+
+/** Eine Beigabe der App, wie sie core/assetstore ausweist (nur die Auskunft). */
+function asset(name: string, mime: string, size = 100): AssetInfo {
+  return { name, path: `assets/${name}`, mime, size };
+}
+
+describe('buildPrompt mit mitgeschickten Beigaben (c0118)', () => {
+  it('nennt jede mitgeschickte Beigabe mit ihrem Pfad in der App', () => {
+    const p = buildPrompt('nimm das Logo in die Kopfzeile', [], {
+      hasApp: true,
+      assets: [asset('logo.png', 'image/png'), asset('daten.json', 'application/json')],
+    });
+    expect(p).toContain('MITGESCHICKTE BEIGABEN');
+    expect(p).toContain('assets/logo.png');
+    expect(p).toContain('assets/daten.json');
+    expect(p).toContain('image/png');
+  });
+
+  it('lässt ein Bild unter GENAU DIESEM Pfad lesen — ohne absoluten Pfad', () => {
+    const p = buildPrompt('nimm das Logo', [], { hasApp: true, assets: [asset('logo.png', 'image/png')] });
+    const line = p.split('\n').find((l) => l.includes('assets/logo.png')) ?? '';
+    expect(line).toMatch(/Read/);
+    expect(line).toContain('assets/logo.png');
+    expect(p).not.toMatch(/\/(tmp|Users|home)\//);
+  });
+
+  it('sagt bei einer Datendatei, dass ihr INHALT in den Code gehört (JS wird nicht gebündelt)', () => {
+    const p = buildPrompt('lies die Tabelle ein', [], { hasApp: true, assets: [asset('daten.json', 'application/json')] });
+    const line = p.split('\n').find((l) => l.includes('assets/daten.json')) ?? '';
+    expect(line).toMatch(/Read/);
+    expect(line).toMatch(/Inhalt/);
+  });
+
+  it('schickt eine Schrift zum @font-face — dort wird sie eingesetzt, nicht gelesen', () => {
+    const p = buildPrompt('nimm die Schrift', [], { hasApp: true, assets: [asset('schrift.woff2', 'font/woff2')] });
+    const line = p.split('\n').find((l) => l.includes('assets/schrift.woff2')) ?? '';
+    expect(line).toContain('url(assets/schrift.woff2)');
+    expect(line).not.toMatch(/Read/);
+  });
+
+  it('sagt im Abschnitt selbst, dass die Beigabe schon in der App liegt und ihm nicht gehört', () => {
+    const p = buildPrompt('x', [], { hasApp: true, assets: [asset('logo.png', 'image/png')] });
+    expect(p).toMatch(/liegen bereits|liegt bereits/);
+    expect(p).toMatch(/nur lesen|NUR ZUM LESEN|niemals/i);
+  });
+
+  it('steht vor dem Wunsch — er bezieht sich darauf', () => {
+    const p = buildPrompt('nimm das Logo', [], { hasApp: true, assets: [asset('logo.png', 'image/png')] });
+    expect(p.indexOf('MITGESCHICKTE BEIGABEN')).toBeLessThan(p.indexOf('nimm das Logo'));
+  });
+
+  it('lässt den Abschnitt ohne Beigaben weg', () => {
+    expect(buildPrompt('x', [], { hasApp: true })).not.toContain('MITGESCHICKTE BEIGABEN');
+    expect(buildPrompt('x', [], { hasApp: true, assets: [] })).not.toContain('MITGESCHICKTE BEIGABEN');
+  });
+
+  it('steht neben den Referenzdateien — beides geht nebeneinander mit', () => {
+    const p = buildPrompt('x', [], {
+      hasApp: true,
+      attachments: [{ name: 'screenshot.png', kind: 'image', path: '/tmp/screenshot.png' }],
+      assets: [asset('logo.png', 'image/png')],
+    });
+    expect(p).toContain('REFERENZDATEIEN');
+    expect(p).toContain('/tmp/screenshot.png');
+    expect(p).toContain('MITGESCHICKTE BEIGABEN');
+    expect(p).toContain('assets/logo.png');
   });
 });
 

@@ -146,6 +146,32 @@ export async function removeAsset(dir: string, pathOrName: string): Promise<bool
 }
 
 /**
+ * Die zu EINEM Wunsch mitgeschickten Beigaben (c0118): Aus dem, was der Anwender
+ * im Composer ausgewählt hat, wird das, was auch wirklich im Asset-Ordner liegt.
+ *
+ * Maßgeblich ist die Platte, nicht die Auswahl. Ein Pfad, zu dem es keine Datei
+ * (mehr) gibt, käme sonst als Anweisung im Prompt an, etwas zu lesen, das es
+ * nicht gibt — und ein Pfad, der gar keiner ist, führte aus dem Ordner hinaus
+ * (die Prüfung geschieht am Namen, wie überall hier). Doppelt Genanntes fällt
+ * weg; die Reihenfolge des Anwenders bleibt, denn sie ist seine Aussage darüber,
+ * worum es ihm zuerst geht.
+ */
+export function pickAssets(dir: string, wanted: readonly string[]): AssetInfo[] {
+  if (!wanted?.length) return [];
+  const have = new Map(listAssets(dir).map((a) => [a.name, a]));
+  const picked: AssetInfo[] = [];
+  const seen = new Set<string>();
+  for (const w of wanted) {
+    const name = assetName(w);
+    const info = name ? have.get(name) : undefined;
+    if (!info || seen.has(name)) continue;
+    seen.add(name);
+    picked.push(info);
+  }
+  return picked;
+}
+
+/**
  * Die Asset-Karte fürs Bündeln (c0117): in-App-Pfad → `data:`-URI, genau das,
  * was `bundle` als dritten Satz erwartet. Hier — und nur hier — treffen sich
  * Bytes und Medientyp; `bundle` selbst bleibt rein und weiß von keiner Platte.

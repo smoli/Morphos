@@ -6,6 +6,7 @@ import { useElapsed } from '@/composables/useElapsed';
 import { renderMarkdown } from '@/core/markdown';
 import { refKey, refLabel } from '@/core/pick';
 import type { AgentEvent, Attachment, ChatMessage, ElementRef, Framework } from '@/types';
+import type { AssetInfo } from '@/core/assets';
 
 /**
  * Der Chat einer App: Verlauf, Eingabe, Anhänge und der Fortschritt des
@@ -43,10 +44,16 @@ const props = defineProps<{
   picking?: boolean;
   /** Die bereits markierten Elemente — sie gehen mit dem nächsten Wunsch mit. */
   elements?: ElementRef[];
+  /**
+   * Die Beigaben, die in dieser App liegen (e16) — die Auswahl, aus der der
+   * Anwender eine zu seinem Wunsch mitschickt (c0118). Eine App ohne Beigaben
+   * (und jeder Entwurf) bekommt den Knopf dafür gar nicht erst zu sehen.
+   */
+  assets?: AssetInfo[];
 }>();
 
 const emit = defineEmits<{
-  submit: [text: string, attachments: Attachment[]];
+  submit: [text: string, attachments: Attachment[], assets: string[]];
   'update:framework': [framework: Framework];
   'update:picking': [on: boolean];
   /** Ein Kärtchen wurde weggenommen (Selektor des Elements). */
@@ -67,6 +74,11 @@ const text = ref('');
 // und lässt sich auf die reine Eingabezeile zuklappen.
 const open = ref(true);
 const attachments = ref<Attachment[]>([]);
+// Die zu diesem Wunsch mitgeschickten Beigaben der App (c0118) — anders als ein
+// Anhang aus dem Dateidialog liegt jede von ihnen schon in der App; mitgeschickt
+// wird darum nur ihr Pfad dort.
+const pickedAssets = ref<AssetInfo[]>([]);
+const assetList = ref(false);
 const attachError = ref<string | null>(null);
 const panel = ref<HTMLElement | null>(null);
 const input = ref<HTMLTextAreaElement | null>(null);
@@ -87,6 +99,19 @@ const teleportTarget = computed<HTMLElement | string>(() => portalTarget.value ?
 // frisch auf, statt dieselben Knoten hin- und herzuschieben. Der Zustand (Text,
 // Anhänge) lebt in diesem Setup und übersteht den Neuaufbau.
 const placeKey = computed(() => (popped.value ? 'windowed' : 'docked'));
+
+// Zur Wahl steht, was die App hat und noch nicht am Wunsch hängt — was schon
+// dranhängt, ein zweites Mal anzubieten, führte nur zu Doppelungen.
+const freeAssets = computed(() =>
+  (props.assets ?? []).filter((a) => !pickedAssets.value.some((p) => p.path === a.path)),
+);
+
+/** Woran man eine Beigabe erkennt: Bild, Schrift oder schlichte Datei. */
+function assetIcon(asset: AssetInfo): string {
+  if (asset.mime.startsWith('image/')) return '🖼';
+  if (asset.mime.startsWith('font/')) return '🔤';
+  return '📄';
+}
 
 // Das Eingabefeld wächst mit dem Inhalt (bis zu 6 Zeilen).
 const rows = computed(() => Math.min(6, Math.max(1, text.value.split('\n').length)));
@@ -194,9 +219,11 @@ function onKeydown(e: KeyboardEvent): void {
 function send(): void {
   const t = text.value.trim();
   if (!t) return;
-  emit('submit', t, attachments.value.map((a) => ({ ...a })));
+  emit('submit', t, attachments.value.map((a) => ({ ...a })), pickedAssets.value.map((a) => a.path));
   text.value = '';
   attachments.value = [];
+  pickedAssets.value = [];
+  assetList.value = false;
 }
 
 async function attach(): Promise<void> {
@@ -225,6 +252,21 @@ function togglePick(): void {
 
 function removeAttachment(path: string): void {
   attachments.value = attachments.value.filter((a) => a.path !== path);
+}
+
+/** Die Liste der Beigaben auf- bzw. zuklappen (📦). */
+function toggleAssetList(): void {
+  assetList.value = !assetList.value;
+}
+
+/** Eine Beigabe der App an diesen Wunsch hängen — danach ist die Liste wieder zu. */
+function attachAsset(asset: AssetInfo): void {
+  if (!pickedAssets.value.some((a) => a.path === asset.path)) pickedAssets.value.push({ ...asset });
+  assetList.value = false;
+}
+
+function removeAsset(path: string): void {
+  pickedAssets.value = pickedAssets.value.filter((a) => a.path !== path);
 }
 
 /** Cmd/Ctrl+V: Bilder aus der Zwischenablage (z. B. Screenshots) als Referenz anhängen. */
@@ -289,8 +331,11 @@ function fmt(ts: number): string {
             <div v-if="msg.role === 'assistant'" class="msg assistant md" v-html="renderMarkdown(msg.text)"></div>
             <div v-else class="msg user">
               <div class="text">{{ msg.text }}</div>
-              <div v-if="msg.attachments?.length || msg.elements?.length" class="atts">
+              <div v-if="msg.attachments?.length || msg.assets?.length || msg.elements?.length" class="atts">
                 <span v-for="name in msg.attachments" :key="name" class="att">📎 {{ name }}</span>
+                <!-- Beigaben der App (c0118): eigenes Zeichen, denn sie liegen IN
+                     der App und kamen nicht von außen. -->
+                <span v-for="p in msg.assets" :key="p" class="att att-asset">📦 {{ p }}</span>
                 <span v-for="label in msg.elements" :key="label" class="att">🎯 {{ label }}</span>
               </div>
               <div class="time">{{ fmt(msg.time) }}</div>
@@ -318,10 +363,21 @@ function fmt(ts: number): string {
           </div>
         </div>
 
-        <div v-if="attachments.length || elements?.length" class="chips">
+        <div v-if="attachments.length || pickedAssets.length || elements?.length" class="chips">
           <span v-for="a in attachments" :key="a.path" class="chip" :title="a.path">
             {{ a.kind === 'image' ? '🖼' : '📄' }} {{ a.name }}
             <button type="button" class="chip-del" title="Entfernen" @click="removeAttachment(a.path)">✕</button>
+          </span>
+          <!-- Beigaben der App: dieselbe Reihe, aber eigens gezeichnet — sie
+               liegen bereits in der App und werden nur benannt (c0118). -->
+          <span
+            v-for="a in pickedAssets"
+            :key="a.path"
+            class="chip asset-chip"
+            :title="`${a.path} — liegt in der App`"
+          >
+            📦 {{ a.name }}
+            <button type="button" class="chip-del" title="Entfernen" @click="removeAsset(a.path)">✕</button>
           </span>
           <!-- Markierte Elemente der App: dieselbe Reihe wie die Anhänge — beides
                ist Beiwerk zum Wunsch, das mit ihm abgeschickt wird. -->
@@ -336,6 +392,21 @@ function fmt(ts: number): string {
               ✕
             </button>
           </span>
+        </div>
+        <!-- Die Beigaben der App zur Auswahl — sie klappen über der Eingabe auf. -->
+        <div v-if="assetList" class="asset-list">
+          <button
+            v-for="a in freeAssets"
+            :key="a.path"
+            type="button"
+            class="asset-option"
+            :title="a.path"
+            @click="attachAsset(a)"
+          >
+            <span class="asset-icon">{{ assetIcon(a) }}</span>
+            <span class="asset-name">{{ a.name }}</span>
+          </button>
+          <p v-if="!freeAssets.length" class="asset-empty">Alle Beigaben dieser App hängen schon am Wunsch.</p>
         </div>
         <div v-if="attachError" class="attach-error">{{ attachError }}</div>
 
@@ -367,6 +438,16 @@ function fmt(ts: number): string {
           </button>
           <button type="button" class="attach" title="Referenzdatei anhängen (Bild oder Text)" @click="attach">
             📎
+          </button>
+          <button
+            v-if="assets?.length"
+            type="button"
+            class="attach-asset"
+            :class="{ on: assetList }"
+            title="Beigabe dieser App anhängen (liegt unter assets/ und wird dem Agenten mit ihrem Pfad genannt)"
+            @click="toggleAssetList"
+          >
+            📦
           </button>
           <button
             v-if="canPick"
@@ -662,6 +743,7 @@ function fmt(ts: number): string {
 .toggle,
 .popout,
 .attach,
+.attach-asset,
 .pick {
   flex-shrink: 0;
   background: var(--panel-2);
@@ -675,6 +757,7 @@ function fmt(ts: number): string {
 .toggle:hover,
 .popout:hover,
 .attach:hover,
+.attach-asset:hover,
 .pick:hover {
   border-color: var(--accent);
 }
@@ -685,6 +768,57 @@ function fmt(ts: number): string {
 }
 .ref-chip {
   border-color: var(--accent);
+}
+/* Die Liste steht offen — der Knopf zeigt es, wie beim Zielmodus auch. */
+.attach-asset.on {
+  border-color: var(--accent);
+}
+/* Eine Beigabe der App ist kein Anhang von außen: eigene Kante, eigenes
+   Zeichen — im Kärtchen wie in der Nachricht (c0118). */
+.asset-chip {
+  border-color: #7fd1a8;
+}
+.att-asset {
+  border-color: rgba(127, 209, 168, 0.7);
+}
+/* Die Beigaben der App zur Auswahl: eine kurze Liste über der Eingabe, die auf
+   Zuruf aufgeht und sich mit der Wahl wieder schließt. */
+.asset-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+.asset-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 3px 8px;
+  cursor: pointer;
+  max-width: 240px;
+}
+.asset-option:hover {
+  border-color: #7fd1a8;
+}
+.asset-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
 }
 textarea {
   flex: 1;

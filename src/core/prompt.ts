@@ -4,6 +4,7 @@ import { mcpToolId } from './mcptools';
 import { PREACT_LIB } from './framework';
 import { formatElementRefs } from './pick';
 import { DESIGN_FILE, hasContent, type Block, type Design } from './design';
+import { ASSETS_DIR, type AssetInfo } from './assets';
 
 /** Für den Prompt aufbereitete Referenzdatei: Text inline, Bild als Pfad. */
 export interface PromptAttachment {
@@ -31,6 +32,14 @@ export interface PromptContext {
    * Prompt — der Agent liest sie selbst (c0087).
    */
   hasApp?: boolean;
+  /**
+   * Die zu DIESEM Wunsch mitgeschickten Beigaben der App (e16/c0118) — nur die
+   * Auskunft über sie, nie ihre Bytes. Anders als eine Referenzdatei
+   * (`attachments`) liegt eine Beigabe schon in der App: Sie wird über ihren
+   * Pfad in der App genannt, und ein Bild liest der Agent unter genau diesem
+   * Pfad — sein Arbeitsverzeichnis IST der Ordner der App.
+   */
+  assets?: AssetInfo[];
   /**
    * Der UI-Entwurf der App (core/design). Anders als die Quellen geht er sehr
    * wohl in den Prompt — nicht als JSON, sondern als lesbarer Baum: Er ist die
@@ -149,7 +158,8 @@ export const SYSTEM_PROMPT = [
   'HARTE REGELN FÜR DIE APP:',
   '1. Keine externen Dateien, keine CDNs, keine Netzwerk-Requests, keine externen',
   '   Schriftarten. Die App läuft offline — eine Content-Security-Policy blockiert',
-  '   jeden Netzwerkzugriff technisch. Bilder/Medien nur als data:-URI oder Canvas/SVG.',
+  '   jeden Netzwerkzugriff technisch. Bilder/Medien nur als data:-URI oder Canvas/SVG —',
+  `   oder als Verweis auf eine Beigabe unter ${ASSETS_DIR}/ (siehe "BEIGABEN DER APP").`,
   '2. Die App läuft in einem gesicherten Sandbox-iframe OHNE same-origin-Zugriff.',
   '   Verwende daher KEIN localStorage, sessionStorage, keine Cookies und kein window.parent.',
   '3. Baue eine ansprechende, moderne, benutzbare Oberfläche.',
@@ -160,6 +170,24 @@ export const SYSTEM_PROMPT = [
   'REFERENZDATEIEN (optional):',
   '- Der Anwender kann Dateien mitschicken; sie stehen unten mit ihrem Pfad. Lies sie',
   '  mit Read — auch Bilder wie Screenshots — und orientiere dich an dem, was du siehst.',
+  '',
+  'BEIGABEN DER APP (optional):',
+  '- Der Anwender kann eigene Dateien in seine App legen — Bilder, Schriften, Datendateien.',
+  `  Sie liegen unter ${ASSETS_DIR}/ im Wurzelverzeichnis, gehören IHM und sind für dich NUR`,
+  '  ZUM LESEN: Ändere und lösche sie niemals (jeder Schreibversuch würde ohnehin abgewiesen).',
+  '- Schickt er eine zu seinem Wunsch mit, steht sie unten unter "MITGESCHICKTE BEIGABEN',
+  '  DER APP" — mit ihrem Pfad in der App. Nur was dort steht, ist gemeint.',
+  '- Im MARKUP und im CSS verweist du auf eine Beigabe über genau diesen Pfad:',
+  `    <img src="${ASSETS_DIR}/logo.png">   bzw.   url(${ASSETS_DIR}/schrift.woff2) im @font-face`,
+  '  Beim Bündeln setzt Morphos an dieser Stelle ihre data:-URI ein — die App bleibt damit',
+  '  offline geschlossen, und Regel 1 ist eingehalten. Baue KEINE data:-URI von Hand.',
+  '- Im JAVASCRIPT trägt der Pfad nicht: Zeichenketten im Code rührt das Bündeln nicht an,',
+  '  und laden lässt sich zur Laufzeit nichts (kein Netz, kein Ursprung). Brauchst du den',
+  '  INHALT einer Datendatei, lies ihn mit Read und nimm ihn in den Code auf.',
+  '- Ein Bild siehst du dir mit Read unter demselben Pfad an — dein Arbeitsverzeichnis IST',
+  '  der Ordner der App. Es braucht dafür keinen absoluten Pfad.',
+  `- Erfinde keine Beigabe: Ein ${ASSETS_DIR}/-Pfad, den niemand genannt hat und den auch`,
+  '  Glob nicht findet, existiert nicht — verweise dann lieber auf nichts.',
   '',
   'MARKIERTE ELEMENTE (optional):',
   '- Der Anwender kann Elemente der laufenden App anklicken und mitschicken; sie stehen',
@@ -337,6 +365,50 @@ export function formatDesign(design?: Design): string[] {
   return parts;
 }
 
+/**
+ * Was mit dieser Beigabe im Code zu tun ist — abgeleitet aus ihrem Medientyp.
+ * Ein Bild und eine Schrift werden VERWIESEN (das Bündeln setzt dort die
+ * `data:`-URI ein, c0117), eine Datendatei dagegen GELESEN: Eine Zeichenkette
+ * im JavaScript rührt das Bündeln nicht an, und zur Laufzeit lädt die App
+ * nichts nach — ihr Inhalt muss also im Code stehen.
+ */
+function assetHint(a: AssetInfo): string {
+  if (a.mime.startsWith('image/')) {
+    return `Bild — sieh es dir bei Bedarf mit Read unter ${a.path} an; im Markup/CSS über genau diesen Pfad verwenden`;
+  }
+  if (a.mime.startsWith('font/')) return `Schrift — im CSS über url(${a.path}) einbinden (@font-face)`;
+  if (a.mime.startsWith('audio/') || a.mime.startsWith('video/')) {
+    return 'Medien — im Markup über genau diesen Pfad verwenden';
+  }
+  if (a.mime.startsWith('text/') || a.mime === 'application/json' || a.mime === 'application/xml') {
+    return `Datendatei — lies sie mit Read unter ${a.path} und nimm ihren Inhalt in den Code auf`;
+  }
+  return 'über genau diesen Pfad verwenden';
+}
+
+/**
+ * Die zu diesem Wunsch mitgeschickten Beigaben (c0118). Genannt wird jede mit
+ * ihrem Pfad IN DER APP (`assets/logo.png`) — und der ist zugleich der Pfad, an
+ * dem der Agent sie findet: Sein Arbeitsverzeichnis IST der Ordner der App, ein
+ * absoluter Pfad wie bei einer Referenzdatei aus dem Dateidialog braucht es
+ * darum nicht. Ohne Beigaben kommt nichts zurück: Dann soll im Prompt auch kein
+ * Wort darüber stehen.
+ */
+export function formatAssets(assets: readonly AssetInfo[] = []): string[] {
+  if (assets.length === 0) return [];
+
+  const parts: string[] = [
+    'MITGESCHICKTE BEIGABEN DER APP (der Anwender hat sie zu diesem Wunsch mitgeschickt):',
+    '(Sie liegen bereits im Ordner der App — deinem Arbeitsverzeichnis — unter dem',
+    ' genannten Pfad. Sie gehören dem Anwender und sind NUR ZUM LESEN: Ändere und lösche',
+    ' sie niemals. Wo eine von ihnen im Markup oder im CSS steht, setzt das Bündeln ihre',
+    ' data:-URI ein — schreib also den Pfad hin und niemals eine data:-URI von Hand.)',
+  ];
+  for (const a of assets) parts.push(`- ${a.path} (${a.mime}) — ${assetHint(a)}`);
+  parts.push('');
+  return parts;
+}
+
 /** Kürzt eine Dialognachricht für den Prompt-Kontext. */
 function clip(text: string): string {
   return text.length > MAX_CHAT_CHARS ? `${text.slice(0, MAX_CHAT_CHARS)} …` : text;
@@ -391,6 +463,11 @@ export function buildPrompt(
     }
     parts.push('');
   }
+
+  // Die mitgeschickten Beigaben stehen bei den Referenzdateien: Beides ist, was
+  // der Anwender diesem Wunsch beilegt — die einen von außen, die anderen aus
+  // der App selbst.
+  parts.push(...formatAssets(context.assets ?? []));
 
   // Der gezeichnete Aufbau der Oberfläche — er gilt für den ganzen Lauf und
   // steht deshalb vor dem, was der Anwender gerade markiert hat.

@@ -6,6 +6,7 @@ import { setHost } from '@/services/host';
 const useAppStore = () => useAppWindow('test');
 import type { AgentEvent, AppData, AppSnapshot, ElementRef, GenerateResult, MorphosHost, SourceFile, VersionInfo } from '@/types';
 import { DEFAULT_BLOCK_NAME, emptyDesign, type Design } from '@/core/design';
+import type { AssetInfo } from '@/core/assets';
 
 const DOC = (body: string, title = 'Test', icon = '🧪'): string =>
   `<!DOCTYPE html><html><head><title>${title}</title><meta name="morphos:icon" content="${icon}"></head><body>${body}</body></html>`;
@@ -117,6 +118,7 @@ describe('useAppStore', () => {
       'preact',
       [],
       undefined,
+      [],
     );
     expect(store.name).toBe('Taschenrechner');
     expect(store.icon).toBe('🧮');
@@ -1683,5 +1685,77 @@ describe('useAppWindow — markierte Elemente', () => {
     const call = (host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[0];
     expect(call[7]).toEqual([REF]);
     expect(store.chat[0].elements).toEqual(['<button> „Los“']);
+  });
+});
+
+describe('useAppWindow — mitgeschickte Beigaben (c0118)', () => {
+  const ASSETS: AssetInfo[] = [
+    { name: 'logo.png', path: 'assets/logo.png', mime: 'image/png', size: 12 },
+    { name: 'daten.json', path: 'assets/daten.json', mime: 'application/json', size: 2 },
+  ];
+
+  it('lädt die Beigaben der App beim Öffnen mit — als Auswahl für den Composer', async () => {
+    const host = makeHost({
+      loadApp: vi.fn(async (): Promise<AppData> => ({
+        id: 'rechner-1', name: 'Rechner', icon: '🧮', createdAt: 1, updatedAt: 2,
+        files: FILES(DOC('calc')), html: DOC('calc'), chat: [], assets: ASSETS,
+      })),
+    });
+    setHost(host);
+    const store = useAppStore();
+
+    await store.open('/apps', 'rechner-1');
+
+    expect(store.assets).toEqual(ASSETS);
+  });
+
+  it('bleibt bei einer App ohne Beigaben leer — und ein Entwurf hat keine', async () => {
+    setHost(makeHost({
+      loadApp: vi.fn(async (): Promise<AppData> => ({
+        id: 'rechner-1', name: 'Rechner', icon: '🧮', createdAt: 1, updatedAt: 2,
+        files: FILES(DOC('calc')), html: DOC('calc'), chat: [],
+      })),
+    }));
+    const store = useAppStore();
+
+    await store.open('/apps', 'rechner-1');
+    expect(store.assets).toEqual([]);
+
+    store.newDraft('/apps');
+    expect(store.assets).toEqual([]);
+  });
+
+  it('schickt die ausgewählten Beigaben mit dem Wunsch an den Host', async () => {
+    const host = makeHost();
+    setHost(host);
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    await store.generate('nimm das Logo in die Kopfzeile', [], [], ['assets/logo.png']);
+
+    const call = (host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[0];
+    expect(call[9]).toEqual(['assets/logo.png']);
+    expect(() => structuredClone(call)).not.toThrow();
+  });
+
+  it('vermerkt sie an der Nachricht des Anwenders — getrennt von den Referenzen', async () => {
+    setHost(makeHost());
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    await store.generate('nimm das Logo', [], [], ['assets/logo.png']);
+
+    expect(store.chat[0].assets).toEqual(['assets/logo.png']);
+    expect(store.chat[0].attachments).toBeUndefined();
+  });
+
+  it('vermerkt nichts, wenn keine mitgeschickt wurde', async () => {
+    setHost(makeHost());
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    await store.generate('nur ein Wunsch');
+
+    expect(store.chat[0].assets).toBeUndefined();
   });
 });

@@ -135,6 +135,19 @@ describe('useAgentsStore', () => {
     expect(call[7]).toEqual([ref]);
   });
 
+  it('trägt die mitgeschickten Beigaben des Wunsches bis in die Generierung (c0118)', async () => {
+    const host = makeHost();
+    setHost(host);
+    const agents = useAgentsStore();
+    const win = openWindow('a-1', 'A');
+
+    agents.submit(win, 'nimm das Logo', [], [], ['assets/logo.png']);
+    await flush();
+
+    const call = (host.generate as unknown as { mock: { calls: unknown[][] } }).mock.calls[0];
+    expect(call[9]).toEqual(['assets/logo.png']);
+  });
+
   describe('Deckel und Warteschlange', () => {
     it('startet bis zum Deckel und reiht den Rest ein', async () => {
       const slow = makeSlowHost();

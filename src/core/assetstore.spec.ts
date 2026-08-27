@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { addAsset, assetDataUris, assetsDir, listAssets, readAsset, removeAsset } from './assetstore';
+import { addAsset, assetDataUris, assetsDir, listAssets, pickAssets, readAsset, removeAsset } from './assetstore';
 import { readSourceFiles, writeAppState } from './appstore';
 import { listVersions, restoreVersion } from './gitstore';
 import type { AppMeta } from '@/types';
@@ -212,5 +212,46 @@ describe('assetDataUris — die Karte fürs Bündeln', () => {
 
   it('liefert eine leere Karte, wenn die App keine Assets hat', () => {
     expect(assetDataUris(dir)).toEqual({});
+  });
+});
+
+describe('pickAssets — die zu einem Wunsch mitgeschickten Beigaben (c0118)', () => {
+  it('macht aus der Auswahl des Anwenders die Auskunft über die Dateien', async () => {
+    await addAsset(dir, 'logo.png', BINARY);
+    await addAsset(dir, 'daten.json', Buffer.from('{}'));
+
+    expect(pickAssets(dir, ['assets/logo.png'])).toEqual([
+      { name: 'logo.png', path: 'assets/logo.png', mime: 'image/png', size: BINARY.length },
+    ]);
+  });
+
+  it('nimmt auch den bloßen Namen an — behält aber die Reihenfolge der Auswahl', async () => {
+    await addAsset(dir, 'logo.png', BINARY);
+    await addAsset(dir, 'daten.json', Buffer.from('{}'));
+
+    expect(pickAssets(dir, ['daten.json', 'assets/logo.png']).map((a) => a.path))
+      .toEqual(['assets/daten.json', 'assets/logo.png']);
+  });
+
+  it('lässt weg, was es gar nicht gibt — der Prompt nennt nur wirklich vorhandene Dateien', async () => {
+    await addAsset(dir, 'logo.png', BINARY);
+
+    expect(pickAssets(dir, ['assets/fehlt.png', 'assets/logo.png']).map((a) => a.name)).toEqual(['logo.png']);
+    expect(pickAssets(dir, ['assets/fehlt.png'])).toEqual([]);
+  });
+
+  it('nennt dieselbe Beigabe nur einmal', async () => {
+    await addAsset(dir, 'logo.png', BINARY);
+    expect(pickAssets(dir, ['logo.png', 'assets/logo.png']).length).toBe(1);
+  });
+
+  it('führt aus dem Asset-Ordner nicht hinaus', async () => {
+    writeAppState(dir, META, [{ path: 'src/index.html', content: 'x' }], 'x');
+    expect(pickAssets(dir, ['assets/../app.json', '../app.json', path.join(dir, 'app.json')])).toEqual([]);
+  });
+
+  it('bleibt ohne Auswahl und ohne Asset-Ordner leer', () => {
+    expect(pickAssets(dir, [])).toEqual([]);
+    expect(pickAssets(dir, ['assets/logo.png'])).toEqual([]);
   });
 });

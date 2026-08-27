@@ -264,6 +264,70 @@ describe('generateApp — der Lauf im App-Ordner', () => {
   });
 });
 
+describe('generateApp mit mitgeschickten Beigaben (c0118)', () => {
+  /** Legt eine Beigabe in den Ordner der App (wie es der Anwender getan hätte). */
+  function putAsset(dir: string, name: string, content = 'x'): void {
+    fs.mkdirSync(path.join(dir, 'assets'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'assets', name), content);
+  }
+
+  it('nennt die ausgewählte Beigabe im Prompt — mit ihrem Pfad in der App', async () => {
+    const dir = existingApp('rechner-1');
+    putAsset(dir, 'logo.png');
+    const runAgent = vi.fn(writingRun({ 'src/index.html': DOC('neu') }));
+
+    await generateApp(request({ id: 'rechner-1', assets: ['assets/logo.png'] }), makeDeps(runAgent));
+
+    const prompt = runAgent.mock.calls[0][0].prompt;
+    expect(prompt).toContain('MITGESCHICKTE BEIGABEN');
+    expect(prompt).toContain('assets/logo.png');
+    expect(prompt).toContain('image/png');
+  });
+
+  it('nennt nur, was auch wirklich im Ordner liegt — die Platte entscheidet', async () => {
+    const dir = existingApp('rechner-1');
+    putAsset(dir, 'logo.png');
+    const runAgent = vi.fn(writingRun({ 'src/index.html': DOC('neu') }));
+
+    await generateApp(
+      request({ id: 'rechner-1', assets: ['assets/logo.png', 'assets/erfunden.png'] }),
+      makeDeps(runAgent),
+    );
+
+    const prompt = runAgent.mock.calls[0][0].prompt;
+    expect(prompt).toContain('assets/logo.png');
+    expect(prompt).not.toContain('erfunden.png');
+  });
+
+  it('lässt den Abschnitt weg, wenn keine mitgeschickt wurde — auch bei vorhandenen Beigaben', async () => {
+    const dir = existingApp('rechner-1');
+    putAsset(dir, 'logo.png');
+    const runAgent = vi.fn(writingRun({ 'src/index.html': DOC('neu') }));
+
+    await generateApp(request({ id: 'rechner-1' }), makeDeps(runAgent));
+
+    expect(runAgent.mock.calls[0][0].prompt).not.toContain('MITGESCHICKTE BEIGABEN');
+  });
+
+  it('gibt dem Agenten für ein Bild KEINEN Ordner frei — es liegt in seinem Arbeitsverzeichnis', async () => {
+    const dir = existingApp('rechner-1');
+    putAsset(dir, 'logo.png');
+    const runAgent = vi.fn(writingRun({ 'src/index.html': DOC('neu') }));
+
+    await generateApp(request({ id: 'rechner-1', assets: ['assets/logo.png'] }), makeDeps(runAgent));
+
+    expect(runAgent.mock.calls[0][0].args).not.toContain('--add-dir');
+    expect(runAgent.mock.calls[0][0].cwd).toBe(dir);
+  });
+
+  it('bleibt bei einem Entwurf ohne Beigaben — dort liegt noch nichts', async () => {
+    const runAgent = vi.fn(writingRun({ 'src/index.html': DOC('neu') }));
+    await generateApp(request({ assets: ['assets/logo.png'] }), makeDeps(runAgent));
+
+    expect(runAgent.mock.calls[0][0].prompt).not.toContain('MITGESCHICKTE BEIGABEN');
+  });
+});
+
 describe('generateApp — eine reine Rückfrage', () => {
   it('committet nichts, legt keine App an und reicht die Frage durch', async () => {
     const deps = makeDeps(askingRun('Welche Art von Spiel?'));

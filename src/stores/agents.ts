@@ -27,6 +27,8 @@ export interface AgentJob {
   attachments: Attachment[];
   /** In der App markierte Elemente, auf die sich der Wunsch bezieht (core/pick). */
   elements: ElementRef[];
+  /** Beigaben der App, die mit dem Wunsch mitgehen — als ihre Pfade (c0118). */
+  assets: string[];
   /** Abgebrochen: Das Ergebnis wird verworfen, der Auftrag ist aus der Liste. */
   cancelled: boolean;
 }
@@ -107,6 +109,7 @@ export const useAgentsStore = defineStore('agents', {
       prompt: string,
       attachments: Attachment[] = [],
       elements: ElementRef[] = [],
+      assets: string[] = [],
     ): string | null {
       const text = prompt.trim();
       if (!text) return null;
@@ -126,6 +129,7 @@ export const useAgentsStore = defineStore('agents', {
         // Reine Werte: der Auftrag überlebt sein Fenster und dessen Store.
         attachments: attachments.map((a) => ({ ...a })),
         elements: elements.map((e) => ({ ...e })),
+        assets: [...assets],
         cancelled: false,
       };
       this.jobs.push(job);
@@ -182,7 +186,7 @@ export const useAgentsStore = defineStore('agents', {
         }
         if (job.cancelled) return;
 
-        await store.generate(job.prompt, job.attachments, job.elements);
+        await store.generate(job.prompt, job.attachments, job.elements, job.assets);
         this.announce(job, store);
         await this.afterRun(job, store);
       } finally {
