@@ -1,11 +1,10 @@
 ---
 id: c0115
 title: Posibility to add assets
-status: discuss
+status: backlog
 created: 2026-08-27
 updated: 2026-08-27
-status-changed: 2026-08-27T22:32:15
-epic: e0001
+status-changed: 2026-08-27T22:37:59
 ---
 # Posibility to add assets
 
@@ -49,13 +48,13 @@ so the app uses them offline under the sandbox CSP.
 
 **Decisions**
 - **Storage — top-level `assets/`, not `src/`.** `src/` is text-only:
-  [`readSourceFiles`](../../../src/core/appstore.ts) reads it as UTF-8 and
+  [`readSourceFiles`](../../src/core/appstore.ts) reads it as UTF-8 and
   `syncSourceFiles` wipes and rewrites the whole folder from the in-memory
   string set each generation — a binary under `src/` would be corrupted on read
   and deleted on the next run. `assets/` sits outside that path, git-tracked.
 - **Runtime — inline as `data:` URI at bundle time.** The app runs offline in a
   sandboxed iframe under CSP; `data:` URIs are the offline-safe way to use an
-  asset. Extends [`bundle`](../../../src/core/bundle.ts), which today inlines
+  asset. Extends [`bundle`](../../src/core/bundle.ts), which today inlines
   only CSS/JS/libs.
 - **Ownership — user adds/removes; agent references only.** Binary content can't
   be LLM-authored as text, and the agent's write scope is `src/` + the two docs.
