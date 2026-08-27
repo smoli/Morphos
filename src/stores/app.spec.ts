@@ -1759,3 +1759,139 @@ describe('useAppWindow — mitgeschickte Beigaben (c0118)', () => {
     expect(store.chat[0].assets).toBeUndefined();
   });
 });
+
+describe('useAppWindow — Beigaben verwalten (c0119)', () => {
+  const LOGO: AssetInfo = { name: 'logo.png', path: 'assets/logo.png', mime: 'image/png', size: 12 };
+  const DATEN: AssetInfo = { name: 'daten.json', path: 'assets/daten.json', mime: 'application/json', size: 2 };
+
+  /** Eine geöffnete App mit Beigaben — der Ausgangspunkt für Hinzufügen und Entfernen. */
+  async function openWith(assets: AssetInfo[], overrides: Partial<MorphosHost> = {}) {
+    const host = makeHost({
+      loadApp: vi.fn(async (): Promise<AppData> => ({
+        id: 'rechner-1', name: 'Rechner', icon: '🧮', createdAt: 1, updatedAt: 2,
+        files: FILES(DOC('calc')), html: DOC('calc'), chat: [], assets,
+      })),
+      ...overrides,
+    });
+    setHost(host);
+    const store = useAppStore();
+    await store.open('/apps', 'rechner-1');
+    return { host, store };
+  }
+
+  it('nimmt eine Datei auf und führt sie sofort in der Liste — unter dem Namen, den sie bekommen hat', async () => {
+    const { host, store } = await openWith([DATEN], {
+      addAsset: vi.fn(async () => ({ ok: true, asset: { ...LOGO, name: 'logo-2.png', path: 'assets/logo-2.png' } })),
+    });
+
+    const res = await store.addAsset('logo.png', 'AAEC');
+
+    expect(res.ok).toBe(true);
+    expect(host.addAsset).toHaveBeenCalledWith('/apps', 'rechner-1', 'logo.png', 'AAEC');
+    // Der Hauptprozess entscheidet über den Namen (core/assets) — die Liste
+    // übernimmt ihn, statt den mitgegebenen zu zeigen.
+    expect(store.assets.map((a) => a.name)).toEqual(['daten.json', 'logo-2.png']);
+  });
+
+  it('behält die Liste sortiert, wie sie von der Platte käme', async () => {
+    const { store } = await openWith([DATEN], {
+      addAsset: vi.fn(async () => ({ ok: true, asset: { ...LOGO, name: 'aaa.png', path: 'assets/aaa.png' } })),
+    });
+
+    await store.addAsset('aaa.png', 'AAEC');
+
+    expect(store.assets.map((a) => a.name)).toEqual(['aaa.png', 'daten.json']);
+  });
+
+  it('lässt die Liste unangetastet, wenn das Hinzufügen scheitert — und reicht den Grund weiter', async () => {
+    const { store } = await openWith([DATEN], {
+      addAsset: vi.fn(async () => ({ ok: false, error: 'Kein Platz mehr' })),
+    });
+
+    const res = await store.addAsset('logo.png', 'AAEC');
+
+    expect(res).toEqual({ ok: false, error: 'Kein Platz mehr' });
+    expect(store.assets).toEqual([DATEN]);
+  });
+
+  it('fügt einem Entwurf nichts hinzu — er hat noch keinen Ordner', async () => {
+    const host = makeHost({ addAsset: vi.fn(async () => ({ ok: true, asset: LOGO })) });
+    setHost(host);
+    const store = useAppStore();
+    store.newDraft('/apps');
+
+    const res = await store.addAsset('logo.png', 'AAEC');
+
+    expect(res.ok).toBe(false);
+    expect(host.addAsset).not.toHaveBeenCalled();
+    expect(store.assets).toEqual([]);
+  });
+
+  it('entfernt genau eine Beigabe aus der Liste', async () => {
+    const { host, store } = await openWith([DATEN, LOGO], {
+      removeAsset: vi.fn(async () => ({ ok: true })),
+    });
+
+    const res = await store.removeAsset('assets/logo.png');
+
+    expect(res.ok).toBe(true);
+    expect(host.removeAsset).toHaveBeenCalledWith('/apps', 'rechner-1', 'assets/logo.png');
+    expect(store.assets).toEqual([DATEN]);
+  });
+
+  it('behält sie in der Liste, wenn das Entfernen scheitert', async () => {
+    const { store } = await openWith([DATEN, LOGO], {
+      removeAsset: vi.fn(async () => ({ ok: false, error: 'geht nicht' })),
+    });
+
+    const res = await store.removeAsset('assets/logo.png');
+
+    expect(res.ok).toBe(false);
+    expect(store.assets).toEqual([DATEN, LOGO]);
+  });
+
+  it('holt die Bytes einer Beigabe einzeln — nur auf Zuruf', async () => {
+    const content = { ...LOGO, data: 'AAEC' };
+    const { host, store } = await openWith([LOGO], { readAsset: vi.fn(async () => content) });
+
+    expect(await store.readAsset('assets/logo.png')).toEqual(content);
+    expect(host.readAsset).toHaveBeenCalledWith('/apps', 'rechner-1', 'assets/logo.png');
+    // Die Liste bleibt, was sie ist: Auskünfte ohne Bytes.
+    expect(store.assets).toEqual([LOGO]);
+  });
+
+  it('liest die Liste neu von der Platte — nach einem Revert steht dort ein anderer Stand', async () => {
+    const { store } = await openWith([LOGO], { listAssets: vi.fn(async () => [DATEN]) });
+
+    await store.refreshAssets();
+
+    expect(store.assets).toEqual([DATEN]);
+  });
+
+  it('kommt ohne Anbindung aus — dann gibt es eben keine Beigaben (Renderer-Test)', async () => {
+    const { store } = await openWith([LOGO]);
+
+    await store.refreshAssets();
+    expect(store.assets).toEqual([LOGO]);
+
+    expect((await store.addAsset('logo.png', 'AAEC')).ok).toBe(false);
+    expect((await store.removeAsset('assets/logo.png')).ok).toBe(false);
+    expect(await store.readAsset('assets/logo.png')).toBeNull();
+    expect(store.assets).toEqual([LOGO]);
+  });
+
+  it('macht aus einem Fehler der Brücke keine Ausnahme', async () => {
+    const { store } = await openWith([LOGO], {
+      listAssets: vi.fn(async () => { throw new Error('Brücke weg'); }),
+      addAsset: vi.fn(async () => { throw new Error('Brücke weg'); }),
+      removeAsset: vi.fn(async () => { throw new Error('Brücke weg'); }),
+      readAsset: vi.fn(async () => { throw new Error('Brücke weg'); }),
+    });
+
+    await store.refreshAssets();
+    expect(store.assets).toEqual([LOGO]);
+    expect((await store.addAsset('logo.png', 'AAEC')).error).toMatch(/Brücke weg/);
+    expect((await store.removeAsset('assets/logo.png')).error).toMatch(/Brücke weg/);
+    expect(await store.readAsset('assets/logo.png')).toBeNull();
+  });
+});

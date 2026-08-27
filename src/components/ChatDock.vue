@@ -7,6 +7,9 @@ import { renderMarkdown } from '@/core/markdown';
 import { refKey, refLabel } from '@/core/pick';
 import type { AgentEvent, Attachment, ChatMessage, ElementRef, Framework } from '@/types';
 import type { AssetInfo } from '@/core/assets';
+// Dasselbe Zeichen wie in der Beigaben-Verwaltung (c0119) — eine Datei sieht
+// überall gleich aus, wo sie auftaucht.
+import { assetIcon } from '@/core/assetview';
 
 /**
  * Der Chat einer App: Verlauf, Eingabe, Anhänge und der Fortschritt des
@@ -105,13 +108,6 @@ const placeKey = computed(() => (popped.value ? 'windowed' : 'docked'));
 const freeAssets = computed(() =>
   (props.assets ?? []).filter((a) => !pickedAssets.value.some((p) => p.path === a.path)),
 );
-
-/** Woran man eine Beigabe erkennt: Bild, Schrift oder schlichte Datei. */
-function assetIcon(asset: AssetInfo): string {
-  if (asset.mime.startsWith('image/')) return '🖼';
-  if (asset.mime.startsWith('font/')) return '🔤';
-  return '📄';
-}
 
 // Das Eingabefeld wächst mit dem Inhalt (bis zu 6 Zeilen).
 const rows = computed(() => Math.min(6, Math.max(1, text.value.split('\n').length)));
@@ -403,7 +399,7 @@ function fmt(ts: number): string {
             :title="a.path"
             @click="attachAsset(a)"
           >
-            <span class="asset-icon">{{ assetIcon(a) }}</span>
+            <span class="asset-icon">{{ assetIcon(a.mime) }}</span>
             <span class="asset-name">{{ a.name }}</span>
           </button>
           <p v-if="!freeAssets.length" class="asset-empty">Alle Beigaben dieser App hängen schon am Wunsch.</p>

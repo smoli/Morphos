@@ -5,6 +5,7 @@ import AppWindow from './AppWindow.vue';
 import WelcomeScreen from './WelcomeScreen.vue';
 import IconDialog from './IconDialog.vue';
 import DocsPanel from './DocsPanel.vue';
+import AssetPanel from './AssetPanel.vue';
 import DesignOverlay from './DesignOverlay.vue';
 import ChatDock from './ChatDock.vue';
 import AppCanvas from './AppCanvas.vue';
@@ -169,6 +170,79 @@ describe('AppWindow', () => {
       await flushPromises();
 
       expect(wrapper.find('.w-docs').exists()).toBe(false);
+    });
+  });
+
+  // e16/c0119: Die Beigaben der App (assets/) — hinzufügen, ansehen, entfernen.
+  describe('Beigaben aus der Titelleiste', () => {
+    const LOGO = { name: 'logo.png', path: 'assets/logo.png', mime: 'image/png', size: 12 };
+
+    it('öffnet die Verwaltung mit den Beigaben der App', async () => {
+      const { wrapper } = await mountFrameForApp({
+        loadApp: vi.fn(async () => appData({ assets: [LOGO] })),
+        listAssets: vi.fn(async () => [LOGO]),
+      });
+      expect(wrapper.findComponent(AssetPanel).exists()).toBe(false);
+
+      await wrapper.get('.w-assets').trigger('click');
+      await flushPromises();
+
+      const panel = wrapper.getComponent(AssetPanel);
+      expect(panel.props('assets')).toEqual([LOGO]);
+      expect(panel.text()).toContain('logo.png');
+      // Die Warnung vor dem Entfernen liest im Quelltext der App nach.
+      expect(panel.props('files')).toEqual(appData().files);
+    });
+
+    it('holt die Liste beim Aufklappen frisch von der Platte', async () => {
+      const NEU = { name: 'neu.png', path: 'assets/neu.png', mime: 'image/png', size: 3 };
+      const listAssets = vi.fn(async () => [NEU]);
+      const { wrapper } = await mountFrameForApp({
+        loadApp: vi.fn(async () => appData({ assets: [LOGO] })),
+        listAssets,
+      });
+
+      await wrapper.get('.w-assets').trigger('click');
+      await flushPromises();
+
+      expect(listAssets).toHaveBeenCalledWith('/apps', 'rechner-1');
+      expect(wrapper.getComponent(AssetPanel).props('assets')).toEqual([NEU]);
+    });
+
+    it('legt Beigaben, Dokumente und Versionen nicht übereinander', async () => {
+      const { wrapper } = await mountFrameForApp({ listAssets: vi.fn(async () => []) });
+
+      await wrapper.get('.w-versions').trigger('click');
+      await wrapper.get('.w-assets').trigger('click');
+      await flushPromises();
+      expect(wrapper.find('.w-versions-panel').exists()).toBe(false);
+
+      await wrapper.get('.w-docs').trigger('click');
+      expect(wrapper.findComponent(AssetPanel).exists()).toBe(false);
+      expect(wrapper.findComponent(DocsPanel).exists()).toBe(true);
+    });
+
+    it('schließt die Verwaltung wieder', async () => {
+      const { wrapper } = await mountFrameForApp({ listAssets: vi.fn(async () => []) });
+
+      await wrapper.get('.w-assets').trigger('click');
+      await flushPromises();
+      await wrapper.getComponent(AssetPanel).get('.asset-close').trigger('click');
+
+      expect(wrapper.findComponent(AssetPanel).exists()).toBe(false);
+    });
+
+    it('bietet einem Entwurf (noch ohne App) keine Beigaben an', async () => {
+      setActivePinia(createPinia());
+      setHost(makeHost());
+      useWorkspaceStore().folder = '/apps';
+      const desktop = useDesktopStore();
+      const id = desktop.openDraft();
+      const win = desktop.windows.find((w) => w.instanceId === id)!;
+      const wrapper = mount(AppWindow, { props: { win } });
+      await flushPromises();
+
+      expect(wrapper.find('.w-assets').exists()).toBe(false);
     });
   });
 

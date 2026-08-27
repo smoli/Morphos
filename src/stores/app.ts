@@ -1,5 +1,8 @@
 import { defineStore } from 'pinia';
-import type { AgentEvent, AppDocs, Attachment, ChatMessage, ElementRef, Framework, SourceFile, VersionInfo } from '@/types';
+import type {
+  AgentEvent, AppDocs, AssetContent, AssetResult, Attachment, ChatMessage, ElementRef,
+  Framework, SaveResult, SourceFile, VersionInfo,
+} from '@/types';
 // Das Modell des UI-Entwurfs ist rein (core/design) und darf darum auch hier
 // laufen; auf die Platte greift allein der Hauptprozess (core/designstore), der
 // über den Host erreicht wird.
@@ -677,6 +680,91 @@ export function useAppWindow(instanceId: string) {
         this.versions = await getHost().listVersions(this.folder, this.id);
       } catch {
         this.versions = [];
+      }
+    },
+
+    /**
+     * Liest die Beigaben der App neu von der Platte (e16/c0119). Nötig, wo sich
+     * der Ordner ohne dieses Fenster geändert haben kann — beim Öffnen der
+     * Verwaltung etwa, oder nachdem ein Revert einen früheren Stand
+     * zurückgeholt hat (Assets liegen mit im Commit).
+     *
+     * Ein Fehlschlag lässt den bisherigen Stand stehen: Eine leere Liste, wo es
+     * Dateien gibt, wäre die schlechtere Auskunft — und ohne Anbindung
+     * (Renderer-Test) gibt es nichts nachzulesen.
+     */
+    async refreshAssets(): Promise<void> {
+      if (!this.folder || this.id === null) return;
+      try {
+        const assets = await getHost().listAssets?.(this.folder, this.id);
+        if (Array.isArray(assets)) this.assets = assets;
+      } catch {
+        /* kein Grund, die bekannte Liste wegzuwerfen */
+      }
+    },
+
+    /**
+     * Nimmt eine Datei des Anwenders als Beigabe in die App auf — `data` sind
+     * ihre Bytes als base64, wie sie über die Brücke gehen. Der Hauptprozess
+     * entscheidet über den Namen (zurechtgerückt, ein belegter hochgezählt) und
+     * committet; hier kommt nur noch die Auskunft an, unter der die Datei nun
+     * wirklich liegt — und genau die kommt in die Liste.
+     *
+     * Ein Entwurf hat noch keinen Ordner, in den etwas kopiert werden könnte:
+     * Er kann nichts aufnehmen, und der Fehler dazu ist keine Ausnahme, sondern
+     * eine Antwort, die die Verwaltung dem Anwender hinschreiben kann.
+     */
+    async addAsset(name: string, data: string): Promise<AssetResult> {
+      if (!this.folder || this.id === null) return { ok: false, error: 'Diese App gibt es noch nicht.' };
+      const host = getHost();
+      if (!host.addAsset) return { ok: false, error: 'Beigaben lassen sich hier nicht ablegen.' };
+      try {
+        const res = await host.addAsset(this.folder, this.id, name, data);
+        if (!res?.ok || !res.asset) return { ok: false, error: res?.error ?? 'Die Datei konnte nicht abgelegt werden.' };
+        // Einsortiert wie auf der Platte (listAssets sortiert nach Namen) —
+        // sonst stünde die neue Datei bis zum nächsten Öffnen an anderer Stelle.
+        this.assets = [...this.assets, res.asset].sort((a, b) => a.name.localeCompare(b.name));
+        return res;
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
+    /**
+     * Entfernt genau diese Beigabe (und committet das). Aus der Liste fällt sie
+     * erst, wenn sie auch von der Platte ist — was noch daliegt, soll auch
+     * dastehen.
+     *
+     * Was der Code noch verwendet, wird trotzdem entfernt: Die Referenz bleibt
+     * dann stehen und läuft ins Leere (das Bündeln lässt sie unangetastet,
+     * c0117). Die Warnung davor ist Sache der Verwaltung, die Entscheidung die
+     * des Anwenders.
+     */
+    async removeAsset(pathOrName: string): Promise<SaveResult> {
+      if (!this.folder || this.id === null) return { ok: false, error: 'Diese App gibt es noch nicht.' };
+      const host = getHost();
+      if (!host.removeAsset) return { ok: false, error: 'Beigaben lassen sich hier nicht entfernen.' };
+      try {
+        const res = await host.removeAsset(this.folder, this.id, pathOrName);
+        if (!res?.ok) return { ok: false, error: res?.error ?? 'Die Beigabe konnte nicht entfernt werden.' };
+        this.assets = this.assets.filter((a) => a.path !== pathOrName && a.name !== pathOrName);
+        return res;
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
+    /**
+     * Holt EINE Beigabe samt ihren Bytes (base64) — für die Vorschau, und nur
+     * dann. Die Liste bleibt, was sie ist: Auskünfte ohne Inhalt; eine App mit
+     * 40 MB Bildern hat davon nichts im Fenster liegen.
+     */
+    async readAsset(pathOrName: string): Promise<AssetContent | null> {
+      if (!this.folder || this.id === null) return null;
+      try {
+        return (await getHost().readAsset?.(this.folder, this.id, pathOrName)) ?? null;
+      } catch {
+        return null;
       }
     },
 

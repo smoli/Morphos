@@ -13,6 +13,7 @@ import ChatDock from './ChatDock.vue';
 import WelcomeScreen from './WelcomeScreen.vue';
 import HistoryList from './HistoryList.vue';
 import DocsPanel from './DocsPanel.vue';
+import AssetPanel from './AssetPanel.vue';
 import DesignOverlay from './DesignOverlay.vue';
 import AppIcon from './AppIcon.vue';
 import IconDialog from './IconDialog.vue';
@@ -35,9 +36,19 @@ const agents = useAgentsStore();
 const store = useAppWindow(props.win.instanceId);
 const setAppIcon = useSetAppIcon();
 
-const showVersions = ref(false);
-const showDocs = ref(false);
 const showIcon = ref(false);
+
+/**
+ * Versionen, Dokumente und Beigaben legen sich alle über die App — es liegt
+ * also stets höchstens eine dieser Ansichten oben. Ein Zustand statt dreier
+ * Schalter: Sonst wüchse mit jeder weiteren Ansicht das gegenseitige
+ * Ausschließen paarweise mit.
+ */
+type Overlay = 'versions' | 'docs' | 'assets';
+const overlay = ref<Overlay | null>(null);
+const showVersions = computed(() => overlay.value === 'versions');
+const showDocs = computed(() => overlay.value === 'docs');
+const showAssets = computed(() => overlay.value === 'assets');
 
 // Die Warteanzeige führt den Lauf vor, ohne dass der Chat aufklappen muss: was
 // der Agent gerade tut plus die mitlaufende Laufzeit (ein Schritt kann lange
@@ -135,20 +146,30 @@ function openDesign(): void {
   void store.openDesign();
 }
 
-// Versionen und Dokumente legen sich beide über die App — es liegt also stets
-// höchstens eine der beiden Ansichten oben.
 function toggleVersions(): void {
-  showVersions.value = !showVersions.value;
-  if (showVersions.value) showDocs.value = false;
+  overlay.value = showVersions.value ? null : 'versions';
 }
 function toggleDocs(): void {
-  showDocs.value = !showDocs.value;
-  if (showDocs.value) showVersions.value = false;
+  overlay.value = showDocs.value ? null : 'docs';
+}
+
+/**
+ * Die Beigaben-Verwaltung (e16/c0119). Beim Aufklappen wird die Liste frisch
+ * von der Platte geholt: Sie kann sich ohne dieses Fenster geändert haben — ein
+ * Revert etwa holt Assets mit zurück, denn sie liegen im selben Commit.
+ */
+async function toggleAssets(): Promise<void> {
+  if (showAssets.value) {
+    overlay.value = null;
+    return;
+  }
+  overlay.value = 'assets';
+  await store.refreshAssets();
 }
 
 async function onRevert(sha: string): Promise<void> {
   await store.revertTo(sha);
-  showVersions.value = false;
+  overlay.value = null;
 }
 
 /** Neues Icon aus dem Dialog: auf die Platte, in die Kachel und in dieses Fenster. */
@@ -199,6 +220,16 @@ async function onIcon(icon: string | null): Promise<void> {
         @click="toggleDesign"
       >
         📐
+      </button>
+      <button
+        v-if="!store.isDraft"
+        type="button"
+        class="w-assets"
+        title="Beigaben der App (assets/)"
+        @mousedown.stop
+        @click="toggleAssets"
+      >
+        📦
       </button>
       <button
         v-if="!store.isDraft"
@@ -300,12 +331,24 @@ async function onIcon(icon: string | null): Promise<void> {
     <div v-if="showVersions" class="w-versions-panel">
       <div class="w-versions-head">
         <span>Versionen</span>
-        <button type="button" @click="showVersions = false">Schließen</button>
+        <button type="button" @click="overlay = null">Schließen</button>
       </div>
       <HistoryList :versions="store.versions" :active-sha="store.activeSha" @select="onRevert" />
     </div>
 
-    <DocsPanel v-if="showDocs" :docs="store.docs" @close="showDocs = false" />
+    <DocsPanel v-if="showDocs" :docs="store.docs" @close="overlay = null" />
+
+    <!-- Die Beigaben der App: hinzufügen, ansehen, entfernen. Die Bytes holt der
+         Panel einzeln über den Store — im Fenster liegt nur die Auskunft. -->
+    <AssetPanel
+      v-if="showAssets"
+      :assets="store.assets"
+      :files="store.files"
+      :read="store.readAsset"
+      :add="store.addAsset"
+      :remove="store.removeAsset"
+      @close="overlay = null"
+    />
 
     <IconDialog
       v-if="showIcon"
