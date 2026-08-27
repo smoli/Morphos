@@ -72,6 +72,19 @@ describe('sanitizeAssetName', () => {
     expect(name.length).toBeLessThanOrEqual(MAX_ASSET_NAME_LENGTH);
     expect(name.endsWith('.png')).toBe(true);
   });
+
+  it('bleibt auch bei einer überlangen ENDUNG im Rahmen', () => {
+    const name = sanitizeAssetName(`a.${'b'.repeat(100)}`);
+    expect(name.length).toBeLessThanOrEqual(MAX_ASSET_NAME_LENGTH);
+    expect(isAssetPath(assetPath(name))).toBe(true);
+  });
+
+  it('liefert stets einen Namen, der auch wieder gelesen werden kann', () => {
+    for (const raw of ['logo.png', `${'x'.repeat(300)}.png`, `a.${'b'.repeat(100)}`, '.'.repeat(90), 'ä'.repeat(200)]) {
+      const name = sanitizeAssetName(raw);
+      expect(isAssetPath(assetPath(name))).toBe(true);
+    }
+  });
 });
 
 describe('uniqueAssetName', () => {
@@ -90,6 +103,31 @@ describe('uniqueAssetName', () => {
 
   it('kommt auch ohne Endung zurecht', () => {
     expect(uniqueAssetName('daten', ['daten'])).toBe('daten-2');
+  });
+
+  it('sprengt mit der Zählung nicht die Namenslänge — sonst wäre der Name unlesbar', () => {
+    const long = sanitizeAssetName(`${'x'.repeat(300)}.png`);
+    expect(long.length).toBe(MAX_ASSET_NAME_LENGTH);
+
+    const second = uniqueAssetName(long, [long]);
+    expect(second).not.toBe(long);
+    expect(second.length).toBeLessThanOrEqual(MAX_ASSET_NAME_LENGTH);
+    expect(isAssetPath(assetPath(second))).toBe(true);
+    expect(second.endsWith('.png')).toBe(true);
+
+    const third = uniqueAssetName(long, [long, second]);
+    expect([long, second]).not.toContain(third);
+    expect(isAssetPath(assetPath(third))).toBe(true);
+  });
+
+  it('zählt auch bei langen Namen weiter, ohne je zweimal dasselbe zu liefern', () => {
+    const taken = [sanitizeAssetName(`${'x'.repeat(300)}.png`)];
+    for (let i = 0; i < 12; i += 1) {
+      const next = uniqueAssetName(taken[0], taken);
+      expect(taken).not.toContain(next);
+      expect(next.length).toBeLessThanOrEqual(MAX_ASSET_NAME_LENGTH);
+      taken.push(next);
+    }
   });
 });
 

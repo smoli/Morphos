@@ -78,6 +78,36 @@ describe('addAsset / readAsset / listAssets', () => {
     expect(listAssets(dir).map((a) => a.name)).toEqual(['mein-bild-2.png', 'mein-bild.png']);
   });
 
+  it('zählt auch einen überlangen Namen hoch, statt ihn zu überschreiben', async () => {
+    // Gekürzt wird auf denselben Anfang — gerade lange Namen stoßen also
+    // aufeinander, und gerade dort darf nichts verlorengehen.
+    const name = `${'x'.repeat(300)}.png`;
+    const first = await addAsset(dir, name, Buffer.from([1]));
+    const second = await addAsset(dir, name, Buffer.from([2]));
+    const third = await addAsset(dir, name, Buffer.from([3]));
+
+    expect(new Set([first.name, second.name, third.name]).size).toBe(3);
+    expect(listAssets(dir).map((a) => a.name).sort()).toEqual([first.name, second.name, third.name].sort());
+
+    // Jedes der drei ist erreichbar UND trägt noch seine eigenen Bytes.
+    expect(Array.from(readAsset(dir, first.path)!.data)).toEqual([1]);
+    expect(Array.from(readAsset(dir, second.path)!.data)).toEqual([2]);
+    expect(Array.from(readAsset(dir, third.path)!.data)).toEqual([3]);
+
+    // Und jedes lässt sich auch wieder entfernen.
+    expect(await removeAsset(dir, second.path)).toBe(true);
+    expect(listAssets(dir)).toHaveLength(2);
+  });
+
+  it('legt nur Dateien an, die es auch wieder findet', async () => {
+    for (const raw of [`${'x'.repeat(300)}.png`, `a.${'b'.repeat(100)}`, 'ä'.repeat(200), '.'.repeat(90)]) {
+      const info = await addAsset(dir, raw, Buffer.from([7]));
+      expect(readAsset(dir, info.path)).not.toBeNull();
+    }
+    // Auf der Platte liegt nichts, was die Liste nicht kennt.
+    expect(fs.readdirSync(assetsDir(dir)).sort()).toEqual(listAssets(dir).map((a) => a.name).sort());
+  });
+
   it('kann aus einem Asset nicht ausbrechen', async () => {
     const info = await addAsset(dir, '../../boese.png', BINARY);
     expect(info.path).toBe('assets/boese.png');

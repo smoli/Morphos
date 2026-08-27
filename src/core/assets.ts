@@ -101,6 +101,26 @@ function splitName(name: string): [string, string] {
 }
 
 /**
+ * Setzt einen Namen aus seinen Teilen zusammen und hält dabei die Länge ein —
+ * die EINE Stelle, an der über die Namenslänge entschieden wird. Beide Wege
+ * gehen hier hindurch: das Zurechtrücken (ohne Zusatz) und das Hochzählen (mit
+ * `-2`). Getrennt gerechnet wären sie das nicht: Ein bereits ausgereizter Name
+ * plus `-2` wäre zwei Zeichen zu lang — und ein zu langer Name ist keiner, den
+ * `assetName` je wieder annimmt. Er läge dann auf der Platte, ohne in der Liste
+ * zu stehen, und der nächste gleichnamige Zusatz überschriebe ihn stillschweigend.
+ *
+ * Gekürzt wird zuerst der Name, denn er trägt die Bedeutung; die Endung weicht
+ * nur, wenn sie allein schon den ganzen Platz beansprucht (dann ist es keine
+ * Endung mehr, sondern nur noch der Rest eines langen Namens). Der Zusatz
+ * bleibt unangetastet — er ist es, der die Datei unterscheidbar macht.
+ */
+function fitName(stem: string, ext: string, suffix = ''): string {
+  const shortExt = ext.slice(0, Math.max(0, MAX_ASSET_NAME_LENGTH - suffix.length - 1));
+  const room = Math.max(1, MAX_ASSET_NAME_LENGTH - suffix.length - shortExt.length);
+  return `${stem.slice(0, room)}${suffix}${shortExt}`;
+}
+
+/**
  * Macht aus dem Namen, den der Anwender mitbringt, einen, der im Asset-Ordner
  * stehen darf: nur der Dateiname (nie der Pfad davor — auch kein `..`), nur
  * einfache Zeichen, nichts Verstecktes, nicht zu lang. Bleibt nichts übrig,
@@ -116,8 +136,7 @@ export function sanitizeAssetName(name: string): string {
   const cleanExt = ext.replace(ALLOWED, '-').replace(/-{2,}/g, '-').replace(/-+$/, '');
   if (!cleanStem) return FALLBACK_NAME;
 
-  const room = Math.max(1, MAX_ASSET_NAME_LENGTH - cleanExt.length);
-  return `${cleanStem.slice(0, room)}${cleanExt}`;
+  return fitName(cleanStem, cleanExt);
 }
 
 /**
@@ -126,7 +145,8 @@ export function sanitizeAssetName(name: string): string {
  * (jedes Fotoprogramm liefert `bild.png`) — überschrieben wird deshalb nie
  * stillschweigend. Verglichen wird ohne Rücksicht auf Groß- und
  * Kleinschreibung: Auf macOS und Windows ist `Logo.png` dieselbe Datei wie
- * `logo.png`.
+ * `logo.png`. Die Länge hält der Zusatz mit ein (`fitName`) — was hier
+ * herauskommt, ist stets ein Name, den `assetName` auch wieder annimmt.
  */
 export function uniqueAssetName(name: string, taken: readonly string[]): string {
   const used = new Set(taken.map((t) => t.toLowerCase()));
@@ -134,7 +154,7 @@ export function uniqueAssetName(name: string, taken: readonly string[]): string 
 
   const [stem, ext] = splitName(name);
   for (let n = 2; ; n += 1) {
-    const candidate = `${stem}-${n}${ext}`;
+    const candidate = fitName(stem, ext, `-${n}`);
     if (!used.has(candidate.toLowerCase())) return candidate;
   }
 }

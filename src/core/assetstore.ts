@@ -5,6 +5,7 @@ import {
   assetMime,
   assetName,
   assetPath,
+  isAssetPath,
   sanitizeAssetName,
   uniqueAssetName,
   type AssetFile,
@@ -112,6 +113,11 @@ export async function addAsset(dir: string, name: string, data: Uint8Array): Pro
   fs.mkdirSync(folder, { recursive: true });
 
   const unique = uniqueAssetName(sanitizeAssetName(name), listAssets(dir).map((a) => a.name));
+  // Geschrieben wird nur, was auch wieder gefunden wird: Eine Datei, die
+  // `listAssets` nicht mehr als Asset gälte, läge unerreichbar im Ordner — und
+  // der nächste gleiche Name überschriebe sie stillschweigend. core/assets hält
+  // das ein; hier steht der Riegel, damit es dabei bleibt.
+  if (!isAssetPath(assetPath(unique))) throw new Error(`Unbrauchbarer Asset-Name: ${name}`);
   fs.writeFileSync(path.join(folder, unique), data);
 
   const info = infoOf(unique, data.length);
