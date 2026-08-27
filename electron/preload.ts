@@ -1,9 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Design } from '../src/core/design';
+import type { AssetInfo } from '../src/core/assets';
 import type {
   AgentEvent,
   AppData,
   AppSummary,
+  AssetContent,
+  AssetResult,
   Attachment,
   ChatMessage,
   DiskUsageResult,
@@ -119,6 +122,18 @@ contextBridge.exposeInMainWorld('morphos', {
     ipcRenderer.invoke('morphos:readDesign', folder, id),
   writeDesign: (folder: string, id: string, design: Design): Promise<Design | null> =>
     ipcRenderer.invoke('morphos:writeDesign', folder, id, design),
+
+  // Die Beigaben einer App (e16): Aufgelistet werden nur die Auskünfte über die
+  // Dateien unter assets/ — die Bytes kommen einzeln auf Zuruf (als base64, für
+  // die `data:`-URI der Vorschau). Hinzufügen und Entfernen sind je ein Commit.
+  listAssets: (folder: string, id: string): Promise<AssetInfo[]> =>
+    ipcRenderer.invoke('morphos:listAssets', folder, id),
+  readAsset: (folder: string, id: string, path: string): Promise<AssetContent | null> =>
+    ipcRenderer.invoke('morphos:readAsset', folder, id, path),
+  addAsset: (folder: string, id: string, name: string, data: string): Promise<AssetResult> =>
+    ipcRenderer.invoke('morphos:addAsset', folder, id, name, data),
+  removeAsset: (folder: string, id: string, path: string): Promise<SaveResult> =>
+    ipcRenderer.invoke('morphos:removeAsset', folder, id, path),
 
   listVersions: (folder: string, id: string): Promise<VersionInfo[]> =>
     ipcRenderer.invoke('morphos:listVersions', folder, id),

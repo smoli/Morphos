@@ -4,6 +4,7 @@ import type { AppData, AppDocs, AppMeta, ChatMessage, LegacyHistoryEntry, Source
 import { isValidSourcePath } from './files';
 import { ENTRY_FILE } from './bundle';
 import { commitAll, ensureRepo } from './gitstore';
+import { listAssets } from './assetstore';
 import { CONCEPT_FILE, USERDOC_FILE } from './docs';
 import { DEFAULT_ICON } from './app';
 import { extractIcon } from './html';
@@ -12,6 +13,7 @@ import { extractIcon } from './html';
  * Ablage einer App auf der Platte (nur Hauptprozess):
  *   <app>/app.json                Manifest (Kopfdaten, ohne Historie)
  *   <app>/src/…                   Quelldateien
+ *   <app>/assets/…                Beigaben des Anwenders (Bilder, Schriften …)
  *   <app>/index.html              gebündeltes Artefakt (eigenständig öffenbar)
  *   <app>/concept.md              lebende Spezifikation (geht in jeden Prompt)
  *   <app>/userdocumentation.md    Anleitung für den Anwender
@@ -20,6 +22,11 @@ import { extractIcon } from './html';
  *
  * Die beiden Dokumente sind mitversioniert (anders als chat.json): Ein Revert
  * holt den Stand der App samt der Dokumente zurück, die ihn beschreiben.
+ *
+ * Der Asset-Ordner liegt bewusst NEBEN src/ und wird hier nur gelesen (e16):
+ * `readSourceFiles` liest ausschließlich src/, `syncSourceFiles` löscht
+ * ausschließlich src/ — eine Generierung, die ein Asset nie erwähnt, lässt es
+ * darum unangetastet. Geschrieben werden Assets allein in core/assetstore.
  */
 
 type ManifestOnDisk = AppMeta & { history?: LegacyHistoryEntry[]; activeId?: string | null };
@@ -273,5 +280,6 @@ export async function loadAppFromDisk(dir: string): Promise<AppData | null> {
     html,
     chat: readChat(dir),
     docs: readDocs(dir),
+    assets: listAssets(dir),
   };
 }

@@ -4,6 +4,9 @@ import type { TileTree } from '@/core/tiling';
 // Der UI-Entwurf einer App wird im Hauptprozess gelesen (core/design greift auf
 // die Platte); hierher kommt nur sein Typ.
 import type { Design } from '@/core/design';
+// Ebenso die Beigaben einer App (e16): Gelesen werden sie im Hauptprozess
+// (core/assetstore), hierher kommt nur die Auskunft über sie.
+import type { AssetInfo } from '@/core/assets';
 
 /** Eine virtuelle Quelldatei einer App. Pfad mit "/" relativ zum App-Ordner, stets unter src/. */
 export interface SourceFile {
@@ -146,6 +149,12 @@ export interface AppData extends AppMeta {
   chat: ChatMessage[];
   /** Konzept und Anleitung der App (mitversioniert; fehlt bei Alt-Ständen). */
   docs?: AppDocs;
+  /**
+   * Die Beigaben der App (e16): NUR die Auskunft über die Dateien unter
+   * `assets/` — Name, Pfad, Typ, Größe. Die Bytes stehen hier nie; wer sie
+   * braucht, holt sie einzeln (`readAsset`). Fehlt, wo keine gelesen wurden.
+   */
+  assets?: AssetInfo[];
 }
 
 /** Kurzfassung einer App für die Desktop-Kacheln. */
@@ -453,6 +462,26 @@ export interface ReadmeResult extends SaveResult {
   existed?: boolean;
 }
 
+/**
+ * Ergebnis des Hinzufügens eines Assets (e16): bei Erfolg die Auskunft über die
+ * Datei, WIE SIE NUN HEISST — der mitgegebene Name wird zurechtgerückt und ein
+ * belegter hochgezählt, überschrieben wird nie (core/assets).
+ */
+export interface AssetResult extends SaveResult {
+  asset?: AssetInfo;
+}
+
+/**
+ * Ein Asset samt seinen Bytes, wie es über die Brücke kommt: die Auskunft plus
+ * den Inhalt als base64. Auf der Platte liegt und bleibt es binär (core/
+ * assetstore) — über die Brücke geht es als Zeichenkette, weil der Renderer
+ * daraus unmittelbar eine `data:`-URI baut (`data:<mime>;base64,<data>`), wie
+ * schon bei Icon und Hintergrundbild.
+ */
+export interface AssetContent extends AssetInfo {
+  data: string;
+}
+
 /** Ergebnis einer Icon-Änderung: das nun wirksame Icon (bei Erfolg). */
 export interface IconResult {
   ok: boolean;
@@ -708,6 +737,30 @@ export interface MorphosHost {
    * null, wenn nichts geschrieben werden konnte.
    */
   writeDesign?(folder: string, id: string, design: Design): Promise<Design | null>;
+
+  /**
+   * Die Beigaben einer App (e16): nur die Auskünfte (Name, Pfad, Typ, Größe),
+   * nie die Bytes — eine App mit 40 MB Bildern hat davon nichts im Fenster.
+   * Optional: im Renderer-Test fehlt die Anbindung, dann hat eine App keine.
+   */
+  listAssets?(folder: string, id: string): Promise<AssetInfo[]>;
+
+  /**
+   * Holt ein einzelnes Asset samt seinen Bytes (base64) — auf Zuruf, für die
+   * Vorschau. `null`, wenn es das Asset nicht gibt.
+   */
+  readAsset?(folder: string, id: string, path: string): Promise<AssetContent | null>;
+
+  /**
+   * Nimmt eine Datei des Anwenders als Asset in die App auf (Bytes als base64)
+   * und übernimmt das als Commit. Zurück kommt die Auskunft über das Asset, wie
+   * es nun heißt: Der Name wird zurechtgerückt und ein belegter hochgezählt —
+   * überschrieben wird nie.
+   */
+  addAsset?(folder: string, id: string, name: string, data: string): Promise<AssetResult>;
+
+  /** Entfernt genau dieses eine Asset und übernimmt das als Commit. */
+  removeAsset?(folder: string, id: string, path: string): Promise<SaveResult>;
 
   /** Liefert die Git-Versionshistorie einer App, neueste zuerst. */
   listVersions(folder: string, id: string): Promise<VersionInfo[]>;

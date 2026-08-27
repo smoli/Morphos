@@ -41,6 +41,7 @@ import { loadAppFromDisk, readManifest, setManifestIcon, touchManifest, writeCha
 import { isSafeAppId } from '../src/core/app';
 import { emptyDesign, normalizeDesign } from '../src/core/design';
 import { readDesign, writeDesign } from '../src/core/designstore';
+import { addAsset, listAssets, readAsset, removeAsset } from '../src/core/assetstore';
 import { IMPORT_DIR, repoUrlError, resolveImport, startImport } from '../src/core/appimport';
 import { validateIcon } from '../src/core/icon';
 import { writeReadme } from '../src/core/readme';
@@ -61,11 +62,14 @@ import { cleanBlurs, cleanTransparencies } from '../src/core/transparency';
 import { resolveLibs } from './libcache';
 import type { PromptAttachment, PromptContext } from '../src/core/prompt';
 import type { Design } from '../src/core/design';
+import type { AssetInfo } from '../src/core/assets';
 import type {
   AgentEvent,
   AgentResult,
   AppData,
   AppSummary,
+  AssetContent,
+  AssetResult,
   Attachment,
   ChatMessage,
   DiskUsageResult,
@@ -1144,6 +1148,72 @@ ipcMain.handle('morphos:writeDesign', async (_e, folder: string, id: string, des
   } catch (err) {
     console.error('[morphos] writeDesign fehlgeschlagen:', err);
     return null;
+  }
+});
+
+/**
+ * Die Beigaben einer App (e16): die Dateien unter `assets/`. Über die Brücke
+ * gehen nur Auskünfte — Name, Pfad, Medientyp, Größe; die Bytes bleiben liegen,
+ * bis sie jemand einzeln anfordert (morphos:readAsset). So kostet eine App mit
+ * 40 MB Bildern das Fenster nichts.
+ */
+ipcMain.handle('morphos:listAssets', async (_e, folder: string, id: string): Promise<AssetInfo[]> => {
+  try {
+    return listAssets(appDir(folder, id));
+  } catch (err) {
+    console.error('[morphos] listAssets fehlgeschlagen:', err);
+    return [];
+  }
+});
+
+/**
+ * Ein einzelnes Asset auf Zuruf — gelesen wird BINÄR, über die Brücke geht es
+ * als base64, aus dem der Renderer seine `data:`-URI baut. `null`, wenn es das
+ * Asset nicht gibt oder der Pfad keiner ist, der im Asset-Ordner stehen darf
+ * (core/assetstore grenzt das ein).
+ */
+ipcMain.handle('morphos:readAsset', async (_e, folder: string, id: string, assetPath: string): Promise<AssetContent | null> => {
+  try {
+    const asset = readAsset(appDir(folder, id), assetPath);
+    if (!asset) return null;
+    const { data, ...info } = asset;
+    return { ...info, data: Buffer.from(data).toString('base64') };
+  } catch (err) {
+    console.error('[morphos] readAsset fehlgeschlagen:', err);
+    return null;
+  }
+});
+
+/**
+ * Nimmt eine Datei des Anwenders als Asset auf (e16): Die Bytes kommen als
+ * base64 aus dem Renderer, der Name wird zurechtgerückt und ein belegter
+ * hochgezählt — überschrieben wird nie. Danach EIN Commit, wie bei jeder
+ * anderen Datei der App. Eine Größengrenze gibt es bewusst nicht.
+ */
+ipcMain.handle('morphos:addAsset', async (_e, folder: string, id: string, name: string, data: string): Promise<AssetResult> => {
+  const problem = knownWorkspaceError(folder);
+  if (problem) return { ok: false, error: problem };
+  try {
+    const asset = await addAsset(appDir(folder, id), String(name ?? ''), Buffer.from(String(data ?? ''), 'base64'));
+    return { ok: true, asset };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+/**
+ * Entfernt genau dieses eine Asset und übernimmt das als Commit. Gab es das
+ * Asset nicht, wird nichts gelöscht und nichts committet — und der Anwender
+ * erfährt es.
+ */
+ipcMain.handle('morphos:removeAsset', async (_e, folder: string, id: string, assetPath: string): Promise<SaveResult> => {
+  const problem = knownWorkspaceError(folder);
+  if (problem) return { ok: false, error: problem };
+  try {
+    const removed = await removeAsset(appDir(folder, id), assetPath);
+    return removed ? { ok: true } : { ok: false, error: 'Diese Beigabe gibt es nicht (mehr).' };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 });
 

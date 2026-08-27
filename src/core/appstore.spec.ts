@@ -16,6 +16,7 @@ import {
   writeDocs,
 } from './appstore';
 import { commitAll, ensureRepo, listVersions, restoreVersion } from './gitstore';
+import { addAsset } from './assetstore';
 import type { AppMeta, ChatMessage, SourceFile } from '@/types';
 
 let dir: string;
@@ -226,6 +227,17 @@ describe('loadAppFromDisk', () => {
     expect(app!.files).toEqual([{ path: 'src/index.html', content: '<html>q</html>' }]);
     expect(app!.html).toBe('<html>art</html>');
     expect(app!.chat).toEqual([{ role: 'user', text: 'hi', time: 1 }]);
+  });
+
+  it('trägt die Assets als bloße Auskunft mit — ohne ihre Bytes (e16)', async () => {
+    writeAppState(dir, META, [{ path: 'src/index.html', content: '<html>q</html>' }], '<html>art</html>');
+    await addAsset(dir, 'logo.png', Buffer.from([0x00, 0xff, 0x80]));
+
+    const app = await loadAppFromDisk(dir);
+
+    expect(app!.assets).toEqual([{ name: 'logo.png', path: 'assets/logo.png', mime: 'image/png', size: 3 }]);
+    // Ein Asset ist keine Quelldatei — es taucht in files nie auf.
+    expect(app!.files.map((f) => f.path)).toEqual(['src/index.html']);
   });
 
   it('migriert das Alt-Format zu Git: ein Commit je alter Version, Original-Wunsch und -Zeit', async () => {
