@@ -1,23 +1,9 @@
 {
-  "status": "running",
-  "ready": [
-    "c0117",
-    "c0118",
-    "c0119"
-  ],
+  "status": "idle",
+  "ready": [],
   "waiting": [],
-  "runs": [
-    {
-      "cardId": "c0116",
-      "phase": "running",
-      "activity": {
-        "name": "Bash",
-        "arg": "cat src/core/appstore.ts"
-      },
-      "model": "claude-opus-5"
-    }
-  ],
-  "updated": "2026-08-27T23:29:38",
+  "runs": [],
+  "updated": "2026-08-28T00:31:48",
   "pickupDelay": 10,
   "owned": [
     "c0029",
@@ -91,13 +77,12 @@
     "i0009",
     "c0113",
     "c0114",
-    "c0116"
+    "c0116",
+    "c0117",
+    "c0118",
+    "c0119"
   ],
   "afk": true,
   "paused": false,
-  "firstSeen": {
-    "c0117": "2026-08-27T23:29:25",
-    "c0118": "2026-08-27T23:29:25",
-    "c0119": "2026-08-27T23:29:25"
-  }
+  "firstSeen": {}
 }

@@ -1,12 +1,14 @@
 ---
 id: c0118
 title: "Per-wish asset attach — stored assets into the prompt"
-status: in-progress
+status: review
 epic: e16
 depends: [c0116]
 created: 2026-08-27
 updated: 2026-08-28
-status-changed: 2026-08-28T00:00:42
+status-changed: 2026-08-28T00:13:08
+usage-tokens: 55274
+usage-cost: 9.89318
 ---
 
 # Per-wish asset attach — stored assets into the prompt
@@ -75,8 +77,51 @@ Der Weg eines mitgeschickten Assets, von unten nach oben:
 Geprüft: 2204 Tests grün, `vue-tsc --noEmit` sauber (einen Lint-Schritt hat das
 Repo nicht).
 
+## Review
+
+### 2026-08-28T00:14:34 — pass
+
+Checked: alle sechs Akzeptanzkriterien am Code, `npm test`, `npm run typecheck`,
+der Diff von `ee45383` (einen Lint-Schritt hat das Repo nicht — `package.json`
+kennt nur `test`, `test:watch`, `typecheck`).
+
+- „Ein Wunsch kann eine oder mehrere GESPEICHERTE Beigaben anhängen": `ChatDock.vue`
+  (`attachAsset`/`pickedAssets`, Knopf 📦 nur bei `assets?.length`) hängt mehrere an
+  und lässt keine doppelt zu; gedeckt von „hängt auch mehrere an — und dieselbe nur
+  einmal" in `ChatDock.spec.ts`.
+- „Der Prompt nennt jede Beigabe mit `assets/<name>`": `formatAssets()` in
+  `core/prompt.ts` setzt den Abschnitt `MITGESCHICKTE BEIGABEN DER APP` mit
+  `- <path> (<mime>) — <hint>`; gedeckt in `prompt.spec.ts` und end-to-end in
+  `generate.spec.ts`. Ohne Beigaben bleibt der Abschnitt weg (beide Ebenen geprüft).
+- „Bilder unter demselben relativen Pfad `Read`-bar, kein absoluter Pfad":
+  `generate.ts:246` startet den Agenten mit `cwd: dir`, und der Beigaben-Zweig
+  rührt `--add-dir` nicht an (nur `context.attachments` tut das). Der Test „gibt
+  dem Agenten für ein Bild KEINEN Ordner frei" prüft beides; `prompt.spec.ts`
+  prüft zusätzlich, dass im Prompt kein `/tmp|/Users|/home`-Pfad auftaucht.
+- „Sichtbar unterscheidbar von und nebeneinander mit dem transienten `Attachment`":
+  eigenes Kärtchen `.asset-chip` (📦, grüne Kante) neben `.chip` (📎/🖼), eigener
+  Knopf, eigene Aufklappliste; der Test „hält Beigabe und Referenzdatei
+  auseinander" schickt beide zusammen ab und prüft beide Wege im `submit`.
+- „An der Nachricht des Anwenders vermerkt": `ChatMessage.assets` (getrennt von
+  `attachments`), gesetzt in `stores/app.ts` und gezeichnet als `.att-asset`;
+  gedeckt in `app.spec.ts` und `ChatDock.spec.ts`.
+- „Specs decken die Prompt-Formatierung ab": 8 neue Fälle in `prompt.spec.ts`,
+  5 in `generate.spec.ts`, 6 in `assetstore.spec.ts` (u. a. „führt aus dem
+  Asset-Ordner nicht hinaus" — `pickAssets` prüft am Namen, `assets/../app.json`
+  und ein absoluter Pfad fallen weg).
+- `npm test`: 2204 Tests in 101 Dateien grün. `npm run typecheck` (`vue-tsc
+  --noEmit`): sauber. Kein Test abgeschwächt — die Änderungen in
+  `AgentsIndicator.spec.ts`, `TelemetrySection.spec.ts`, `DesktopView.spec.ts`
+  und `AppWindow.spec.ts` sind ausschließlich das neue `assets: []` am `AgentJob`
+  bzw. das dritte `submit`-Argument. Kein `.only`, kein `.skip`, kein
+  übriggebliebenes `console.log`.
+- Der Diff bleibt im „What": Prompt, Auflösung gegen die Platte, Durchreichen
+  über Brücke und Stores, Composer-Auswahl. Der Agent bekommt die Beigaben nur
+  zum Lesen genannt; geschrieben wird nichts.
+
 ## Log
 
 - 2026-08-27 created from the e16 epic breakdown.
 - 2026-08-27 status → ready (app)
 - 2026-08-28 status → in-progress (agent)
+- 2026-08-28 status → review (agent)

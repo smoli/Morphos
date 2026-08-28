@@ -1,12 +1,14 @@
 ---
 id: c0117
 title: "Bundle inlining — assets/ references as data: URIs"
-status: in-progress
+status: review
 epic: e16
 depends: [c0116]
 created: 2026-08-27
 updated: 2026-08-27
-status-changed: 2026-08-27T23:51:34
+status-changed: 2026-08-27T23:57:32
+usage-tokens: 36385
+usage-cost: 3.346896
 ---
 
 # Bundle inlining — assets/ references as data: URIs
@@ -69,9 +71,55 @@ unbekannter Typ (`UNKNOWN_MIME`, neu benannt in `core/assets.ts`) kommt gar
 nicht erst in die Karte — damit bleibt seine Referenz stehen, ohne dass `bundle`
 etwas von Medientypen wissen müsste.
 
+## Review
+
+### 2026-08-28T00:00:03 — pass
+
+Checked: acceptance criteria, diff, tests, typecheck; lint not run (das Repo hat
+keine Lint-Konfiguration, `package.json` kennt nur `test`, `typecheck`, `build`).
+
+- Asset-Karte als dritter Satz: `bundle(files, libs, assets)`
+  (`src/core/bundle.ts:189`) mit Vorgabe `{}`; `generate.ts:187` reicht
+  `assetDataUris(dir)` durch, `bundleApp` bekommt dafür `dir`. Einziger Aufrufer
+  von `bundle` im Baum — nichts hängt am alten Zweiersatz.
+- Ein Auflöser für alle Formen: alles läuft über `assetUri`
+  (`src/core/bundle.ts:83`). Nachgeprüft an eigenen Beispielen, nicht nur an den
+  Specs: `<img src>` (auch `./`, auch `<IMG SRC=…>` in Großschreibung),
+  `srcset` samt Deskriptoren, `<source src>`, `<video poster>`, `<audio src>`,
+  `href` am `<image>` (auch `xlink:href`) und nicht am `<a>`, `url()` im
+  `style`-Attribut in beiden Zitatformen.
+- CSS beidseitig: `url()` im `<style>`-Block und in der aus `src/*.css`
+  eingebetteten `@font-face` — `inlineAssets` läuft bewusst zuletzt
+  (`bundle.ts:220`), darum trifft es das eben entstandene `<style>` mit. In
+  einer Deklaration mit zwei `url()` werden beide ersetzt.
+- Medientypen: `assetDataUris` (`src/core/assetstore.ts:157`) nimmt den Typ aus
+  `assetMime`; die Tabelle deckt png/jpg/webp/gif, woff2/woff/ttf/otf,
+  json/csv/txt ab, SVG als base64 `data:image/svg+xml`. `UNKNOWN_MIME` kommt gar
+  nicht erst in die Karte, die Referenz bleibt darum stehen — Spec
+  `assetstore.spec.ts` „lässt einen unbekannten Typ aus der Karte".
+- Fehlgriff ohne Fehler: `assets/fehlt.png`, `https://…/assets/logo.png` und
+  `/assets/logo.png` bleiben Zeichen für Zeichen stehen, `bundle` wirft nicht;
+  keine Größengrenze im Code.
+- `src/`-Inlining unverändert: Bei leerer Karte kurzschließt `bundle` ganz; bei
+  gefüllter Karte werden Tag und `<style>`-Kopf aus den Fängen wörtlich wieder
+  zusammengesetzt, ein Attribut nur bei echter Änderung. Skript-Rümpfe und
+  Kommentare bleiben unangetastet (nachgeprüft mit Markup in einem JS-String),
+  `data-morphos-src` spricht nicht an (der Trenner vor dem Namen ist `[\s:]`).
+- Specs: 14 neue, je Referenzform eine, dazu CSS inline + `.css`, MIME je Typ,
+  fehlendes Asset, Skript-Rumpf, und in `generate.spec.ts` der Weg von der
+  Platte ins Artefakt. Keine abgeschwächte, übersprungene oder `.only`-Spec im
+  Diff.
+- `npm test`: 2170 Tests in 101 Dateien grün. `npm run typecheck` (`vue-tsc
+  --noEmit`): sauber.
+- Diff bleibt im What: `bundle.ts`, `assetstore.ts`, `generate.ts`, das
+  Herausziehen von `UNKNOWN_MIME` in `assets.ts`, drei Spec-Dateien. Kein
+  Fremdkörper, kein Debug-Rest.
+- Am Rande (kein Mangel): Die Abhängigkeit c0116 steht selbst noch in `review`.
+
 ## Log
 
 - 2026-08-27 created from the e16 epic breakdown.
 - 2026-08-27 status → ready (app)
 - 2026-08-27 status → in-progress (agent)
 - 2026-08-27 umgesetzt: bundle(files, libs, assets) + assetDataUris; 14 neue Specs (bundle, assetstore, generate), 2170 Tests grün, vue-tsc sauber.
+- 2026-08-27 status → review (agent)

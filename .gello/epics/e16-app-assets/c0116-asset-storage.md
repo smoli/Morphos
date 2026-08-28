@@ -7,8 +7,8 @@ depends: []
 created: 2026-08-27
 updated: 2026-08-27
 status-changed: 2026-08-27T23:46:46
-usage-tokens: 47804
-usage-cost: 5.035977
+usage-tokens: 80236
+usage-cost: 9.15277
 ---
 
 # Asset storage — assets/ folder, binary IO, git, survive src/ sync
@@ -162,6 +162,68 @@ all four IPC handlers exist in main + preload + `MorphosHost` and read bytes on
 demand with no size cap; path escapes (`assets/../app.json`, absolute paths) are
 rejected at the name; the diff is additive only (732 insertions, 0 deletions) — no
 test weakened, skipped or `.only`'d, and nothing outside the card's What.
+
+### 2026-08-27T23:50:49 — pass
+
+Checked: both round-1 findings against the fix commit ba1d775, all eight acceptance
+criteria against `src/core/assets.ts`, `src/core/assetstore.ts`, `src/types/index.ts`,
+`electron/main.ts`, `electron/preload.ts`; `npm test` (2156 passed / 101 files, green);
+`npm run typecheck` (`vue-tsc --noEmit`, clean). No lint step exists in this repo
+(no `lint` script, no eslint config) — not run.
+
+- Round-1 finding 1+2 (orphaned name at the length boundary, then a silent overwrite)
+  is fixed at the root. `fitName(stem, ext, suffix)` is now the single place the
+  length is decided, and both `sanitizeAssetName` and `uniqueAssetName` go through
+  it, so the counter's `-n` is budgeted instead of appended after the fact. Verified
+  against the real code in a temporary spec: adding `'x'.repeat(300) + '.png'` three
+  times yields three distinct 80-char names, `readdirSync(assetsDir(dir))` equals
+  `listAssets(dir)`, each file still carries its own bytes (`[1, 2, 3]`), and each is
+  removable (`[true, true, true]`). The exact sequence that lost data in round 1 now
+  keeps all three.
+- Round-1 finding 3 (over-long extension) is fixed: `sanitizeAssetName('a.' +
+  'b'.repeat(100))` is 80 chars and `isAssetPath` accepts it. `fitName` shortens the
+  extension only once it would claim the whole budget on its own.
+- The counter is sound beyond the two hand-picked cases: over 120 rounds on six bases
+  (short, long stem, long extension, no extension, single char, 79-char stem)
+  `uniqueAssetName` never repeated a name, never exceeded `MAX_ASSET_NAME_LENGTH`,
+  and always returned a name `isAssetPath` accepts — so the loop terminates and the
+  truncation cannot make two rounds collide.
+- Round-1 finding 4 (the boundary untested) is met: six new specs cover it, and they
+  test the interaction rather than the halves — `assets.spec.ts` counts across twelve
+  rounds at the limit, `assetstore.spec.ts` adds the same over-long name three times
+  on disk and asserts three findable files with their own bytes, plus the invariant
+  that nothing lies in `assets/` that `listAssets` does not know.
+- The fix's own backstop is real: `addAsset` now refuses to write a name
+  `isAssetPath` would reject, so a regression here fails loudly instead of orphaning
+  a file. It throws before writing, and `morphos:addAsset` turns that into
+  `{ ok: false, error }`.
+- The diff is scoped to the card's What (4 files, 98 insertions, 4 deletions — the
+  name-length logic and its specs). No test was weakened, skipped or `.only`'d; the
+  spec changes are additive and stricter than what they replace.
+
+Re-verified from round 1, unchanged: binary IO is genuinely binary (`readFileSync`
+without an encoding, `writeFileSync` of the `Uint8Array`), pinned with 0x00/0x80/0xFF;
+assets survive a `src/` sync (`readSourceFiles` walks only `src/`, `syncSourceFiles`
+`rmSync`s only `src/`); `removeAsset` deletes only the named file; add and remove are
+each one `ensureRepo` + `commitAll` and the revert spec shows assets come back with a
+version; the `AssetInfo`/`AssetFile` split is real, `AppData.assets` is metadata-only
+and assets never enter `files: SourceFile[]`; all four IPC handlers exist in main +
+preload + `MorphosHost` and read bytes on demand with no size cap; path escapes
+(`assets/../app.json`, absolute paths) are rejected at the name.
+
+Not blocking, but worth a follow-up: `sanitizeAssetName` can still return a HIDDEN
+name, which `addAsset`'s new guard then rejects outright. Stripping the leading `-`
+in `cleanStem` can expose a `.` underneath — `sanitizeAssetName('@.logo.png')` is
+`.logo.png`, and adding that file throws `Unbrauchbarer Asset-Name` instead of
+storing it. I did not fail the card on it: nothing is lost or overwritten (the guard
+is exactly what turns it into a visible error), and it is not reachable by a
+realistic filename — 0 failures in 100 000 generated everyday names, and of a
+42-name hand-written corpus (`.DS_Store`, `.hidden.png`, `..twodots.png`, `@2x.png`,
+`#hashtag.png`, `-dash.png`, `Ärger mit Größe.png`, `Bericht – Entwurf (final).pdf`, …)
+only the constructed `@.logo.png` fails. Two notes for whoever picks it up: the fix is
+one line (strip leading dots from `cleanStem`, falling back to `asset` if nothing is
+left), and the new spec "liefert stets einen Namen, der auch wieder gelesen werden
+kann" asserts a universal it only checks for five inputs — that claim is false today.
 
 ## Log
 

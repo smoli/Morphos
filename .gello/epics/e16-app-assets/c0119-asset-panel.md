@@ -1,12 +1,14 @@
 ---
 id: c0119
 title: "Asset-manager panel — add / remove / preview"
-status: in-progress
+status: review
 epic: e16
 depends: [c0116]
 created: 2026-08-27
 updated: 2026-08-28
-status-changed: 2026-08-28T00:15:11
+status-changed: 2026-08-28T00:28:38
+usage-tokens: 68353
+usage-cost: 7.603937
 ---
 
 # Asset-manager panel — add / remove / preview
@@ -84,6 +86,54 @@ Specs: `src/core/assetview.spec.ts` (17), `src/components/AssetPanel.spec.ts`
 Entfernen mit Rückfrage und Warnung), `src/core/drop.spec.ts` (3), dazu 10 im
 Store und 5 in `AppWindow.spec.ts`. Ganze Suite grün (2259), `vue-tsc` sauber.
 
+## Review
+
+### 2026-08-28T00:30:59 — pass
+
+Checked: die sechs Akzeptanzkriterien am Code, die Specs, `npm test`, `npm run
+typecheck`, den Diff von 6ea268a.
+
+- Kriterium „Liste mit Name, Typ und Größe“: `AssetPanel.vue` zeigt je Zeile
+  `asset.name`, `assetTypeLabel` („Bild · PNG“, aus Medientyp + Endung) und
+  `formatBytes(asset.size)`; belegt in `AssetPanel.spec.ts` („führt jede Beigabe
+  mit Namen, Typ und Größe auf“).
+- Kriterium „Dateiwähler“: `pickFiles`/`onPicked` → `addFiles` liest jede Datei
+  per `FileReader` nach base64 und ruft `add(name, data)`; der Weg zur Platte ist
+  durchgezogen (`stores/app.addAsset` → `morphos:addAsset` in `electron/preload.ts:134`
+  → `electron/main.ts:1204`, `Buffer.from(data,'base64')`). Mehrfachwahl
+  nacheinander, ein Fehlschlag hält die übrigen nicht auf — beides getestet.
+- Kriterium „Drag-and-drop“: `@drop.prevent="onDrop"` führt in dasselbe
+  `addFiles`; Spec „nimmt fallengelassene Dateien genauso auf“ und ein leerer Zug
+  ohne Wirkung.
+- Kriterium „Vorschau“: `assetView` entscheidet je Medientyp — Bild/Ton/Video als
+  `data:`-URI, Datendateien als bei 64 KB gekappter Text, Schrift und Übriges als
+  Angaben zur Datei. Specs decken Bild, Text, Schrift, unlesbare Datei und das
+  überholte Lesen (`readSeq`) ab; die Bytes kommen einzeln über `readAsset`, die
+  Liste bleibt bytefrei.
+- Kriterium „Entfernen, auch wenn noch referenziert“: `confirmRemove` →
+  `store.removeAsset` → `morphos:removeAsset`; `assetUsers` warnt nur
+  („Wird noch verwendet in src/index.html“) und sperrt nichts. Die stehen
+  bleibende Referenz bricht nichts: `pickAssets` lässt fehlende Pfade weg
+  (`assetstore.spec.ts:239`), `bundle` lässt sie unangetastet (c0117). Die
+  Vorschau räumt sich mit weg, wenn die gezeigte Beigabe aus der Liste fällt.
+- Kriterium „Specs decken Liste, Wählen, Fallenlassen, Vorschau, Entfernen“:
+  20 in `AssetPanel.spec.ts`, 17 in `assetview.spec.ts`, 10 im Store, 5 in
+  `AppWindow.spec.ts`, 3 in `drop.spec.ts` — alle vorhanden und aussagekräftig,
+  kein `.only`, kein `skip`, nichts abgeschwächt.
+- Checks: `npm test` grün (104 Dateien, 2259 Tests), `npm run typecheck`
+  (`vue-tsc --noEmit`) sauber. Ein Lint-Skript gibt es in diesem Repo nicht
+  (`package.json` kennt nur dev/build/start/test/typecheck) — insofern nicht
+  ausgeführt.
+- Diff bleibt im What: Panel, `core/assetview`, Store-Aktionen, 📦 im Fenster.
+  Zwei Zugaben sind gedeckt: `core/drop` + `src/main.ts` ist der Riegel, den
+  erst dieses Fallenlassen nötig macht (ohne ihn lüde Chromium die daneben
+  gefallene Datei als Seite), und die drei Überlagerungen in `AppWindow.vue`
+  teilen sich statt paarweisem Ausschließen nun einen `overlay`-Zustand.
+- Zwei Kleinigkeiten ohne Belang für die Kriterien, für später: eine Datei mit
+  0 Bytes wird beim Ablegen als „leer oder ließ sich nicht lesen“ abgewiesen,
+  und `.asset-remove` ist ein `<span role="button">` in einem `<button>` — für
+  die Tastatur nicht erreichbar.
+
 ## Log
 
 - 2026-08-27 created from the e16 epic breakdown.
@@ -91,3 +141,4 @@ Store und 5 in `AppWindow.spec.ts`. Ganze Suite grün (2259), `vue-tsc` sauber.
 - 2026-08-28 status → in-progress (agent)
 - 2026-08-28 core/assetview + AssetPanel gebaut, Store-Aktionen, 📦 im Fenster,
   Riegel gegen daneben fallengelassene Dateien; Suite grün (2259).
+- 2026-08-28 status → review (agent)
